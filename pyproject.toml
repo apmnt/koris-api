@@ -1,0 +1,24 @@
+[project]
+name = "koris-api"
+version = "0.1.0"
+description = "Python client for the Basket.fi API"
+readme = "README.md"
+authors = [
+    { name = "apmnt", email = "aapomo@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "requests",
+    "textual",
+    "pandas",
+    "openpyxl",
+    "types-requests>=2.32.4.20250913",
+]
+
+[project.scripts]
+koris-api = "koris_api:main"
+koris-tui = "koris_api.tui:run"
+
+[build-system]
+requires = ["uv_build>=0.8.10,<0.9.0"]
+build-backend = "uv_build"
