@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 import pandas as pd
 import requests
 from textual.app import App, ComposeResult
@@ -60,7 +60,9 @@ class MatchViewScreen(Screen):
         self.match_id = match_id
         self.home_team = home_team
         self.away_team = away_team
-        self.match_data = None
+        self.match_data: Optional[dict] = None
+        self.boxscore_data: Optional[dict] = None
+        self.boxscore_match_id: Optional[str] = None  # Genius Sports match ID
 
     def compose(self) -> ComposeResult:
         """Create the match view layout."""
@@ -74,6 +76,13 @@ class MatchViewScreen(Screen):
             yield DataTable(id="home_players_table")
             yield Static("", id="away_team_header")
             yield DataTable(id="away_players_table")
+            # Advanced box score section
+            yield Static("", id="advanced_boxscore_header")
+            yield Static("", id="advanced_boxscore_loading")
+            yield Static("", id="advanced_home_team_header")
+            yield DataTable(id="advanced_home_players_table")
+            yield Static("", id="advanced_away_team_header")
+            yield DataTable(id="advanced_away_players_table")
             with Horizontal():
                 yield Button("Back", id="btn_back", variant="primary")
                 yield Button(
@@ -84,6 +93,8 @@ class MatchViewScreen(Screen):
     def on_mount(self) -> None:
         """Fetch and display match data when screen is mounted."""
         self.load_match_data()
+        # Start loading advanced box score in the background
+        self.load_advanced_boxscore()
 
     def load_match_data(self) -> None:
         """Fetch and display match information."""
@@ -95,6 +106,9 @@ class MatchViewScreen(Screen):
 
             if "match" in data:
                 self.match_data = data["match"]
+                # Extract Genius Sports match ID if available
+                if self.match_data and "match_external_id" in self.match_data:
+                    self.boxscore_match_id = self.match_data["match_external_id"]
                 self.render_match_info()
             else:
                 display.update(f"No data found for match {self.match_id}")
@@ -268,6 +282,252 @@ class MatchViewScreen(Screen):
                     str(player.get("fouls", "0")),
                     str(player.get("playing_time_min", "0")),
                 )
+
+    def load_advanced_boxscore(self) -> None:
+        """Load advanced box score data in the background using a worker."""
+        # Show loading indicator
+        loading = self.query_one("#advanced_boxscore_loading", Static)
+        header = self.query_one("#advanced_boxscore_header", Static)
+
+        header.update(
+            "\n[bold cyan]{'=' * 80}[/bold cyan]\n[bold yellow]ADVANCED BOX SCORE (Genius Sports)[/bold yellow]\n[bold cyan]{'=' * 80}[/bold cyan]"
+        )
+        loading.update("[dim]Loading advanced statistics...[/dim]")
+
+        # Run the fetch in a worker to avoid blocking the UI
+        self.run_worker(self._fetch_boxscore_worker, exclusive=False, thread=True)
+
+    def _fetch_boxscore_worker(self) -> dict | None:
+        """Worker function to fetch box score data."""
+        try:
+            if not self.boxscore_match_id:
+                return {"error": "Genius Sports match ID not available for this match"}
+
+            # Fetch the box score data
+            boxscore_data = KorisAPI.get_match_boxscore(str(self.boxscore_match_id))
+            return {"data": boxscore_data}
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    def on_worker_state_changed(self, event) -> None:
+        """Handle worker state changes."""
+        if event.worker.name == "_fetch_boxscore_worker":
+            if event.state.name == "SUCCESS":
+                result = event.worker.result
+                if result and "data" in result:
+                    self._update_boxscore_display(result["data"])
+                elif result and "error" in result:
+                    self._update_boxscore_error(result["error"])
+            elif event.state.name == "ERROR":
+                self._update_boxscore_error("Failed to load advanced statistics")
+
+    def _update_boxscore_error(self, error_msg: str) -> None:
+        """Update the UI when box score loading fails."""
+        loading = self.query_one("#advanced_boxscore_loading", Static)
+        loading.update(
+            f"[dim red]Advanced statistics not available: {error_msg}[/dim red]"
+        )
+
+    def _update_boxscore_display(self, boxscore_data: dict) -> None:
+        """Update the UI with fetched box score data."""
+        self.boxscore_data = boxscore_data
+
+        # Clear loading message
+        loading = self.query_one("#advanced_boxscore_loading", Static)
+        loading.update("")
+
+        # Render the advanced box score
+        self.render_advanced_boxscore()
+
+    def render_advanced_boxscore(self) -> None:
+        """Render the advanced box score tables."""
+        if not self.boxscore_data or "teams" not in self.boxscore_data:
+            return
+
+        teams = self.boxscore_data["teams"]
+        if len(teams) < 2:
+            return
+
+        # Render home team (first team in the list)
+        home_team = teams[0]
+        home_header = self.query_one("#advanced_home_team_header", Static)
+        home_header.update(
+            f"\n[bold cyan]{home_team.get('team_name', 'Home Team')} - Advanced Statistics[/bold cyan]"
+        )
+
+        home_table = self.query_one("#advanced_home_players_table", DataTable)
+        home_table.clear(columns=True)
+
+        # Add columns for advanced stats
+        home_table.add_column("#", width=4)
+        home_table.add_column("Player", width=20)
+        home_table.add_column("MIN", width=6)
+        home_table.add_column("PTS", width=5)
+        home_table.add_column("2PM-A", width=8)
+        home_table.add_column("2P%", width=6)
+        home_table.add_column("3PM-A", width=8)
+        home_table.add_column("3P%", width=6)
+        home_table.add_column("FTM-A", width=8)
+        home_table.add_column("FT%", width=6)
+        home_table.add_column("REB", width=5)
+        home_table.add_column("AST", width=5)
+        home_table.add_column("STL", width=5)
+        home_table.add_column("BLK", width=5)
+        home_table.add_column("TO", width=5)
+        home_table.add_column("PF", width=5)
+        home_table.add_column("+/-", width=5)
+
+        home_table.show_header = True
+        home_table.zebra_stripes = True
+        home_table.cursor_type = "none"
+
+        # Add player rows
+        for player in home_team.get("players", []):
+            # Format minutes (convert from decimal to MM:SS)
+            mins = player.get("Minutes", 0)
+            if isinstance(mins, (int, float)):
+                total_seconds = int(mins * 60)
+                min_part = total_seconds // 60
+                sec_part = total_seconds % 60
+                mins_display = f"{min_part}:{sec_part:02d}"
+            else:
+                mins_display = str(mins)
+
+            # Format percentages
+            fg2_pct = player.get("2 Points Percentage", 0)
+            if isinstance(fg2_pct, (int, float)):
+                fg2_pct = f"{fg2_pct * 100:.1f}" if fg2_pct <= 1 else f"{fg2_pct:.1f}"
+
+            fg3_pct = player.get("3 Point Percentage", 0)
+            if isinstance(fg3_pct, (int, float)):
+                fg3_pct = f"{fg3_pct * 100:.1f}" if fg3_pct <= 1 else f"{fg3_pct:.1f}"
+
+            ft_pct = player.get("Free Throw Percentage", 0)
+            if isinstance(ft_pct, (int, float)):
+                ft_pct = f"{ft_pct * 100:.1f}" if ft_pct <= 1 else f"{ft_pct:.1f}"
+
+            home_table.add_row(
+                str(player.get("Shirt Number", "-")),
+                player.get("Player", "Unknown")[:19],  # Truncate long names
+                mins_display,
+                str(player.get("Points", 0)),
+                f"{player.get('2 Points Made', 0)}-{player.get('2 Points Attempted', 0)}",
+                fg2_pct,
+                f"{player.get('3 Points Made', 0)}-{player.get('3 Points Atttempted', 0)}",
+                fg3_pct,
+                f"{player.get('Free Throws Made', 0)}-{player.get('Free Throws Attempted', 0)}",
+                ft_pct,
+                str(player.get("Total Rebounds", 0)),
+                str(player.get("Assists", 0)),
+                str(player.get("Steals", 0)),
+                str(player.get("Blocks", 0)),
+                str(player.get("Turnovers", 0)),
+                str(player.get("Personal Foul", 0)),
+                str(player.get("Plus/Minus", 0)),
+            )
+
+        # Show coaching staff
+        if "coaches" in home_team and home_team["coaches"]:
+            coaches = home_team["coaches"]
+            coach_text = f"  [dim]Head Coach: {coaches.get('head_coach', 'N/A')}"
+            if coaches.get("assistant_coach"):
+                coach_text += f" | Assistant: {coaches.get('assistant_coach')}[/dim]"
+            else:
+                coach_text += "[/dim]"
+            home_header.update(
+                f"\n[bold cyan]{home_team.get('team_name', 'Home Team')} - Advanced Statistics[/bold cyan]\n{coach_text}"
+            )
+
+        # Render away team (second team in the list)
+        away_team = teams[1]
+        away_header = self.query_one("#advanced_away_team_header", Static)
+        away_header.update(
+            f"\n[bold cyan]{away_team.get('team_name', 'Away Team')} - Advanced Statistics[/bold cyan]"
+        )
+
+        away_table = self.query_one("#advanced_away_players_table", DataTable)
+        away_table.clear(columns=True)
+
+        # Add columns for advanced stats (same as home)
+        away_table.add_column("#", width=4)
+        away_table.add_column("Player", width=20)
+        away_table.add_column("MIN", width=6)
+        away_table.add_column("PTS", width=5)
+        away_table.add_column("2PM-A", width=8)
+        away_table.add_column("2P%", width=6)
+        away_table.add_column("3PM-A", width=8)
+        away_table.add_column("3P%", width=6)
+        away_table.add_column("FTM-A", width=8)
+        away_table.add_column("FT%", width=6)
+        away_table.add_column("REB", width=5)
+        away_table.add_column("AST", width=5)
+        away_table.add_column("STL", width=5)
+        away_table.add_column("BLK", width=5)
+        away_table.add_column("TO", width=5)
+        away_table.add_column("PF", width=5)
+        away_table.add_column("+/-", width=5)
+
+        away_table.show_header = True
+        away_table.zebra_stripes = True
+        away_table.cursor_type = "none"
+
+        # Add player rows
+        for player in away_team.get("players", []):
+            # Format minutes (convert from decimal to MM:SS)
+            mins = player.get("Minutes", 0)
+            if isinstance(mins, (int, float)):
+                total_seconds = int(mins * 60)
+                min_part = total_seconds // 60
+                sec_part = total_seconds % 60
+                mins_display = f"{min_part}:{sec_part:02d}"
+            else:
+                mins_display = str(mins)
+
+            # Format percentages
+            fg2_pct = player.get("2 Points Percentage", 0)
+            if isinstance(fg2_pct, (int, float)):
+                fg2_pct = f"{fg2_pct * 100:.1f}" if fg2_pct <= 1 else f"{fg2_pct:.1f}"
+
+            fg3_pct = player.get("3 Point Percentage", 0)
+            if isinstance(fg3_pct, (int, float)):
+                fg3_pct = f"{fg3_pct * 100:.1f}" if fg3_pct <= 1 else f"{fg3_pct:.1f}"
+
+            ft_pct = player.get("Free Throw Percentage", 0)
+            if isinstance(ft_pct, (int, float)):
+                ft_pct = f"{ft_pct * 100:.1f}" if ft_pct <= 1 else f"{ft_pct:.1f}"
+
+            away_table.add_row(
+                str(player.get("Shirt Number", "-")),
+                player.get("Player", "Unknown")[:19],  # Truncate long names
+                mins_display,
+                str(player.get("Points", 0)),
+                f"{player.get('2 Points Made', 0)}-{player.get('2 Points Attempted', 0)}",
+                fg2_pct,
+                f"{player.get('3 Points Made', 0)}-{player.get('3 Points Atttempted', 0)}",
+                fg3_pct,
+                f"{player.get('Free Throws Made', 0)}-{player.get('Free Throws Attempted', 0)}",
+                ft_pct,
+                str(player.get("Total Rebounds", 0)),
+                str(player.get("Assists", 0)),
+                str(player.get("Steals", 0)),
+                str(player.get("Blocks", 0)),
+                str(player.get("Turnovers", 0)),
+                str(player.get("Personal Foul", 0)),
+                str(player.get("Plus/Minus", 0)),
+            )
+
+        # Show coaching staff
+        if "coaches" in away_team and away_team["coaches"]:
+            coaches = away_team["coaches"]
+            coach_text = f"  [dim]Head Coach: {coaches.get('head_coach', 'N/A')}"
+            if coaches.get("assistant_coach"):
+                coach_text += f" | Assistant: {coaches.get('assistant_coach')}[/dim]"
+            else:
+                coach_text += "[/dim]"
+            away_header.update(
+                f"\n[bold cyan]{away_team.get('team_name', 'Away Team')} - Advanced Statistics[/bold cyan]\n{coach_text}"
+            )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -773,7 +1033,7 @@ class KorisApp(App):
         categories_path = Path(__file__).parent.parent.parent / "categories.json"
         if categories_path.exists():
             with open(categories_path) as f:
-                return json.load(f)
+                return cast(dict, json.load(f))
         return {
             "2": {"category_name": "Miesten I divisioona A"},
             "4": {"category_name": "Korisliiga"},
