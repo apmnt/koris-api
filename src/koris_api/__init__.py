@@ -12,6 +12,8 @@ __all__ = [
     "KorisAPI",
     "download_matches_with_boxscores",
     "download_league_all_seasons",
+    "download_players_season",
+    "download_players_by_team",
     "main",
 ]
 
@@ -493,6 +495,82 @@ def download_league_all_seasons(
         print(f"{'=' * 60}")
 
 
+def download_players_season(
+    competition_id: str,
+    output_file: str,
+    verbose: bool = True,
+) -> None:
+    """Download all players and their gamelogs for a specific Genius Sports competition."""
+
+    if verbose:
+        print(f"Fetching players for Genius Sports competition {competition_id}...")
+        print(f"{'=' * 60}\n")
+
+    try:
+        # Use the API method to get all players
+        result = KorisAPI.get_genius_players(
+            competition_id=competition_id, output_file=output_file
+        )
+
+        # Summary already printed by get_genius_players
+        if verbose:
+            print(f"\n{'=' * 60}")
+            print(f"✓ Successfully saved player data to {output_file}")
+            print(f"  - Competition ID: {competition_id}")
+            print(f"  - Teams: {len(result['teams'])}")
+            print(f"  - Players: {len(result['players'])}")
+
+            # Count players with errors
+            errors = sum(1 for p in result["players"] if "error" in p)
+            if errors > 0:
+                print(f"  - Players with errors: {errors}")
+
+            # Count total games
+            total_games = sum(len(p.get("games", [])) for p in result["players"])
+            print(f"  - Total games logged: {total_games}")
+            print(f"{'=' * 60}")
+
+    except Exception as e:
+        print(f"Error downloading players: {str(e)}")
+        raise
+
+
+def download_players_by_team(
+    competition_id: str,
+    team_id: str,
+    output_file: str,
+    verbose: bool = True,
+) -> None:
+    """Download players and their gamelogs for a specific team in a Genius Sports competition."""
+
+    if verbose:
+        print(f"Fetching players for team {team_id} in competition {competition_id}...")
+        print(f"{'=' * 60}\n")
+
+    try:
+        # Use the API method to get players by team
+        result = KorisAPI.get_genius_players_by_team(
+            competition_id=competition_id, team_id=team_id, output_file=output_file
+        )
+
+        # Summary already printed by get_genius_players_by_team
+        if verbose:
+            print(f"\n{'=' * 60}")
+            print(f"✓ Successfully saved player data to {output_file}")
+            print(f"  - Competition ID: {competition_id}")
+            print(f"  - Team: {result.get('team_name', 'Unknown')} (ID: {team_id})")
+            print(f"  - Players: {len(result['players'])}")
+
+            # Count total games
+            total_games = sum(len(p.get("games", [])) for p in result["players"])
+            print(f"  - Total games logged: {total_games}")
+            print(f"{'=' * 60}")
+
+    except Exception as e:
+        print(f"Error downloading players: {str(e)}")
+        raise
+
+
 def main() -> None:
     """CLI entry point for koris-api."""
     epilog = """
@@ -509,8 +587,11 @@ examples:
   # Download teams for entire league (TODO)
   uv run koris-api teams-league --category-id 4
   
-  # Download players for a season (TODO)
-  uv run koris-api players-season --category-id 4
+  # Download players for a Genius Sports competition (1. divisioona)
+  uv run koris-api players-season --competition-id 42145
+  
+  # Download players for a specific team (much faster than full season)
+  uv run koris-api players-team --competition-id 42145 --team-id 40154
   
   # Download players for entire league (TODO)
   uv run koris-api players-league --category-id 4
@@ -519,6 +600,24 @@ common category IDs:
   4  - Korisliiga (Men's top division)
   2  - Miesten I divisioona A (Men's 1st division A)
   13 - Naisten Korisliiga (Women's top division)
+
+common Genius Sports competition IDs (for players):
+  42145 - Miesten I divisioona A (2024-2025)
+  39346 - Miesten I divisioona A (2023-2024)
+
+common team IDs for competition 42145 (Miesten I divisioona A 2024-2025):
+  40154 - ACO Basket
+  40157 - HBA-Märsky
+  40868 - Helsingin NMKY
+  40151 - Jyväskylä Basketball Academy
+  40873 - Karkkila
+  98525 - Kipinä Basket
+  98486 - Lappeenrannan NMKY
+  40152 - Pyrintö Akatemia A
+  40876 - Raholan Pyrkivä
+  96823 - Raiders Basket
+  40158 - Torpan Pojat
+  40751 - Äänekosken Huima
 """
 
     parser = argparse.ArgumentParser(
@@ -534,9 +633,10 @@ common category IDs:
             "teams-season",
             "teams-league",
             "players-season",
+            "players-team",
             "players-league",
         ],
-        help="Action: matches-season, matches-league, teams-season, teams-league, players-season, players-league",
+        help="Action: matches-season, matches-league, teams-season, teams-league, players-season, players-team, players-league",
     )
     parser.add_argument(
         "--season-id",
@@ -547,6 +647,14 @@ common category IDs:
         "--category-id",
         default="4",
         help="Category ID (default: 4 for Korisliiga)",
+    )
+    parser.add_argument(
+        "--competition-id",
+        help="Genius Sports competition ID (for players-season and players-team)",
+    )
+    parser.add_argument(
+        "--team-id",
+        help="Genius Sports team ID (for players-team)",
     )
     parser.add_argument(
         "--output",
@@ -614,11 +722,36 @@ common category IDs:
 
         # PLAYERS
         elif args.action == "players-season":
-            if args.advanced:
+            if not args.competition_id:
+                print("Error: --competition-id is required for players-season action")
+                print("Example: uv run koris-api players-season --competition-id 42145")
+                return
+
+            download_players_season(
+                competition_id=args.competition_id,
+                output_file=args.output,
+                verbose=not args.quiet,
+            )
+        elif args.action == "players-team":
+            if not args.competition_id:
+                print("Error: --competition-id is required for players-team action")
                 print(
-                    "Warning: Advanced stats for players not yet implemented (ignored)"
+                    "Example: uv run koris-api players-team --competition-id 42145 --team-id 40154"
                 )
-            print("TODO: Implement download_players_season function")
+                return
+            if not args.team_id:
+                print("Error: --team-id is required for players-team action")
+                print(
+                    "Example: uv run koris-api players-team --competition-id 42145 --team-id 40154"
+                )
+                return
+
+            download_players_by_team(
+                competition_id=args.competition_id,
+                team_id=args.team_id,
+                output_file=args.output,
+                verbose=not args.quiet,
+            )
         elif args.action == "players-league":
             if args.advanced:
                 print(
