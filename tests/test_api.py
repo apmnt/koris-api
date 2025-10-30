@@ -177,7 +177,7 @@ def test_download_only_fetches_played_matches():
     try:
         # Download with concurrency
         download_matches_with_boxscores(
-            competition_id="huki2526",
+            season_id="huki2526",
             category_id="4",
             output_file=output_file,
             include_advanced=True,
@@ -229,7 +229,7 @@ def test_concurrent_download_with_advanced():
 
     try:
         download_matches_with_boxscores(
-            competition_id="huki2526",
+            season_id="huki2526",
             category_id="4",
             output_file=output_file,
             include_advanced=True,
@@ -242,7 +242,7 @@ def test_concurrent_download_with_advanced():
 
         # Check metadata
         metadata = data["metadata"]
-        assert metadata["competition_id"] == "huki2526"
+        assert metadata["season_id"] == "huki2526"
         assert metadata["category_id"] == "4"
         assert metadata["include_advanced_stats"] is True
 
@@ -303,7 +303,7 @@ def test_concurrent_download_without_advanced():
 
     try:
         download_matches_with_boxscores(
-            competition_id="huki2526",
+            season_id="huki2526",
             category_id="4",
             output_file=output_file,
             include_advanced=False,
@@ -337,7 +337,7 @@ def test_concurrent_download_different_worker_counts():
 
         try:
             download_matches_with_boxscores(
-                competition_id="huki2526",
+                season_id="huki2526",
                 category_id="4",
                 output_file=output_file,
                 include_advanced=True,
@@ -351,7 +351,7 @@ def test_concurrent_download_different_worker_counts():
             results.append(
                 {
                     "workers": workers,
-                    "total": data["metadata"]["total_matches"],
+                    "total": data["metadata"]["total_matches_in_season"],
                     "advanced": data["metadata"]["matches_with_advanced_stats"],
                     "failed": data["metadata"]["matches_failed"],
                 }
