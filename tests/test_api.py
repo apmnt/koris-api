@@ -11,7 +11,7 @@ def test_boxscore_parsing_from_local_file():
     """Test parsing box score from local HTML file."""
     # Load the example HTML file
     example_file = (
-        Path(__file__).parent.parent / ".example_responses" / "genius-box-score.html"
+        Path(__file__).parent.parent / "example_responses" / "genius-box-score.html"
     )
 
     assert example_file.exists(), f"Example file should exist: {example_file}"
