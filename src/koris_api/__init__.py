@@ -19,7 +19,7 @@ def download_matches_with_boxscores(
     verbose: bool = True,
 ) -> None:
     """Download all matches for a season, optionally including advanced box scores."""
-    
+
     if verbose:
         print(
             f"Fetching matches for competition {competition_id}, category {category_id}..."
@@ -42,6 +42,20 @@ def download_matches_with_boxscores(
     matches_to_fetch_advanced = []
 
     for match in matches:
+        # Check if match has been played (has scores)
+        home_score = match.get("fs_A")
+        away_score = match.get("fs_B")
+        is_played = (
+            home_score is not None
+            and away_score is not None
+            and home_score != ""
+            and away_score != ""
+        )
+
+        # Only process played matches
+        if not is_played:
+            continue
+
         match_data = {
             "match_id": match.get("match_id"),
             "match_external_id": match.get("match_external_id"),
@@ -51,8 +65,8 @@ def download_matches_with_boxscores(
             "home_team_id": match.get("team_A_id"),
             "away_team": match.get("club_B_name"),
             "away_team_id": match.get("team_B_id"),
-            "home_score": match.get("fs_A"),
-            "away_score": match.get("fs_B"),
+            "home_score": home_score,
+            "away_score": away_score,
             "status": match.get("status"),
             "venue": match.get("venue_name"),
             "competition": match.get("competition_name"),
@@ -63,8 +77,7 @@ def download_matches_with_boxscores(
         processed_matches.append(match_data)
 
         # Check if we should fetch advanced stats for this match
-        # Only fetch for matches that have been played (status == "Played")
-        if include_advanced and match.get("status") == "Played":
+        if include_advanced:
             external_id = match.get("match_external_id")
             if external_id:
                 matches_to_fetch_advanced.append(
@@ -134,7 +147,8 @@ def download_matches_with_boxscores(
         "metadata": {
             "competition_id": competition_id,
             "category_id": category_id,
-            "total_matches": total_matches,
+            "total_matches_in_season": total_matches,
+            "played_matches_saved": len(processed_matches),
             "matches_with_advanced_stats": matches_with_advanced,
             "matches_failed": matches_failed,
             "include_advanced_stats": include_advanced,
@@ -147,10 +161,14 @@ def download_matches_with_boxscores(
 
     if verbose:
         print(f"\n{'=' * 60}")
-        print(f"✓ Successfully saved {total_matches} matches to {output_path}")
+        print(
+            f"Successfully saved {len(processed_matches)} played matches to {output_path}"
+        )
+        print(f"  - Total matches in season: {total_matches}")
+        print(f"  - Played matches saved: {len(processed_matches)}")
         if include_advanced:
             print(
-                f"  - Advanced stats: {matches_with_advanced}/{len(matches_to_fetch_advanced)} played matches"
+                f"  - Advanced stats: {matches_with_advanced}/{len(matches_to_fetch_advanced)} matches"
             )
             if matches_failed > 0:
                 print(f"  - Failed: {matches_failed}")
@@ -159,41 +177,82 @@ def download_matches_with_boxscores(
 
 def main() -> None:
     """CLI entry point for koris-api."""
+    epilog = """
+examples:
+  # Download entire season with advanced statistics
+  koris-api --action download-season --output season.json --category-id 4 --advanced
+  
+  # Get all matches for Korisliiga
+  koris-api --action matches --competition-id huki2526 --category-id 4
+  
+  # Get team information
+  koris-api --action team --team-id 12345 --output team.json
+  
+  # Get match details
+  koris-api --action match --match-id 2701885 --output match.json
+  
+  # Get category info with available seasons
+  koris-api --action category --competition-id huki2526 --category-id 4
+
+common category IDs:
+  4  - Korisliiga (Men's top division)
+  2  - Miesten I divisioona A (Men's 1st division A)
+  13 - Naisten Korisliiga (Women's top division)
+"""
+
     parser = argparse.ArgumentParser(
-        description="Access Koripallo API from command line"
+        description="Access Koris API from command line",
+        epilog=epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--action",
         choices=["matches", "team", "match", "category", "download-season"],
         required=True,
-        help="Action to perform",
+        metavar="ACTION",
+        help="Action to perform: matches (get all matches), team (get team info), "
+        "match (get match details), category (get category/season info), "
+        "download-season (download full season with optional advanced stats)",
     )
     parser.add_argument(
         "--competition-id",
         default="huki2526",
-        help="Competition ID (default: huki2526)",
+        metavar="ID",
+        help="Competition ID (default: huki2526 for current season)",
     )
     parser.add_argument(
-        "--category-id", default="4", help="Category ID (default: 4 for Korisliiga)"
+        "--category-id",
+        default="4",
+        metavar="ID",
+        help="Category ID (default: 4 for Korisliiga)",
     )
-    parser.add_argument("--team-id", help="Team ID for team info")
-    parser.add_argument("--match-id", help="Match ID for match details")
-    parser.add_argument("--output", help="Output file path (default: print to stdout)")
+    parser.add_argument(
+        "--team-id", metavar="ID", help="Team ID (required for --action team)"
+    )
+    parser.add_argument(
+        "--match-id", metavar="ID", help="Match ID (required for --action match)"
+    )
+    parser.add_argument(
+        "--output",
+        metavar="FILE",
+        help="Output file path (prints to stdout if not specified, required for download-season)",
+    )
     parser.add_argument(
         "--advanced",
         action="store_true",
-        help="Include Genius Sports advanced box scores (for download-season action)",
+        help="Include Genius Sports advanced box scores (only for download-season action)",
     )
     parser.add_argument(
         "--concurrency",
         type=int,
         default=5,
+        metavar="N",
         help="Number of concurrent workers for fetching advanced stats (default: 5)",
     )
     parser.add_argument(
         "--quiet",
         action="store_true",
-        help="Suppress progress output",
+        help="Suppress progress output and status messages",
     )
 
     args = parser.parse_args()
