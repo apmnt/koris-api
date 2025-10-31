@@ -5,15 +5,19 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, Any
 from tqdm import tqdm
-from .api import KorisAPI
+from .api import KorisAPI, BasketHotelAPI
 
 __version__ = "0.1.0"
 __all__ = [
     "KorisAPI",
+    "BasketHotelAPI",
     "download_matches_with_boxscores",
     "download_league_all_seasons",
     "download_players_season",
     "download_players_by_team",
+    "download_old_game",
+    "download_old_games_bulk",
+    "download_old_games_from_file",
     "main",
 ]
 
@@ -571,6 +575,235 @@ def download_players_by_team(
         raise
 
 
+def download_old_game(
+    game_id: str,
+    season_id: str = "121333",
+    league_id: str = "2",
+    output_file: Optional[str] = None,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """
+    Download game data from BasketHotel API (for older games not available in main API).
+
+    Args:
+        game_id: BasketHotel game identifier
+        season_id: Season identifier (default: 121333)
+        league_id: League identifier (default: 2)
+        output_file: Optional path to save the results as JSON
+        verbose: Whether to show progress output
+
+    Returns:
+        Dictionary containing the game data
+    """
+    if verbose:
+        print(f"Fetching old game data for game {game_id}...")
+        print(f"  Season ID: {season_id}")
+        print(f"  League ID: {league_id}")
+        print(f"{'=' * 60}\n")
+
+    try:
+        client = BasketHotelAPI()
+        game_data = client.fetch_game_data(game_id, season_id, league_id)
+
+        # Generate output filename if not provided
+        if output_file:
+            # Save to file
+            output_path = Path(output_file)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(game_data, f, indent=2, ensure_ascii=False)
+
+            if verbose:
+                print(f"\n{'=' * 60}")
+                print(f"✓ Successfully saved game data to {output_path}")
+                print(f"  - Game ID: {game_id}")
+
+                # Show game info
+                if game_data.get("teams", {}).get("home", {}).get("name"):
+                    home_team = game_data["teams"]["home"]["name"]
+                    away_team = game_data["teams"]["away"]["name"]
+                    print(f"  - Teams: {home_team} vs {away_team}")
+
+                if game_data.get("score"):
+                    home_score = game_data["score"].get("home", "?")
+                    away_score = game_data["score"].get("away", "?")
+                    print(f"  - Score: {home_score} - {away_score}")
+
+                if game_data.get("game_info", {}).get("date"):
+                    print(f"  - Date: {game_data['game_info']['date']}")
+
+                print(f"{'=' * 60}")
+
+        return game_data
+
+    except Exception as e:
+        if verbose:
+            print(f"Error downloading old game: {str(e)}")
+        raise
+
+
+def download_old_games_bulk(
+    game_ids: list[str],
+    season_id: str = "121333",
+    league_id: str = "2",
+    output_file: Optional[str] = None,
+    max_workers: int = 5,
+    verbose: bool = True,
+) -> None:
+    """
+    Download multiple old games from BasketHotel API in parallel.
+
+    Args:
+        game_ids: List of BasketHotel game identifiers
+        season_id: Season identifier (default: 121333)
+        league_id: League identifier (default: 2)
+        output_file: Optional path to save the results as JSON
+        max_workers: Number of concurrent workers (default: 5)
+        verbose: Whether to show progress output
+    """
+    if verbose:
+        print(f"Fetching {len(game_ids)} old games from BasketHotel API...")
+        print(f"  Season ID: {season_id}")
+        print(f"  League ID: {league_id}")
+        print(f"  Concurrency: {max_workers} workers")
+        print(f"{'=' * 60}\n")
+
+    client = BasketHotelAPI()
+    games_data = []
+    games_successful = 0
+    games_failed = 0
+
+    def fetch_game(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Fetch a single game. Returns (game_data, error_msg)."""
+        try:
+            data = client.fetch_game_data(game_id, season_id, league_id)
+            return (data, None)
+        except Exception as e:
+            return (None, str(e))
+
+    # Use ThreadPoolExecutor for concurrent fetching
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        futures = {
+            executor.submit(fetch_game, game_id): game_id for game_id in game_ids
+        }
+
+        # Process results with progress bar
+        with tqdm(
+            total=len(game_ids),
+            desc="Fetching games",
+            disable=not verbose,
+        ) as pbar:
+            for future in as_completed(futures):
+                game_id = futures[future]
+                game_data, error = future.result()
+
+                if game_data:
+                    # Add game ID to the data
+                    game_data["baskethotel_game_id"] = game_id
+                    games_data.append(game_data)
+                    games_successful += 1
+                else:
+                    games_failed += 1
+                    if verbose:
+                        tqdm.write(f"  ✗ Game {game_id}: {error}")
+
+                pbar.update(1)
+
+    # Save to file if specified
+    if output_file:
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        result = {
+            "metadata": {
+                "season_id": season_id,
+                "league_id": league_id,
+                "total_games_requested": len(game_ids),
+                "games_successful": games_successful,
+                "games_failed": games_failed,
+            },
+            "games": games_data,
+        }
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+
+    if verbose:
+        print(f"\n{'=' * 60}")
+        print(f"✓ Successfully fetched {games_successful}/{len(game_ids)} games")
+        if games_failed > 0:
+            print(f"  - Failed: {games_failed}")
+        if output_file:
+            print(f"  - Saved to: {output_file}")
+        print(f"{'=' * 60}")
+
+
+def download_old_games_from_file(
+    input_file: str,
+    season_id: str = "121333",
+    league_id: str = "2",
+    output_file: Optional[str] = None,
+    max_workers: int = 5,
+    verbose: bool = True,
+) -> None:
+    """
+    Download old games from BasketHotel API using game IDs from a file.
+
+    The input file should contain one game ID per line, or be a JSON file with
+    an array of game IDs.
+
+    Args:
+        input_file: Path to file containing game IDs
+        season_id: Season identifier (default: 121333)
+        league_id: League identifier (default: 2)
+        output_file: Optional path to save the results as JSON
+        max_workers: Number of concurrent workers (default: 5)
+        verbose: Whether to show progress output
+    """
+    if verbose:
+        print(f"Reading game IDs from {input_file}...")
+
+    input_path = Path(input_file)
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input file not found: {input_file}")
+
+    # Try to read as JSON first
+    game_ids: list[str] = []
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                game_ids = [str(gid) for gid in data]
+            elif isinstance(data, dict) and "game_ids" in data:
+                game_ids = [str(gid) for gid in data["game_ids"]]
+            else:
+                raise ValueError(
+                    "JSON file must contain an array or an object with 'game_ids' key"
+                )
+    except json.JSONDecodeError:
+        # Not JSON, try reading as text file (one ID per line)
+        with open(input_path, "r", encoding="utf-8") as f:
+            game_ids = [line.strip() for line in f if line.strip()]
+
+    if not game_ids:
+        raise ValueError("No game IDs found in input file")
+
+    if verbose:
+        print(f"Found {len(game_ids)} game IDs")
+
+    # Download the games
+    download_old_games_bulk(
+        game_ids=game_ids,
+        season_id=season_id,
+        league_id=league_id,
+        output_file=output_file,
+        max_workers=max_workers,
+        verbose=verbose,
+    )
+
+
 def main() -> None:
     """CLI entry point for koris-api."""
     epilog = """
@@ -580,6 +813,18 @@ examples:
   
   # Download all matches from entire league history
   uv run koris-api matches-league --category-id 4
+  
+  # Download a single old game from BasketHotel API
+  uv run koris-api old-game --game-id 5535221
+  
+  # Download multiple old games (with game IDs in command)
+  uv run koris-api old-games-bulk --game-ids 5535221 5535222 5535223
+  
+  # Download multiple old games from a file (one ID per line or JSON array)
+  uv run koris-api old-games-file --input game_ids.txt
+  
+  # Download old games with custom season and league IDs
+  uv run koris-api old-games-bulk --game-ids 5535221 5535222 --old-season-id 121333 --old-league-id 2
   
   # Download teams for a season (TODO)
   uv run koris-api teams-season --category-id 4
@@ -618,6 +863,15 @@ common team IDs for competition 42145 (Miesten I divisioona A 2024-2025):
   96823 - Raiders Basket
   40158 - Torpan Pojat
   40751 - Äänekosken Huima
+
+old game notes:
+  The old-game commands use the BasketHotel API which has data for older games
+  not available in the main Koris API. Game IDs are different from the main API.
+  
+  For bulk downloads, you can:
+  - Use --game-ids to specify IDs directly in the command
+  - Use --input to read game IDs from a file (one per line or JSON array)
+  - Adjust --concurrency for parallel downloads (default: 5)
 """
 
     parser = argparse.ArgumentParser(
@@ -630,13 +884,16 @@ common team IDs for competition 42145 (Miesten I divisioona A 2024-2025):
         choices=[
             "matches-season",
             "matches-league",
+            "old-game",
+            "old-games-bulk",
+            "old-games-file",
             "teams-season",
             "teams-league",
             "players-season",
             "players-team",
             "players-league",
         ],
-        help="Action: matches-season, matches-league, teams-season, teams-league, players-season, players-team, players-league",
+        help="Action to perform",
     )
     parser.add_argument(
         "--season-id",
@@ -655,6 +912,29 @@ common team IDs for competition 42145 (Miesten I divisioona A 2024-2025):
     parser.add_argument(
         "--team-id",
         help="Genius Sports team ID (for players-team)",
+    )
+    parser.add_argument(
+        "--game-id",
+        help="BasketHotel game ID (for old-game)",
+    )
+    parser.add_argument(
+        "--game-ids",
+        nargs="+",
+        help="List of BasketHotel game IDs (for old-games-bulk)",
+    )
+    parser.add_argument(
+        "--input",
+        help="Input file with game IDs (for old-games-file) - one ID per line or JSON array",
+    )
+    parser.add_argument(
+        "--old-season-id",
+        default="121333",
+        help="BasketHotel season ID for old games (default: 121333)",
+    )
+    parser.add_argument(
+        "--old-league-id",
+        default="2",
+        help="BasketHotel league ID for old games (default: 2)",
     )
     parser.add_argument(
         "--output",
@@ -706,6 +986,57 @@ common team IDs for competition 42145 (Miesten I divisioona A 2024-2025):
                 output_file=args.output,
                 season_id=args.season_id,
                 include_advanced=args.advanced,
+                max_workers=args.concurrency,
+                verbose=not args.quiet,
+            )
+
+        # OLD GAMES (BasketHotel API)
+        elif args.action == "old-game":
+            if not args.game_id:
+                print("Error: --game-id is required for old-game action")
+                print("Example: uv run koris-api old-game --game-id 5535221")
+                return
+
+            # For single game, generate default filename if not specified
+            if not args.output:
+                args.output = f"old_game_{args.game_id}.json"
+
+            download_old_game(
+                game_id=args.game_id,
+                season_id=args.old_season_id,
+                league_id=args.old_league_id,
+                output_file=args.output,
+                verbose=not args.quiet,
+            )
+
+        elif args.action == "old-games-bulk":
+            if not args.game_ids:
+                print("Error: --game-ids is required for old-games-bulk action")
+                print(
+                    "Example: uv run koris-api old-games-bulk --game-ids 5535221 5535222 5535223"
+                )
+                return
+
+            download_old_games_bulk(
+                game_ids=args.game_ids,
+                season_id=args.old_season_id,
+                league_id=args.old_league_id,
+                output_file=args.output,
+                max_workers=args.concurrency,
+                verbose=not args.quiet,
+            )
+
+        elif args.action == "old-games-file":
+            if not args.input:
+                print("Error: --input is required for old-games-file action")
+                print("Example: uv run koris-api old-games-file --input game_ids.txt")
+                return
+
+            download_old_games_from_file(
+                input_file=args.input,
+                season_id=args.old_season_id,
+                league_id=args.old_league_id,
+                output_file=args.output,
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
             )
