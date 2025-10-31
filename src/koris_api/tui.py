@@ -8,7 +8,8 @@ from textual.widgets import Header, Footer, Button, Static, Select, DataTable
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.binding import Binding
 from textual.screen import Screen
-from .api import KorisAPI
+from .basketfi_api import BasketFiAPI
+from .genius_api import GeniusSportsAPI
 
 
 class MatchViewScreen(Screen):
@@ -102,7 +103,7 @@ class MatchViewScreen(Screen):
 
         try:
             display.update("Loading match data...")
-            data = KorisAPI.get_match(self.match_id)
+            data = BasketFiAPI.get_match(self.match_id)
 
             if "match" in data:
                 self.match_data = data["match"]
@@ -304,7 +305,9 @@ class MatchViewScreen(Screen):
                 return {"error": "Genius Sports match ID not available for this match"}
 
             # Fetch the box score data
-            boxscore_data = KorisAPI.get_match_boxscore(str(self.boxscore_match_id))
+            boxscore_data = GeniusSportsAPI.get_match_boxscore(
+                str(self.boxscore_match_id)
+            )
             return {"data": boxscore_data}
 
         except Exception as e:
@@ -621,7 +624,7 @@ class TeamViewScreen(Screen):
 
         try:
             display.update("Loading team data...")
-            data = KorisAPI.get_team(self.team_id)
+            data = BasketFiAPI.get_team(self.team_id)
 
             if "team" in data:
                 self.team_data = data["team"]
@@ -734,7 +737,7 @@ class TeamViewScreen(Screen):
 
         try:
             # Fetch matches directly by team_id
-            matches_data = KorisAPI.get_matches(team_id=str(self.team_id))
+            matches_data = BasketFiAPI.get_matches(team_id=str(self.team_id))
 
             if "matches" not in matches_data:
                 matches_header = self.query_one("#matches_header", Static)
@@ -1213,7 +1216,7 @@ class KorisApp(App):
         try:
             status.update("Loading seasons...")
             # Use the default competition_id to get category data
-            data = KorisAPI.get_category("huki2526", self.current_category)
+            data = BasketFiAPI.get_category("huki2526", self.current_category)
 
             # Extract seasons from the response
             if "category" in data and "seasons" in data["category"]:
@@ -1269,7 +1272,7 @@ class KorisApp(App):
 
             start_time = time.time()
 
-            data = KorisAPI.get_matches(
+            data = BasketFiAPI.get_matches(
                 competition_id=self.current_competition_id,
                 category_id=self.current_category,
             )

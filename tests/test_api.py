@@ -4,7 +4,8 @@ import tempfile
 from pathlib import Path
 
 from koris_api import download_matches_with_boxscores
-from koris_api.api import KorisAPI
+from koris_api.basketfi_api import BasketFiAPI
+from koris_api.genius_sports import GeniusSportsAPI
 
 
 def test_boxscore_parsing_from_local_file():
@@ -20,7 +21,7 @@ def test_boxscore_parsing_from_local_file():
         html_content = f.read()
 
     # Parse the HTML
-    result = KorisAPI._parse_boxscore_html(html_content)
+    result = GeniusSportsAPI._parse_boxscore_html(html_content)
 
     # Verify structure
     assert "match_info" in result
@@ -78,7 +79,7 @@ def test_boxscore_parsing_from_local_file():
 def test_live_api_match_status():
     """Test that the live basket.fi API correctly returns played vs fixture status."""
     # Fetch matches from live API
-    data = KorisAPI.get_matches(competition_id="huki2526", category_id="4")
+    data = BasketFiAPI.get_matches(competition_id="huki2526", category_id="4")
     matches = data.get("matches", [])
 
     assert len(matches) > 0, "Should have matches"
@@ -114,7 +115,7 @@ def test_live_api_match_status():
 def test_live_boxscore_fetching():
     """Test fetching a box score from live Genius Sports API."""
     # First, get a played match with external ID
-    data = KorisAPI.get_matches(competition_id="huki2526", category_id="4")
+    data = BasketFiAPI.get_matches(competition_id="huki2526", category_id="4")
     matches = data.get("matches", [])
 
     played_matches = [
@@ -130,7 +131,7 @@ def test_live_boxscore_fetching():
     external_id = match["match_external_id"]
 
     try:
-        boxscore = KorisAPI.get_match_boxscore(str(external_id))
+        boxscore = GeniusSportsAPI.get_match_boxscore(str(external_id))
 
         # Verify structure
         assert "match_info" in boxscore
