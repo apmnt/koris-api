@@ -74,18 +74,34 @@ class BasketFiAPI:
         return cast(Dict[str, Any], response.json())
 
     @classmethod
-    def get_team(cls, team_id: str) -> Dict[str, Any]:
+    def get_team(
+        cls,
+        team_id: str,
+        competition_id: Optional[str] = None,
+        category_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Fetch team data including roster and officials.
 
         Args:
             team_id: The team identifier
+            competition_id: Optional competition/season identifier for historical roster data
+            category_id: Optional category identifier (required if competition_id is provided)
 
         Returns:
             Dictionary containing team data
+
+        Note:
+            When competition_id and category_id are provided, returns the team roster
+            from that specific season. Otherwise returns current team data.
         """
         url = f"{cls.BASE_URL}/getTeam"
         querystring = {"team_id": team_id}
+
+        if competition_id and category_id:
+            querystring["competition_id"] = competition_id
+            querystring["category_id"] = category_id
+
         response = requests.get(url, headers=cls.HEADERS, params=querystring)
         response.raise_for_status()
         return cast(Dict[str, Any], response.json())

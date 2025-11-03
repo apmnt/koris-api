@@ -197,7 +197,6 @@ class GeniusSportsAPI:
             gamelog_url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/person/{player_id}/gamelog"
 
             try:
-                time.sleep(0.5)  # Be nice to the server
                 gamelog_response = requests.get(gamelog_url)
                 gamelog_response.raise_for_status()
 

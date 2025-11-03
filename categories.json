@@ -1,8 +1,62 @@
 {
   "4": {
-    "category_name": "Korisliiga"
+    "category_name": "Korisliiga",
+    "seasons": [
+      {
+        "season_id": "2025-2026",
+        "season_name": "2025-2026",
+        "competition_id": "huki2526"
+      },
+      {
+        "season_id": "2024-2025",
+        "season_name": "2024-2025",
+        "competition_id": "2024-2025"
+      },
+      {
+        "season_id": "2023-2024",
+        "season_name": "2023-2024",
+        "competition_id": "2023-2024"
+      },
+      {
+        "season_id": "2022-2023",
+        "season_name": "2022-2023",
+        "competition_id": "2022-2023"
+      },
+      {
+        "season_id": "72199",
+        "season_name": "2021-2022",
+        "competition_id": "2021-2022"
+      }
+    ]
   },
   "2": {
-    "category_name": "Miesten I divisioona A"
+    "category_name": "Miesten I divisioona A",
+    "seasons": [
+      {
+        "season_id": "2025-2026",
+        "season_name": "2025-2026",
+        "competition_id": "huki2526"
+      },
+      {
+        "season_id": "2024-2025",
+        "season_name": "2024-2025",
+        "competition_id": "2024-2025"
+      },
+      {
+        "season_id": "2023-2024",
+        "season_name": "2023-2024",
+        "competition_id": "2023-2024"
+      },
+      {
+        "season_id": "2022-2023",
+        "season_name": "2022-2023",
+        "competition_id": "2022-2023"
+      },
+      {
+        "season_id": "72199",
+        "season_name": "2021-2022",
+        "competition_id": "2021-2022"
+      }
+    ]
   }
 }

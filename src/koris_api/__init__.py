@@ -12,56 +12,63 @@ from .baskethotel_api import BasketHotelAPI
 from .genius_api import GeniusSportsAPI
 
 
-def load_genius_ids(category_id: str, competition_id: Optional[str] = None) -> List[str]:
+def load_genius_ids(
+    category_id: str, competition_id: Optional[str] = None
+) -> List[str]:
     """
     Load Genius Sports competition IDs from genius_ids.json file.
-    
+
     Tries multiple lookup strategies:
     1. Direct lookup by category_id and competition_id
     2. Direct lookup by category_id and season_id (if competition_id matches a season)
     3. Extract from category_external_id in API response (if available)
-    
+
     Args:
         category_id: The category/league identifier (e.g., "4" for Korisliiga)
         competition_id: Optional competition/season identifier (e.g., "huki2526")
-    
+
     Returns:
         List of Genius Sports competition IDs, empty list if none found
     """
     genius_ids = []
-    
+
     # Try to load from genius_ids.json file
     genius_ids_path = Path(__file__).parent.parent.parent / "genius_ids.json"
     if genius_ids_path.exists():
         try:
             with open(genius_ids_path, "r", encoding="utf-8") as f:
                 genius_ids_data = json.load(f)
-            
+
             if category_id in genius_ids_data:
                 category_data = genius_ids_data[category_id]
-                
+
                 # Try competition_id first
                 if competition_id and competition_id in category_data:
                     ids = category_data[competition_id]
                     if isinstance(ids, list):
                         genius_ids.extend([str(id) for id in ids if id])
-                
+
                 # Also try to extract from category_external_id in API if available
                 if not genius_ids and competition_id:
                     try:
-                        category_response = BasketFiAPI.get_category(competition_id, category_id)
+                        category_response = BasketFiAPI.get_category(
+                            competition_id, category_id
+                        )
                         if "category" in category_response:
-                            external_id = category_response["category"].get("category_external_id")
+                            external_id = category_response["category"].get(
+                                "category_external_id"
+                            )
                             if external_id and external_id.strip():
                                 genius_ids.append(external_id.strip())
                     except Exception:
                         pass  # Ignore API errors, just use file lookup
-        
+
         except Exception:
             pass  # If file doesn't exist or has errors, continue
-    
+
     # Remove duplicates and empty strings
     return list(dict.fromkeys([id for id in genius_ids if id]))
+
 
 # Backward compatibility alias
 KorisAPI = BasketFiAPI
@@ -324,9 +331,9 @@ def download_league_all_seasons(
             for match_data in processed_matches_raw:
                 match_data_with_season = {**match_data, "season_id": season_data_id}
                 processed_matches.append(match_data_with_season)
-            
+
             matches_to_fetch_advanced = []
-            
+
             # Check if we should fetch advanced stats
             if include_advanced:
                 for idx, match_data in enumerate(processed_matches):
@@ -816,7 +823,7 @@ def download_season_comprehensive(
 ) -> None:
     """
     Download all teams with their matches from one season.
-    
+
     Optionally includes player data from advanced boxscores (if --advanced flag is used).
     Player data comes from match boxscores, not separate player downloads.
 
@@ -855,10 +862,92 @@ def download_season_comprehensive(
     if verbose:
         print("Fetching league information...")
 
-    category_data = BasketFiAPI.get_category(competition_id, category_id)
-    category_name = "Unknown"
-    if "category" in category_data:
-        category_name = category_data["category"].get("category_name", "Unknown")
+    try:
+        category_data = BasketFiAPI.get_category(competition_id, category_id)
+
+        # Check if API returned an error
+        if "call" in category_data and "error" in category_data.get("call", {}):
+            # Invalid season-id, try to get available seasons with fallback
+            try:
+                fallback_data = BasketFiAPI.get_category("huki2526", category_id)
+                if (
+                    "category" in fallback_data
+                    and "seasons" in fallback_data["category"]
+                ):
+                    category_name = fallback_data["category"].get(
+                        "category_name", "Unknown"
+                    )
+                    seasons_list = fallback_data["category"].get("seasons", [])
+                    print(
+                        f"Error: Invalid season-id ({competition_id}) for category '{category_name}'."
+                    )
+                    print(f"\nAvailable seasons for category-id {category_id}:")
+                    for season in seasons_list:
+                        print(
+                            f"  {season.get('competition_id', 'N/A'):15} - {season.get('season_name', 'Unknown')}"
+                        )
+                    return
+            except Exception:
+                pass
+
+            # Fallback failed, show generic error
+            print(f"Error: Invalid season-id ({competition_id}).")
+            print("\nCommon category IDs:")
+            print("  4  - Korisliiga (Men's top division)")
+            print("  2  - Miesten I divisioona A (Men's 1st division A)")
+            print("  13 - Naisten Korisliiga (Women's top division)")
+            return
+
+    except Exception as e:
+        error_msg = "Error: Failed to fetch category/season information.\n"
+        error_msg += f"This usually means the category-id ({category_id}) or season-id ({competition_id}) is invalid.\n"
+        error_msg += f"Details: {str(e)}\n\n"
+        error_msg += "Common category IDs:\n"
+        error_msg += "  4  - Korisliiga (Men's top division)\n"
+        error_msg += "  2  - Miesten I divisioona A (Men's 1st division A)\n"
+        error_msg += "  13 - Naisten Korisliiga (Women's top division)\n"
+        print(error_msg)
+        return
+
+    # Validate category data
+    if "category" not in category_data:
+        print(
+            f"Error: Invalid category-id ({category_id}) or season-id ({competition_id})."
+        )
+        print("The API returned an empty or invalid response.")
+        print("\nCommon category IDs:")
+        print("  4  - Korisliiga (Men's top division)")
+        print("  2  - Miesten I divisioona A (Men's 1st division A)")
+        print("  13 - Naisten Korisliiga (Women's top division)")
+        return
+
+    category_name = category_data["category"].get("category_name", "Unknown")
+
+    # Check if we got valid seasons data
+    seasons_list = category_data["category"].get("seasons", [])
+    if seasons_list and len(seasons_list) > 0:
+        # Category is valid, check if the competition_id matches any season
+        valid_competition_ids = [
+            s.get("competition_id") for s in seasons_list if s.get("competition_id")
+        ]
+        if competition_id not in valid_competition_ids:
+            print(
+                f"Error: Invalid season-id ({competition_id}) for category '{category_name}'."
+            )
+            print(f"\nAvailable seasons for category-id {category_id}:")
+            for season in seasons_list:
+                print(
+                    f"  {season.get('competition_id', 'N/A'):15} - {season.get('season_name', 'Unknown')}"
+                )
+            return
+
+    # Additional validation - check if category name is meaningful
+    if category_name == "Unknown" or not category_name:
+        print(f"Warning: Category name could not be determined.")
+        print(
+            f"This might indicate an invalid category-id ({category_id}) or season-id ({competition_id})."
+        )
+        print("Continuing anyway, but results may be empty...")
 
     if verbose:
         print(f"✓ League: {category_name}\n")
@@ -915,6 +1004,7 @@ def download_season_comprehensive(
                             "external_id": external_id,
                             "home_team": match_data["home_team"],
                             "away_team": match_data["away_team"],
+                            "match_date": match_data.get("match_date", "Unknown date"),
                         }
                     )
 
@@ -995,7 +1085,7 @@ def download_season_comprehensive(
                                     )
 
                                 tqdm.write(
-                                    f"  ✗ {match_info['home_team']} vs {match_info['away_team']}: {error_display}"
+                                    f"  ✗ {match_info['match_date']} - {match_info['home_team']} vs {match_info['away_team']}: {error_display}"
                                 )
 
                         pbar.update(1)
@@ -1003,7 +1093,9 @@ def download_season_comprehensive(
         comprehensive_data["matches"] = processed_matches
         comprehensive_data["metadata"]["total_matches"] = total_matches
         comprehensive_data["metadata"]["played_matches_saved"] = len(processed_matches)
-        comprehensive_data["metadata"]["matches_with_advanced_stats"] = matches_with_advanced
+        comprehensive_data["metadata"]["matches_with_advanced_stats"] = (
+            matches_with_advanced
+        )
         comprehensive_data["metadata"]["matches_failed"] = matches_failed
 
         if verbose:
@@ -1014,7 +1106,9 @@ def download_season_comprehensive(
         print("Step 2: Collecting all teams from matches...")
 
     # Extract unique teams
-    teams_list = BasketFiParser.extract_teams_from_matches(comprehensive_data["matches"])
+    teams_list = BasketFiParser.extract_teams_from_matches(
+        comprehensive_data["matches"]
+    )
 
     if verbose:
         print(f"✓ Found {len(teams_list)} unique teams\n")
@@ -1066,8 +1160,7 @@ def download_season_comprehensive(
         print(f"  - Teams: {len(teams_with_details)}")
         if include_advanced:
             matches_with_player_data = sum(
-                1 for m in comprehensive_data["matches"]
-                if "advanced_boxscore" in m
+                1 for m in comprehensive_data["matches"] if "advanced_boxscore" in m
             )
             print(f"  - Matches with player data: {matches_with_player_data}")
         print(f"{'=' * 80}\n")
@@ -1075,7 +1168,7 @@ def download_season_comprehensive(
 
 def download_team_season(
     team_id: str,
-    category_id: str,
+    category_id: Optional[str],
     competition_id: str,
     output_file: str,
     season_name: Optional[str] = None,
@@ -1085,7 +1178,7 @@ def download_team_season(
 ) -> None:
     """
     Download all matches of one team from one season.
-    
+
     Optionally includes player data from advanced boxscores (if --advanced flag is used).
     Player data comes from match boxscores, not separate player downloads.
 
@@ -1098,7 +1191,7 @@ def download_team_season(
 
     Args:
         team_id: The team identifier
-        category_id: The category/league identifier (e.g., "4" for Korisliiga)
+        category_id: Optional category/league identifier (e.g., "4" for Korisliiga). If not provided, will be auto-detected from team's matches.
         competition_id: The competition/season identifier (e.g., "huki2526")
         output_file: Path where output file will be saved
         season_name: Optional season name (e.g., "2024-2025") for metadata
@@ -1109,12 +1202,53 @@ def download_team_season(
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Get team info first
     if verbose:
         print(f"\n{'=' * 80}")
         print("TEAM SEASON DATA DOWNLOAD")
         print(f"{'=' * 80}")
         print(f"Team ID: {team_id}")
-        print(f"Category ID: {category_id}")
+
+    team_data = BasketFiAPI.get_team(str(team_id))
+    team_name = "Unknown"
+    if "team" in team_data:
+        team_name = BasketFiParser.extract_team_name(team_data)
+
+    # Auto-detect category_id if not provided
+    if not category_id:
+        if verbose:
+            print(f"Category ID: Auto-detecting from team matches...")
+
+        # Fetch team matches to determine category
+        matches_data = BasketFiAPI.get_matches(team_id=team_id)
+        all_matches = BasketFiParser.extract_matches(matches_data)
+
+        # Find a match with the requested competition_id to get category_id
+        for match in all_matches:
+            if match.get("competition_id") == competition_id:
+                category_id = match.get("category_id")
+                if category_id:
+                    if verbose:
+                        print(f"Category ID: {category_id} (auto-detected)")
+                    break
+
+        if not category_id:
+            # Fallback: use the first match's category_id if available
+            if all_matches and all_matches[0].get("category_id"):
+                category_id = all_matches[0].get("category_id")
+                if verbose:
+                    print(
+                        f"Category ID: {category_id} (auto-detected from first match)"
+                    )
+            else:
+                if verbose:
+                    print("Warning: Could not auto-detect category_id")
+                category_id = "Unknown"
+    else:
+        if verbose:
+            print(f"Category ID: {category_id}")
+
+    if verbose:
         print(f"Competition ID: {competition_id}")
         if season_name:
             print(f"Season: {season_name}")
@@ -1122,19 +1256,20 @@ def download_team_season(
         print(f"Include advanced stats (with player data): {include_advanced}")
         print(f"{'=' * 80}\n")
 
-    # Get category and team info
+    # Get category info
     if verbose:
-        print("Fetching league and team information...")
+        print("Fetching league information...")
 
-    category_data = BasketFiAPI.get_category(competition_id, category_id)
     category_name = "Unknown"
-    if "category" in category_data:
-        category_name = category_data["category"].get("category_name", "Unknown")
-
-    team_data = BasketFiAPI.get_team(str(team_id))
-    team_name = "Unknown"
-    if "team" in team_data:
-        team_name = BasketFiParser.extract_team_name(team_data)
+    if category_id and category_id != "Unknown":
+        try:
+            category_data = BasketFiAPI.get_category(competition_id, category_id)
+            if "category" in category_data:
+                category_name = category_data["category"].get(
+                    "category_name", "Unknown"
+                )
+        except Exception:
+            pass
 
     if verbose:
         print(f"✓ League: {category_name}")
@@ -1163,7 +1298,7 @@ def download_team_season(
     # Fetch matches for this team (API only accepts team_id OR competition_id+category_id, not both)
     matches_data = BasketFiAPI.get_matches(team_id=team_id)
     all_matches = BasketFiParser.extract_matches(matches_data)
-    
+
     # Filter matches by season/competition if needed
     matches = BasketFiParser.filter_matches_by_season(
         all_matches, competition_id, category_id
@@ -1197,6 +1332,7 @@ def download_team_season(
                             "external_id": external_id,
                             "home_team": match_data["home_team"],
                             "away_team": match_data["away_team"],
+                            "match_date": match_data.get("match_date", "Unknown date"),
                         }
                     )
 
@@ -1255,6 +1391,23 @@ def download_team_season(
                                     "error_type": error_type or "Unknown",
                                     "error_message": error,
                                 }
+                            if verbose and error:
+                                # Show abbreviated error for common issues
+                                if error_type == "Parse Error":
+                                    error_display = "Data parsing failed"
+                                elif error_type and error_type.startswith("HTTP"):
+                                    error_display = error_type
+                                else:
+                                    # For other errors, show type and short message
+                                    error_display = (
+                                        f"{error_type}: {error[:40]}"
+                                        if error_type
+                                        else error[:50]
+                                    )
+
+                                tqdm.write(
+                                    f"  ✗ {match_info['match_date']} - {match_info['home_team']} vs {match_info['away_team']}: {error_display}"
+                                )
 
                         pbar.update(1)
 
@@ -1284,8 +1437,7 @@ def download_team_season(
         print(f"  - Matches: {len(result_data['matches'])} (played matches)")
         if include_advanced:
             matches_with_player_data = sum(
-                1 for m in result_data["matches"]
-                if "advanced_boxscore" in m
+                1 for m in result_data["matches"] if "advanced_boxscore" in m
             )
             print(f"  - Matches with player data: {matches_with_player_data}")
         print(f"{'=' * 80}\n")
@@ -1301,17 +1453,22 @@ def download_league_comprehensive(
 ) -> None:
     """
     Download all seasons with all teams and their matches.
-    
+
     Optionally includes player data from advanced boxscores (if --advanced flag is used).
     Player data comes from match boxscores, not separate player downloads.
 
     This fetches:
     - All seasons for the league
-    - All matches for each season (played matches only)
-    - All teams with full rosters and staff
-    - Advanced box scores with player stats per match (optional)
+    - For each season:
+      - All matches (played matches only)
+      - All teams that participated in that season
+      - Team details including rosters and staff (current data from API)
 
-    All data is saved to a single structured JSON file.
+    Note: Team data (rosters, officials) is fetched from the current API state.
+    The API does not provide historical team rosters, so team details reflect
+    the current state at download time, not historical rosters from each season.
+
+    All data is organized by season and saved to a single structured JSON file.
 
     Args:
         category_id: The category/league identifier (e.g., "4" for Korisliiga)
@@ -1337,23 +1494,54 @@ def download_league_comprehensive(
     if verbose:
         print("Step 1: Fetching league information and seasons...")
 
-    category_data = BasketFiAPI.get_category(season_id, category_id)
+    try:
+        category_data = BasketFiAPI.get_category(season_id, category_id)
+    except Exception as e:
+        error_msg = "Error: Failed to fetch category/season information.\n"
+        error_msg += f"This usually means the category-id ({category_id}) or reference season-id ({season_id}) is invalid.\n"
+        error_msg += f"Details: {str(e)}\n\n"
+        error_msg += "Common category IDs:\n"
+        error_msg += "  4  - Korisliiga (Men's top division)\n"
+        error_msg += "  2  - Miesten I divisioona A (Men's 1st division A)\n"
+        error_msg += "  13 - Naisten Korisliiga (Women's top division)\n"
+        print(error_msg)
+        return
 
     if "category" not in category_data or "seasons" not in category_data["category"]:
-        print("Error: Could not retrieve seasons for this category.")
+        print(f"Error: Could not retrieve seasons for category-id ({category_id}).")
+        print(
+            f"This usually means the category-id or the reference season-id ({season_id}) is invalid."
+        )
+        print("\nCommon category IDs:")
+        print("  4  - Korisliiga (Men's top division)")
+        print("  2  - Miesten I divisioona A (Men's 1st division A)")
+        print("  13 - Naisten Korisliiga (Women's top division)")
         return
 
     category = category_data["category"]
     seasons = category["seasons"]
     category_name = category.get("category_name", "Unknown")
 
+    # Validate category name
+    if category_name == "Unknown" or not category_name:
+        print("Warning: Category name could not be determined.")
+        print(f"This might indicate an invalid category-id ({category_id}).")
+        print("Continuing anyway, but results may be empty...")
+
     if not seasons:
-        print("No seasons found for this category.")
+        print(f"No seasons found for category-id ({category_id}).")
+        print("This category might not have any active seasons.")
         return
 
     if verbose:
         print(f"✓ League: {category_name}")
-        print(f"✓ Found {len(seasons)} seasons\n")
+        print(f"✓ Found {len(seasons)} seasons")
+        print(f"\nAvailable seasons:")
+        for season in seasons:
+            print(
+                f"  {season.get('competition_id', 'N/A'):15} - {season.get('season_name', 'Unknown')}"
+            )
+        print()
 
     # Initialize comprehensive data structure
     comprehensive_data = {
@@ -1361,32 +1549,22 @@ def download_league_comprehensive(
             "category_id": category_id,
             "category_name": category_name,
             "total_seasons": len(seasons),
-            "seasons": [
-                {
-                    "season_id": s["season_id"],
-                    "season_name": s["season_name"],
-                    "competition_id": s["competition_id"],
-                }
-                for s in seasons
-            ],
             "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
             "include_advanced_stats": include_advanced,
         },
-        "matches": [],
-        "teams": [],
+        "seasons": [],
     }
 
-    # Step 2: Download all matches for all seasons
+    # Step 2: Download all matches for all seasons and organize by season
     if verbose:
-        print("Step 2: Downloading all matches for all seasons...")
+        print("Step 2: Downloading matches and teams for each season...")
 
-    # Collect all matches from all seasons
-    all_matches: list[Dict[str, Any]] = []
+    # Process each season separately
     total_matches_found = 0
     total_played_matches = 0
     total_advanced_stats = 0
     total_failed = 0
-    seasons_processed = []
+    total_teams_fetched = 0
 
     for idx, season in enumerate(seasons, 1):
         season_data_id = season["season_id"]
@@ -1395,6 +1573,14 @@ def download_league_comprehensive(
 
         if verbose:
             print(f"  [{idx}/{len(seasons)}] Processing season: {season_name}")
+
+        season_data = {
+            "season_id": season_data_id,
+            "season_name": season_name,
+            "competition_id": season_competition_id,
+            "matches": [],
+            "teams": [],
+        }
 
         try:
             # Fetch matches for this season
@@ -1406,33 +1592,30 @@ def download_league_comprehensive(
             total_matches_found += len(matches)
 
             # Process matches for this season
-            processed_matches_raw = BasketFiParser.parse_matches(
+            processed_matches = BasketFiParser.parse_matches(
                 matches, season_name=season_name, only_played=True
             )
-            # Add season_id to each match for league-comprehensive
-            processed_matches = []
-            for match_data in processed_matches_raw:
-                match_data_with_season = {**match_data, "season_id": season_data_id}
-                processed_matches.append(match_data_with_season)
-            
+
             matches_to_fetch_advanced = []
-            
+
             # Check if we should fetch advanced stats
             if include_advanced:
-                for idx, match_data in enumerate(processed_matches):
+                for match_idx, match_data in enumerate(processed_matches):
                     external_id = match_data.get("match_external_id")
                     if external_id:
                         matches_to_fetch_advanced.append(
                             {
-                                "index": len(all_matches) + idx,
+                                "index": match_idx,
                                 "external_id": external_id,
                                 "home_team": match_data["home_team"],
                                 "away_team": match_data["away_team"],
+                                "match_date": match_data.get(
+                                    "match_date", "Unknown date"
+                                ),
                             }
                         )
 
             total_played_matches += len(processed_matches)
-            all_matches.extend(processed_matches)
 
             if verbose:
                 print(
@@ -1483,7 +1666,7 @@ def download_league_comprehensive(
                             index, boxscore, error, error_type = future.result()
 
                             if boxscore:
-                                all_matches[index]["advanced_boxscore"] = boxscore
+                                processed_matches[index]["advanced_boxscore"] = boxscore
                                 season_advanced += 1
                                 total_advanced_stats += 1
                             else:
@@ -1491,7 +1674,9 @@ def download_league_comprehensive(
                                 total_failed += 1
                                 # Add error information to match data for debugging
                                 if error:
-                                    all_matches[index]["advanced_boxscore_error"] = {
+                                    processed_matches[index][
+                                        "advanced_boxscore_error"
+                                    ] = {
                                         "error_type": error_type or "Unknown",
                                         "error_message": error,
                                     }
@@ -1510,7 +1695,7 @@ def download_league_comprehensive(
                                         )
 
                                     tqdm.write(
-                                        f"      ✗ {match_info['home_team']} vs {match_info['away_team']}: {error_display}"
+                                        f"      ✗ {match_info['match_date']} - {match_info['home_team']} vs {match_info['away_team']}: {error_display}"
                                     )
 
                             pbar.update(1)
@@ -1521,74 +1706,77 @@ def download_league_comprehensive(
                         stats_msg += f" ({season_failed} failed)"
                     print(stats_msg)
 
-            seasons_processed.append(
-                {
-                    "season_id": season_data_id,
-                    "season_name": season_name,
-                    "competition_id": season_competition_id,
-                    "total_matches": len(matches),
-                    "played_matches": len(processed_matches),
-                }
-            )
+            # Store matches for this season
+            season_data["matches"] = processed_matches
+
+            # Extract unique teams for this season
+            teams_list = BasketFiParser.extract_teams_from_matches(processed_matches)
+
+            if verbose:
+                print(f"    ✓ Found {len(teams_list)} teams in this season")
+                print(f"    Fetching team details for season {season_name}...")
+
+            # Fetch detailed team data for each team in this season
+            teams_with_details = []
+
+            for team_idx, team_info in enumerate(teams_list, 1):
+                team_id = team_info["team_id"]
+                team_name = team_info["team_name"]
+
+                if verbose:
+                    print(
+                        f"      [{team_idx}/{len(teams_list)}] Fetching {team_name}..."
+                    )
+
+                try:
+                    # Pass competition_id and category_id to get historical roster data
+                    team_data = BasketFiAPI.get_team(
+                        str(team_id),
+                        competition_id=season_competition_id,
+                        category_id=category_id,
+                    )
+                    if "team" in team_data:
+                        teams_with_details.append(team_data["team"])
+                    else:
+                        teams_with_details.append(team_info)
+                except Exception as e:
+                    if verbose:
+                        print(f"        ✗ Error: {e}")
+                    teams_with_details.append({**team_info, "error": str(e)})
+
+            season_data["teams"] = teams_with_details
+            total_teams_fetched += len(teams_with_details)
+
+            if verbose:
+                print(
+                    f"    ✓ Fetched {len(teams_with_details)} teams for season {season_name}\n"
+                )
+
+            comprehensive_data["seasons"].append(season_data)
 
         except Exception as e:
             if verbose:
-                print(f"    ✗ Error processing season {season_name}: {str(e)}")
+                print(f"    ✗ Error processing season {season_name}: {str(e)}\n")
             continue
 
-    comprehensive_data["matches"] = all_matches
-    comprehensive_data["metadata"]["seasons_processed"] = len(seasons_processed)
+    comprehensive_data["metadata"]["seasons_processed"] = len(
+        comprehensive_data["seasons"]
+    )
     comprehensive_data["metadata"]["total_matches_found"] = total_matches_found
     comprehensive_data["metadata"]["total_played_matches_saved"] = total_played_matches
     comprehensive_data["metadata"]["matches_with_advanced_stats"] = total_advanced_stats
     comprehensive_data["metadata"]["matches_failed"] = total_failed
+    comprehensive_data["metadata"]["total_teams_fetched"] = total_teams_fetched
 
     if verbose:
-        print(f"\n✓ Downloaded {total_played_matches} played matches from {len(seasons_processed)} seasons\n")
-
-    # Step 3: Collect all unique teams
-    if verbose:
-        print("Step 3: Collecting all teams from matches...")
-
-    # Extract unique teams
-    teams_list = BasketFiParser.extract_teams_from_matches(all_matches)
-
-    if verbose:
-        print(f"✓ Found {len(teams_list)} unique teams\n")
-
-    # Step 4: Fetch detailed team data for each team
-    if verbose:
-        print("Step 4: Fetching detailed team data (rosters, officials, etc.)...")
-
-    teams_with_details = []
-
-    for idx, team_info in enumerate(teams_list, 1):
-        team_id = team_info["team_id"]
-        team_name = team_info["team_name"]
-
-        if verbose:
-            print(f"  [{idx}/{len(teams_list)}] Fetching {team_name}...")
-
-        try:
-            team_data = BasketFiAPI.get_team(str(team_id))
-            if "team" in team_data:
-                teams_with_details.append(team_data["team"])
-            else:
-                teams_with_details.append(team_info)
-        except Exception as e:
-            if verbose:
-                print(f"    ✗ Error: {e}")
-            teams_with_details.append({**team_info, "error": str(e)})
-
-    comprehensive_data["teams"] = teams_with_details
-    comprehensive_data["metadata"]["total_teams"] = len(teams_with_details)
-
-    if verbose:
-        print(f"✓ Fetched {len(teams_with_details)} teams\n")
+        print(
+            f"✓ Downloaded {total_played_matches} played matches from {len(comprehensive_data['seasons'])} seasons"
+        )
+        print(f"✓ Fetched {total_teams_fetched} team records across all seasons\n")
 
     # Save everything to a single comprehensive file
     output_file = output_path / "league_comprehensive.json"
-    
+
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(comprehensive_data, f, indent=2, ensure_ascii=False)
 
@@ -1599,16 +1787,12 @@ def download_league_comprehensive(
         print(f"{'=' * 80}")
         print(f"League: {category_name}")
         print(f"Output file: {output_file.absolute()}")
-        print(f"\nData summary:")
-        print(f"  - Seasons: {len(seasons)}")
+        print("\nData summary:")
+        print(f"  - Seasons: {len(comprehensive_data['seasons'])}")
         print(f"  - Matches: {total_played_matches} (from {total_matches_found} total)")
-        print(f"  - Teams: {len(teams_with_details)}")
+        print(f"  - Team records fetched: {total_teams_fetched}")
         if include_advanced:
-            matches_with_player_data = sum(
-                1 for m in comprehensive_data["matches"]
-                if "advanced_boxscore" in m
-            )
-            print(f"  - Matches with player data: {matches_with_player_data}")
+            print(f"  - Matches with player data: {total_advanced_stats}")
         print(f"{'=' * 80}\n")
 
 
@@ -1619,15 +1803,12 @@ examples:
   # Option 1: All teams with their matches from one season
   uv run koris-api season-comprehensive --category-id 4 --season-id huki2526 --output season.json
   
-  # Option 1 with player data from match boxscores
-  uv run koris-api season-comprehensive --category-id 4 --season-id huki2526 --output season.json --advanced
-  
-  # Option 2: All matches of one team from one season
-  uv run koris-api team-season --team-id 19281 --category-id 4 --season-id huki2526 --output team.json
+  # Option 2: All matches of one team from one season (category auto-detected)
+  uv run koris-api team-season --team-id 19281 --season-id 2024-2025 --output team.json
   
   # Option 2 with player data from match boxscores
-  uv run koris-api team-season --team-id 19281 --category-id 4 --season-id huki2526 --output team.json --advanced
-  
+  uv run koris-api team-season --team-id 19281 --season-id 2024-2025 --output team.json --advanced
+
   # Option 3: All seasons with all teams and their matches
   uv run koris-api league-comprehensive --category-id 4 --output-dir korisliiga_data
   
@@ -1643,6 +1824,7 @@ notes:
   All commands save data to a single structured JSON file.
   Player data comes from advanced boxscores (use --advanced flag).
   Each match's advanced_boxscore includes player stats from that match.
+  For team-season action, category-id is optional and will be auto-detected from team's matches.
 """
 
     parser = argparse.ArgumentParser(
@@ -1653,15 +1835,9 @@ notes:
     parser.add_argument(
         "action",
         choices=[
-            "matches-season",
-            "matches-league",
             "season-comprehensive",
+            "team-season",
             "league-comprehensive",
-            "teams-season",
-            "teams-league",
-            "players-season",
-            "players-team",
-            "players-league",
         ],
         help="Action to perform",
     )
@@ -1672,8 +1848,7 @@ notes:
     )
     parser.add_argument(
         "--category-id",
-        default="4",
-        help="Category ID (default: 4 for Korisliiga)",
+        help="Category ID (default: 4 for Korisliiga, optional for team-season - will be auto-detected)",
     )
     parser.add_argument(
         "--competition-id",
@@ -1709,8 +1884,8 @@ notes:
     parser.add_argument(
         "--concurrency",
         type=int,
-        default=5,
-        help="Concurrent workers for advanced stats (default: 5)",
+        default=10,
+        help="Concurrent workers for advanced stats (default: 10)",
     )
     parser.add_argument(
         "--quiet",
@@ -1721,32 +1896,44 @@ notes:
     args = parser.parse_args()
 
     try:
+        # Provide default category_id if not specified (except for team-season which auto-detects)
+        if args.action != "team-season" and not args.category_id:
+            args.category_id = "4"  # Default to Korisliiga
+
         # Option 1: All teams with their matches from one season
         if args.action == "season-comprehensive":
             # For season-comprehensive, competition_id is required (it's the season identifier)
             if not args.season_id:
                 print("Error: --season-id is required for season-comprehensive action")
-                print("Example: uv run koris-api season-comprehensive --category-id 4 --season-id huki2526 --output season.json")
+                print(
+                    "Example: uv run koris-api season-comprehensive --category-id 4 --season-id huki2526 --output season.json"
+                )
                 return
-            
+
             # Generate output filename if not provided
             if not args.output:
                 from datetime import datetime
+
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 args.output = f"season_{args.season_id}_{timestamp}.json"
-            
+
             # Get season name from category data if possible
             season_name = None
             try:
-                category_data = BasketFiAPI.get_category(args.season_id, args.category_id)
-                if "category" in category_data and "seasons" in category_data["category"]:
+                category_data = BasketFiAPI.get_category(
+                    args.season_id, args.category_id
+                )
+                if (
+                    "category" in category_data
+                    and "seasons" in category_data["category"]
+                ):
                     for season in category_data["category"]["seasons"]:
                         if season.get("competition_id") == args.season_id:
                             season_name = season.get("season_name")
                             break
             except Exception:
                 pass  # Use competition_id as season_name if we can't get it
-            
+
             download_season_comprehensive(
                 category_id=args.category_id,
                 competition_id=args.season_id,
@@ -1761,32 +1948,43 @@ notes:
         elif args.action == "team-season":
             if not args.team_id:
                 print("Error: --team-id is required for team-season action")
-                print("Example: uv run koris-api team-season --team-id 19281 --category-id 4 --season-id huki2526 --output team.json")
+                print(
+                    "Example: uv run koris-api team-season --team-id 19281 --season-id 2024-2025 --output team.json"
+                )
                 return
-            
+
             if not args.season_id:
                 print("Error: --season-id is required for team-season action")
-                print("Example: uv run koris-api team-season --team-id 19281 --category-id 4 --season-id huki2526 --output team.json")
+                print(
+                    "Example: uv run koris-api team-season --team-id 19281 --season-id 2024-2025 --output team.json"
+                )
                 return
-            
+
             # Generate output filename if not provided
             if not args.output:
                 from datetime import datetime
+
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 args.output = f"team_{args.team_id}_{args.season_id}_{timestamp}.json"
-            
-            # Get season name from category data if possible
+
+            # Get season name from category data if possible (and if category_id is provided)
             season_name = None
-            try:
-                category_data = BasketFiAPI.get_category(args.season_id, args.category_id)
-                if "category" in category_data and "seasons" in category_data["category"]:
-                    for season in category_data["category"]["seasons"]:
-                        if season.get("competition_id") == args.season_id:
-                            season_name = season.get("season_name")
-                            break
-            except Exception:
-                pass
-            
+            if args.category_id:
+                try:
+                    category_data = BasketFiAPI.get_category(
+                        args.season_id, args.category_id
+                    )
+                    if (
+                        "category" in category_data
+                        and "seasons" in category_data["category"]
+                    ):
+                        for season in category_data["category"]["seasons"]:
+                            if season.get("competition_id") == args.season_id:
+                                season_name = season.get("season_name")
+                                break
+                except Exception:
+                    pass
+
             download_team_season(
                 team_id=args.team_id,
                 category_id=args.category_id,
