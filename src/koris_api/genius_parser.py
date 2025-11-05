@@ -191,7 +191,9 @@ class GeniusSportsParser:
         return result
 
     @staticmethod
-    def parse_player_gamelog(html_content: str, teams_dict: Dict[str, str]) -> Dict[str, Any]:
+    def parse_player_gamelog(
+        html_content: str, teams_dict: Dict[str, str]
+    ) -> Dict[str, Any]:
         """
         Parse player gamelog HTML content.
 
@@ -411,3 +413,148 @@ class GeniusSportsParser:
                 unique_players.append(player)
 
         return unique_players
+
+    @staticmethod
+    def parse_team_statistics_page(html_content: str) -> Dict[str, Any]:
+        """
+        Parse team statistics page HTML and extract player statistics.
+
+        Args:
+            html_content: HTML content from the team statistics page
+
+        Returns:
+            Dictionary containing team info and three statistical categories
+        """
+        soup = BeautifulSoup(html_content, "html.parser")
+
+        result: Dict[str, Any] = {
+            "team_name": None,
+            "team_location": None,
+            "averages": [],
+            "shooting": [],
+            "totals": [],
+        }
+
+        # Extract team name
+        team_title = soup.find("h1", class_="team-title")
+        if team_title and isinstance(team_title, Tag):
+            result["team_name"] = team_title.get_text(strip=True)
+
+        # Extract team location from contact details
+        contact_div = soup.find("h2", string="Contact Details")
+        if contact_div and isinstance(contact_div, Tag):
+            parent = contact_div.find_parent()
+            if parent and isinstance(parent, Tag):
+                # Get text after the h2, before any other tags
+                text_parts = []
+                for sibling in contact_div.next_siblings:
+                    if isinstance(sibling, NavigableString):
+                        text = str(sibling).strip()
+                        if text:
+                            text_parts.append(text)
+                    elif isinstance(sibling, Tag) and sibling.name == "br":
+                        continue
+                    else:
+                        break
+                if text_parts:
+                    result["team_location"] = text_parts[0]
+
+        # Find all statistical tables
+        tables = soup.find_all("table", class_="tableClass")
+
+        for table in tables:
+            # Find the preceding h4 to determine table type
+            h4 = table.find_previous("h4")
+            if not h4 or not isinstance(h4, Tag):
+                continue
+
+            table_type = h4.get_text(strip=True)
+
+            # Get column headers
+            headers = []
+            thead = table.find("thead")
+            if thead and isinstance(thead, Tag):
+                header_row = thead.find("tr")
+                if header_row and isinstance(header_row, Tag):
+                    for th in header_row.find_all("th"):
+                        # Use title attribute if available, otherwise text
+                        header = th.get("title", th.get_text(strip=True))
+                        headers.append(header)
+
+            # Get player stats
+            tbody = table.find("tbody")
+            if not tbody or not isinstance(tbody, Tag):
+                continue
+
+            players_stats = []
+            for row in tbody.find_all("tr"):
+                if not isinstance(row, Tag):
+                    continue
+
+                cells = row.find_all("td")
+                if len(cells) < 2:
+                    continue
+
+                player_stat: Dict[str, Any] = {}
+
+                for i, cell in enumerate(cells):
+                    if i >= len(headers):
+                        break
+
+                    header = headers[i]
+
+                    # Handle Player column - extract name and ID
+                    if header == "Player":
+                        link = cell.find("a")
+                        if link and isinstance(link, Tag):
+                            player_name = link.get_text(strip=True)
+                            href = link.get("href", "")
+                            # Extract player ID from href
+                            match = re.search(r"/person/(\d+)", str(href))
+                            if match:
+                                player_stat["player_id"] = match.group(1)
+                            player_stat["player_name"] = player_name
+                        continue
+
+                    # Get value from cell
+                    # First try data-sort-value attribute
+                    value = cell.get("data-sort-value")
+                    if value is not None:
+                        # Try to convert to appropriate type
+                        try:
+                            if "." in str(value):
+                                value = float(value)
+                            else:
+                                value = int(value)
+                        except (ValueError, TypeError):
+                            pass  # Keep as string
+                    else:
+                        # Get text content
+                        value = cell.get_text(strip=True)
+                        # Try to convert to number for numeric fields
+                        if header not in ["Player"]:
+                            try:
+                                # Check if it's a time format (MM:SS)
+                                if ":" in str(value):
+                                    value = value  # Keep as string for time
+                                elif "." in str(value):
+                                    value = float(value)
+                                else:
+                                    value = int(value)
+                            except (ValueError, TypeError):
+                                pass  # Keep as string
+
+                    player_stat[header] = value
+
+                if player_stat:
+                    players_stats.append(player_stat)
+
+            # Add to appropriate category
+            if table_type == "Averages":
+                result["averages"] = players_stats
+            elif table_type == "Shooting Statistics":
+                result["shooting"] = players_stats
+            elif table_type == "Totals":
+                result["totals"] = players_stats
+
+        return result

@@ -72,6 +72,16 @@ def genius_boxscore_html():
         return f.read()
 
 
+@pytest.fixture
+def genius_team_statistics_html():
+    """Load the HTML version of genius team statistics for parsing tests."""
+    example_file = (
+        Path(__file__).parent.parent / "example_responses" / "genius-team-players.html"
+    )
+    with open(example_file, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 # =============================================================================
 # PARSING TESTS - Test parsers with fixture data (no API calls)
 # =============================================================================
@@ -127,6 +137,96 @@ def test_boxscore_parsing_from_html(genius_boxscore_html):
         ]
         for field in expected_fields:
             assert field in player, f"Player should have {field} field"
+
+
+def test_team_statistics_parsing_from_html(genius_team_statistics_html):
+    """Test parsing team statistics from HTML file."""
+    result = GeniusSportsParser.parse_team_statistics_page(genius_team_statistics_html)
+
+    # Verify structure
+    assert "team_name" in result
+    assert "team_location" in result
+    assert "averages" in result
+    assert "shooting" in result
+    assert "totals" in result
+
+    # Verify team info
+    assert result["team_name"] == "ACO Basket"
+    assert result["team_location"] == "Oulu"
+
+    # Verify all three statistical categories have data
+    assert len(result["averages"]) == 12, "Should have 12 players in averages"
+    assert len(result["shooting"]) == 12, "Should have 12 players in shooting stats"
+    assert len(result["totals"]) == 12, "Should have 12 players in totals"
+
+    # Verify averages structure
+    player_avg = result["averages"][0]
+    assert "player_id" in player_avg
+    assert "player_name" in player_avg
+    expected_avg_fields = [
+        "Games",
+        "Games started",
+        "Average minutes",
+        "Average points",
+        "Average offensive rebounds",
+        "Average defensive rebounds",
+        "Average total rebounds",
+        "Average assists",
+        "Average steals",
+        "Average blocks",
+        "Average personal fouls",
+        "Average turnovers",
+        "Average +/-",
+    ]
+    for field in expected_avg_fields:
+        assert field in player_avg, f"Player averages should have {field} field"
+
+    # Verify shooting structure
+    player_shoot = result["shooting"][0]
+    assert "player_id" in player_shoot
+    assert "player_name" in player_shoot
+    expected_shoot_fields = [
+        "2 Points made",
+        "2 Points attempted",
+        "2 Points percentage",
+        "3 Points made",
+        "3 Points attempted",
+        "3 Point percentage",
+        "Free throws made",
+        "Free throws attempted",
+        "Free throw percentage",
+    ]
+    for field in expected_shoot_fields:
+        assert field in player_shoot, f"Player shooting should have {field} field"
+
+    # Verify totals structure
+    player_tot = result["totals"][0]
+    assert "player_id" in player_tot
+    assert "player_name" in player_tot
+    expected_tot_fields = [
+        "Games",
+        "Minutes",
+        "Points",
+        "Offensive rebounds",
+        "Defensive rebounds",
+        "Total rebounds",
+        "Assists",
+        "Steals",
+        "Blocks",
+        "Personal fouls",
+        "Plus/minus",
+        "Index of success",
+    ]
+    for field in expected_tot_fields:
+        assert field in player_tot, f"Player totals should have {field} field"
+
+    # Verify data types are correct
+    assert isinstance(player_avg["Games"], int)
+    assert isinstance(player_avg["Average points"], float)
+    assert isinstance(player_shoot["2 Points made"], int)
+    assert isinstance(player_shoot["2 Points percentage"], float)
+    assert isinstance(player_tot["Points"], int)
+    assert isinstance(player_tot["Minutes"], float)  # Time in decimal minutes
 
 
 def test_basketfi_matches_parsing(basketfi_matches):
@@ -234,6 +334,34 @@ def test_genius_boxscore_mocked(genius_boxscore_html):
         assert "match_info" in boxscore
         assert "teams" in boxscore
         assert len(boxscore["teams"]) == 2
+
+
+def test_genius_team_statistics_mocked(genius_team_statistics_html):
+    """Test get_team_statistics API method with mocked response."""
+    with patch("requests.get") as mock_get:
+        mock_response = MagicMock()
+        mock_response.text = genius_team_statistics_html
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        stats = GeniusSportsAPI.get_team_statistics("42145", "40154")
+
+        # Verify structure
+        assert "competition_id" in stats
+        assert "team_id" in stats
+        assert "team_name" in stats
+        assert "team_location" in stats
+        assert "averages" in stats
+        assert "shooting" in stats
+        assert "totals" in stats
+
+        # Verify data
+        assert stats["competition_id"] == "42145"
+        assert stats["team_id"] == "40154"
+        assert stats["team_name"] == "ACO Basket"
+        assert len(stats["averages"]) == 12
+        assert len(stats["shooting"]) == 12
+        assert len(stats["totals"]) == 12
 
 
 # =============================================================================

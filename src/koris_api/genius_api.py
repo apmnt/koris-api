@@ -240,3 +240,50 @@ class GeniusSportsAPI:
             print(f"Saved data to {output_file}")
 
         return result
+
+    @classmethod
+    def get_team_statistics(
+        cls,
+        competition_id: str,
+        team_id: str,
+        output_file: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Fetch team player statistics from Genius Sports.
+
+        Args:
+            competition_id: The Genius Sports competition identifier
+            team_id: The Genius Sports team identifier
+            output_file: Optional path to save the results as JSON
+
+        Returns:
+            Dictionary containing team statistics with averages, shooting, and totals
+        """
+        print(
+            f"Fetching team statistics for team {team_id} in competition {competition_id}..."
+        )
+
+        # Fetch the team statistics page
+        url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/team/{team_id}/statistics"
+        response = requests.get(url)
+        response.raise_for_status()
+
+        # Parse the statistics
+        stats = GeniusSportsParser.parse_team_statistics_page(response.text)
+
+        result: Dict[str, Any] = {
+            "competition_id": competition_id,
+            "team_id": team_id,
+            **stats,
+        }
+
+        print(f"Found statistics for {len(stats.get('averages', []))} players")
+
+        # Save to file if specified
+        if output_file:
+            output_path = Path(output_file)
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
+            print(f"Saved data to {output_file}")
+
+        return result

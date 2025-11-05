@@ -1173,19 +1173,24 @@ def download_team_season(
     output_file: str,
     season_name: Optional[str] = None,
     include_advanced: bool = False,
+    include_team_stats: bool = False,
+    genius_competition_id: Optional[str] = None,
+    genius_team_id: Optional[str] = None,
     max_workers: int = 5,
     verbose: bool = True,
 ) -> None:
     """
     Download all matches of one team from one season.
 
-    Optionally includes player data from advanced boxscores (if --advanced flag is used).
+    Optionally includes player data from advanced boxscores (if --adv-players flag is used).
+    Optionally includes team season statistics (if --adv-teams flag is used).
     Player data comes from match boxscores, not separate player downloads.
 
     This fetches:
     - All matches for the team in the season (played matches only)
     - Team details with roster and staff
     - Advanced box scores with player stats per match (optional)
+    - Team season statistics - averages, shooting, totals (optional)
 
     All data is saved to a single structured JSON file.
 
@@ -1196,6 +1201,9 @@ def download_team_season(
         output_file: Path where output file will be saved
         season_name: Optional season name (e.g., "2024-2025") for metadata
         include_advanced: Whether to include advanced box scores with player data from Genius Sports
+        include_team_stats: Whether to include team season statistics from Genius Sports
+        genius_competition_id: Genius Sports competition ID (required for team stats)
+        genius_team_id: Genius Sports team ID (required for team stats)
         max_workers: Number of concurrent workers for parallel downloads
         verbose: Whether to show progress output
     """
@@ -1420,6 +1428,34 @@ def download_team_season(
         if verbose:
             print(f"✓ Downloaded {len(processed_matches)} played matches\n")
 
+    # Fetch team statistics if requested
+    if include_team_stats:
+        if not genius_competition_id or not genius_team_id:
+            if verbose:
+                print(
+                    "⚠ Warning: --adv-teams requires --genius-competition-id and --genius-team-id"
+                )
+                print("  Skipping team statistics...\n")
+        else:
+            if verbose:
+                print(f"Fetching team season statistics from Genius Sports...")
+
+            try:
+                team_stats = GeniusSportsAPI.get_team_statistics(
+                    competition_id=genius_competition_id, team_id=genius_team_id
+                )
+                result_data["team_statistics"] = team_stats
+                result_data["metadata"]["include_team_stats"] = True
+
+                if verbose:
+                    print(
+                        f"✓ Fetched team statistics with {len(team_stats.get('averages', []))} players\n"
+                    )
+            except Exception as e:
+                if verbose:
+                    print(f"✗ Error fetching team statistics: {e}\n")
+                result_data["metadata"]["team_stats_error"] = str(e)
+
     # Save to file
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(result_data, f, indent=2, ensure_ascii=False)
@@ -1440,6 +1476,9 @@ def download_team_season(
                 1 for m in result_data["matches"] if "advanced_boxscore" in m
             )
             print(f"  - Matches with player data: {matches_with_player_data}")
+        if include_team_stats and "team_statistics" in result_data:
+            team_stats = result_data["team_statistics"]
+            print(f"  - Team statistics: {len(team_stats.get('averages', []))} players")
         print(f"{'=' * 80}\n")
 
 
@@ -1803,17 +1842,14 @@ examples:
   # Option 1: All teams with their matches from one season
   uv run koris-api season-comprehensive --category-id 4 --season-id huki2526 --output season.json
   
-  # Option 2: All matches of one team from one season (category auto-detected)
+  # Option 2: All matches of one team from one season
   uv run koris-api team-season --team-id 19281 --season-id 2024-2025 --output team.json
-  
-  # Option 2 with player data from match boxscores
-  uv run koris-api team-season --team-id 19281 --season-id 2024-2025 --output team.json --advanced
 
   # Option 3: All seasons with all teams and their matches
   uv run koris-api league-comprehensive --category-id 4 --output-dir korisliiga_data
-  
-  # Option 3 with player data from match boxscores
-  uv run koris-api league-comprehensive --category-id 4 --output-dir korisliiga_data --advanced
+
+  # Add --adv-players to include per-match player stats from advanced boxscores
+  # Add --adv-teams to include team season statistics (averages, shooting, totals)
 
 common category IDs:
   4  - Korisliiga (Men's top division)
@@ -1822,8 +1858,8 @@ common category IDs:
 
 notes:
   All commands save data to a single structured JSON file.
-  Player data comes from advanced boxscores (use --advanced flag).
-  Each match's advanced_boxscore includes player stats from that match.
+  Use --adv-players for per-match player statistics from advanced boxscores.
+  Use --adv-teams for team season statistics (requires Genius Sports competition ID).
   For team-season action, category-id is optional and will be auto-detected from team's matches.
 """
 
@@ -1856,7 +1892,15 @@ notes:
     )
     parser.add_argument(
         "--team-id",
-        help="Genius Sports team ID (for players-team)",
+        help="Team ID (for team-season)",
+    )
+    parser.add_argument(
+        "--genius-competition-id",
+        help="Genius Sports competition ID (required for --adv-teams)",
+    )
+    parser.add_argument(
+        "--genius-team-id",
+        help="Genius Sports team ID (required for --adv-teams)",
     )
     parser.add_argument(
         "--old-season-id",
@@ -1877,9 +1921,14 @@ notes:
         help="Output directory for comprehensive downloads (for league-comprehensive)",
     )
     parser.add_argument(
-        "--advanced",
+        "--adv-players",
         action="store_true",
-        help="Include advanced boxscores with player data from Genius Sports (optional)",
+        help="Include advanced boxscores with player data from Genius Sports (per-match stats)",
+    )
+    parser.add_argument(
+        "--adv-teams",
+        action="store_true",
+        help="Include team season statistics (averages, shooting, totals) from Genius Sports",
     )
     parser.add_argument(
         "--concurrency",
@@ -1939,7 +1988,7 @@ notes:
                 competition_id=args.season_id,
                 output_file=args.output,
                 season_name=season_name,
-                include_advanced=args.advanced,
+                include_advanced=args.adv_players,
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
             )
@@ -1991,7 +2040,10 @@ notes:
                 competition_id=args.season_id,
                 output_file=args.output,
                 season_name=season_name,
-                include_advanced=args.advanced,
+                include_advanced=args.adv_players,
+                include_team_stats=args.adv_teams,
+                genius_competition_id=args.genius_competition_id,
+                genius_team_id=args.genius_team_id,
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
             )
@@ -2009,7 +2061,7 @@ notes:
                 category_id=args.category_id,
                 output_dir=args.output_dir,
                 season_id=args.season_id,
-                include_advanced=args.advanced,
+                include_advanced=args.adv_players,
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
             )
