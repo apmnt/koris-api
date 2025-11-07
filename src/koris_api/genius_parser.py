@@ -356,12 +356,35 @@ class GeniusSportsParser:
 
                 result["events"].append(event)
 
+        # Populate running score for all events
+        GeniusSportsParser._populate_running_score(result["events"])
+
         # Calculate possessions from events
         result["possessions"] = GeniusSportsParser._calculate_possessions(
             result["events"]
         )
 
         return result
+
+    @staticmethod
+    def _populate_running_score(events: List[Dict[str, Any]]) -> None:
+        """
+        Populate running score for all events based on scoring events.
+
+        This ensures every event has the current score, not just scoring plays.
+
+        Args:
+            events: List of events to populate scores for (modified in place)
+        """
+        current_score = "0-0"
+
+        for event in events:
+            # If this event has a score, update our current score
+            if event.get("score"):
+                current_score = event["score"]
+            # Otherwise, use the current running score
+            else:
+                event["score"] = current_score
 
     @staticmethod
     def _calculate_possessions(events: List[Dict[str, Any]]) -> Dict[str, Any]:
