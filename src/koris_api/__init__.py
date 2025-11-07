@@ -1848,6 +1848,9 @@ examples:
   # Option 3: All seasons with all teams and their matches
   uv run koris-api league-comprehensive --category-id 4 --output-dir korisliiga_data
 
+  # Option 4: Play-by-play data for a specific match
+  uv run koris-api playbyplay --match-id 2701892 --output playbyplay.json
+
   # Add --adv-players to include per-match player stats from advanced boxscores
   # Add --adv-teams to include team season statistics (averages, shooting, totals)
 
@@ -1874,6 +1877,7 @@ notes:
             "season-comprehensive",
             "team-season",
             "league-comprehensive",
+            "playbyplay",
         ],
         help="Action to perform",
     )
@@ -1893,6 +1897,10 @@ notes:
     parser.add_argument(
         "--team-id",
         help="Team ID (for team-season)",
+    )
+    parser.add_argument(
+        "--match-id",
+        help="Genius Sports match ID (for playbyplay)",
     )
     parser.add_argument(
         "--genius-competition-id",
@@ -2065,6 +2073,69 @@ notes:
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
             )
+
+        # Play-by-play for a specific match
+        elif args.action == "playbyplay":
+            if not args.match_id:
+                print("Error: --match-id is required for playbyplay action")
+                print(
+                    "Example: uv run koris-api playbyplay --match-id 2701892 --output playbyplay.json"
+                )
+                return
+
+            # Generate output filename if not provided
+            if not args.output:
+                from datetime import datetime
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                args.output = f"playbyplay_{args.match_id}_{timestamp}.json"
+
+            if not args.quiet:
+                print(f"Fetching play-by-play data for match {args.match_id}...")
+                print(f"Output file: {args.output}")
+                print(f"{'=' * 60}\n")
+
+            try:
+                playbyplay_data = GeniusSportsAPI.get_match_playbyplay(args.match_id)
+
+                # Save to file
+                output_path = Path(args.output)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+
+                with open(output_path, "w", encoding="utf-8") as f:
+                    json.dump(playbyplay_data, f, indent=2, ensure_ascii=False)
+
+                if not args.quiet:
+                    print(f"\n{'=' * 60}")
+                    print(f"✓ Successfully saved play-by-play data to {output_path}")
+                    print(
+                        f"  - Match: {playbyplay_data.get('match_info', {}).get('home_team', 'N/A')} vs {playbyplay_data.get('match_info', {}).get('away_team', 'N/A')}"
+                    )
+                    print(
+                        f"  - Score: {playbyplay_data.get('match_info', {}).get('home_score', '-')} - {playbyplay_data.get('match_info', {}).get('away_score', '-')}"
+                    )
+                    print(f"  - Events: {len(playbyplay_data.get('events', []))}")
+
+                    # Show possession statistics
+                    possessions = playbyplay_data.get("possessions", {})
+                    if possessions:
+                        print(
+                            f"  - Total Possessions: {possessions.get('total_possessions', 0)}"
+                        )
+                        print(
+                            f"    • Team 1: {possessions.get('team1_possessions', 0)} possessions, "
+                            f"avg {possessions.get('team1_avg_possession_length_seconds', 0):.1f}s"
+                        )
+                        print(
+                            f"    • Team 2: {possessions.get('team2_possessions', 0)} possessions, "
+                            f"avg {possessions.get('team2_avg_possession_length_seconds', 0):.1f}s"
+                        )
+
+                    print(f"{'=' * 60}")
+
+            except Exception as e:
+                print(f"Error fetching play-by-play data: {str(e)}")
+                raise
 
     except Exception as e:
         print(f"Error: {e}")

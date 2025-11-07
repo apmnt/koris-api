@@ -191,6 +191,347 @@ class GeniusSportsParser:
         return result
 
     @staticmethod
+    def parse_playbyplay_html(html_content: str) -> Dict[str, Any]:
+        """
+        Parse play-by-play HTML content and extract game events.
+
+        Args:
+            html_content: HTML content from the play-by-play page
+
+        Returns:
+            Dictionary containing parsed play-by-play data
+        """
+        soup = BeautifulSoup(html_content, "html.parser")
+
+        result: Dict[str, Any] = {"match_info": {}, "events": []}
+
+        # Extract match info from header
+        match_header = soup.find("div", class_="match-header")
+
+        if match_header and isinstance(match_header, Tag):
+            home_wrapper = match_header.find("div", class_="home-wrapper")
+            away_wrapper = match_header.find("div", class_="away-wrapper")
+
+            if home_wrapper and isinstance(home_wrapper, Tag):
+                home_name_elem = home_wrapper.find("span", class_="name")
+                home_score_elem = home_wrapper.find("div", class_="score")
+                result["match_info"]["home_team"] = (
+                    home_name_elem.get_text(strip=True) if home_name_elem else None
+                )
+                result["match_info"]["home_score"] = (
+                    int(home_score_elem.get_text(strip=True))
+                    if home_score_elem
+                    else None
+                )
+
+            if away_wrapper and isinstance(away_wrapper, Tag):
+                away_name_elem = away_wrapper.find("span", class_="name")
+                away_score_elem = away_wrapper.find("div", class_="score")
+                result["match_info"]["away_team"] = (
+                    away_name_elem.get_text(strip=True) if away_name_elem else None
+                )
+                result["match_info"]["away_score"] = (
+                    int(away_score_elem.get_text(strip=True))
+                    if away_score_elem
+                    else None
+                )
+
+            # Get match status
+            status_elem = match_header.find("span", class_="status")
+            if status_elem:
+                result["match_info"]["status"] = status_elem.get_text(strip=True)
+
+            # Get match details (date, venue)
+            details = match_header.find("div", class_="details")
+            if details and isinstance(details, Tag):
+                time_elem = details.find("div", class_="match-time")
+                venue_elem = details.find("div", class_="match-venue")
+                if time_elem and isinstance(time_elem, Tag):
+                    time_span = time_elem.find("span")
+                    result["match_info"]["datetime"] = (
+                        time_span.get_text(strip=True)
+                        if time_span and isinstance(time_span, Tag)
+                        else None
+                    )
+                if venue_elem and isinstance(venue_elem, Tag):
+                    venue_span = venue_elem.find("span")
+                    result["match_info"]["venue"] = (
+                        venue_span.get_text(strip=True)
+                        if venue_span and isinstance(venue_span, Tag)
+                        else None
+                    )
+
+        # Extract play-by-play events
+        playbyplay_div = soup.find("div", id="playbyplay")
+        if playbyplay_div and isinstance(playbyplay_div, Tag):
+            # Find all event divs
+            event_divs = playbyplay_div.find_all("div", class_="pbpa")
+
+            for event_div in event_divs:
+                if not isinstance(event_div, Tag):
+                    continue
+
+                # Extract event type from classes
+                event_classes = event_div.get("class", [])
+                event_type = None
+                period = None
+                team = None
+
+                for cls in event_classes:
+                    if cls.startswith("pbpty"):
+                        event_type = cls.replace("pbpty", "")
+                    elif cls.startswith("per_"):
+                        period = cls.replace("per_", "")
+                    elif cls.startswith("pbpt"):
+                        team_match = re.match(r"pbpt(\d+)", cls)
+                        if team_match:
+                            team = team_match.group(1)
+
+                # Extract event details
+                pbp_team = event_div.find("div", class_="pbp-team")
+                if not pbp_team or not isinstance(pbp_team, Tag):
+                    continue
+
+                # Get time
+                time_elem = pbp_team.find("div", class_="pbp-time")
+                time_str = None
+                score = None
+                period_str = None
+
+                if time_elem and isinstance(time_elem, Tag):
+                    period_span = time_elem.find("span", class_="pbp-period")
+                    if period_span:
+                        period_str = period_span.get_text(strip=True)
+
+                    score_span = time_elem.find("span", class_="pbpsc")
+                    if score_span:
+                        score = score_span.get_text(strip=True)
+
+                    # Get the time text (excluding period and score spans)
+                    time_text_parts = []
+                    for content in time_elem.contents:
+                        if isinstance(content, NavigableString):
+                            text = str(content).strip()
+                            if text:
+                                time_text_parts.append(text)
+                    time_str = " ".join(time_text_parts)
+
+                # Get action description
+                action_elem = pbp_team.find("div", class_="pbp-action")
+                action = (
+                    action_elem.get_text(strip=True)
+                    if action_elem and isinstance(action_elem, Tag)
+                    else None
+                )
+
+                # Extract player name and number from action if present
+                player_name = None
+                player_number = None
+                if action:
+                    # Look for player in strong tag
+                    strong = (
+                        action_elem.find("strong")
+                        if action_elem and isinstance(action_elem, Tag)
+                        else None
+                    )
+                    if strong:
+                        player_text = strong.get_text(strip=True)
+                        # Format is usually "number, name"
+                        if "," in player_text:
+                            parts = player_text.split(",", 1)
+                            player_number = parts[0].strip()
+                            player_name = parts[1].strip()
+
+                # Create event object
+                event = {
+                    "event_type": event_type,
+                    "period": period_str or period,
+                    "team": team,
+                    "time": time_str,
+                    "score": score,
+                    "action": action,
+                    "player_number": player_number,
+                    "player_name": player_name,
+                }
+
+                result["events"].append(event)
+
+        # Calculate possessions from events
+        result["possessions"] = GeniusSportsParser._calculate_possessions(
+            result["events"]
+        )
+
+        return result
+
+    @staticmethod
+    def _calculate_possessions(events: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Calculate possessions from play-by-play events.
+
+        A possession is when one team has control of the ball. It ends when:
+        - Defensive rebound (other team gets possession)
+        - Turnover/Steal (other team gets possession)
+        - Made basket (other team gets possession)
+
+        Offensive rebounds do not start a new possession - they extend the current possession.
+
+        Args:
+            events: List of play-by-play events
+
+        Returns:
+            Dictionary with possession statistics and detailed possession list
+        """
+        possessions: List[Dict[str, Any]] = []
+        current_possession: Dict[str, Any] | None = None
+
+        for event in events:
+            event_type = event.get("event_type", "")
+            team = event.get("team", "")
+            time_str = event.get("time", "")
+            period = event.get("period", "")
+            action = event.get("action", "")
+
+            # Skip neutral events
+            if team in ["0", None, ""]:
+                continue
+
+            # Parse time to seconds for duration calculation
+            # Basketball clocks count DOWN from 10:00 to 0:00
+            # Format is MM:SS or MM:SS:SS (subseconds)
+            time_seconds = None
+            if time_str and ":" in time_str:
+                try:
+                    parts = time_str.split(":")
+                    if len(parts) >= 2:  # MM:SS or MM:SS:subseconds
+                        # Always treat as MM:SS (minutes:seconds)
+                        time_seconds = int(parts[0]) * 60 + int(parts[1])
+                except (ValueError, IndexError):
+                    pass
+
+            # Determine if possession changes
+            possession_change = False
+            new_team = None
+
+            # Made basket - other team gets possession
+            if event_type in ["2pt", "3pt", "freethrow"] and "made" in action.lower():
+                possession_change = True
+                new_team = "1" if team == "2" else "2"
+
+            # Defensive rebound only - other team gets possession
+            # Offensive rebounds continue the same possession!
+            elif event_type == "rebound" and "defensive" in action.lower():
+                possession_change = True
+                new_team = team
+
+            # Turnover - other team gets possession
+            elif event_type == "turnover":
+                possession_change = True
+                new_team = "1" if team == "2" else "2"
+
+            # Steal - stealing team gets possession
+            elif event_type == "steal":
+                possession_change = True
+                new_team = team
+
+            # Handle possession change
+            if possession_change and new_team and new_team != "0":
+                # End current possession
+                if current_possession:
+                    current_possession["end_time"] = time_str
+                    current_possession["end_time_seconds"] = time_seconds
+                    current_possession["end_period"] = period
+                    current_possession["ending_event"] = {
+                        "event_type": event_type,
+                        "action": action,
+                    }
+
+                    # Calculate duration (clock counts down, so start time > end time)
+                    if (
+                        current_possession["start_time_seconds"] is not None
+                        and time_seconds is not None
+                        and current_possession["start_period"] == period
+                    ):
+                        # For same period: start - end (clock counts down)
+                        duration = (
+                            current_possession["start_time_seconds"] - time_seconds
+                        )
+                        current_possession["duration_seconds"] = max(0, duration)
+                    elif (
+                        current_possession["start_time_seconds"] is not None
+                        and time_seconds is not None
+                    ):
+                        # Different periods - can't accurately calculate
+                        current_possession["duration_seconds"] = None
+
+                    possessions.append(current_possession)
+
+                # Start new possession
+                current_possession = {
+                    "possession_number": len(possessions) + 1,
+                    "team": new_team,
+                    "start_time": time_str,
+                    "start_time_seconds": time_seconds,
+                    "start_period": period,
+                    "starting_event": {
+                        "event_type": event_type,
+                        "action": action,
+                    },
+                    "end_time": None,
+                    "end_time_seconds": None,
+                    "end_period": None,
+                    "ending_event": None,
+                    "duration_seconds": None,
+                    "events": [],
+                }
+
+            # Add ALL events to current possession (including offensive rebounds)
+            if current_possession:
+                current_possession["events"].append(
+                    {
+                        "event_type": event_type,
+                        "time": time_str,
+                        "action": action,
+                        "team": team,
+                    }
+                )
+
+        # Close final possession
+        if current_possession:
+            possessions.append(current_possession)
+
+        # Calculate statistics
+        team1_possessions = [p for p in possessions if p["team"] == "1"]
+        team2_possessions = [p for p in possessions if p["team"] == "2"]
+
+        # Calculate average possession length (only for possessions with duration)
+        team1_durations = [
+            p["duration_seconds"]
+            for p in team1_possessions
+            if p.get("duration_seconds") is not None
+        ]
+        team2_durations = [
+            p["duration_seconds"]
+            for p in team2_possessions
+            if p.get("duration_seconds") is not None
+        ]
+
+        team1_avg_duration = (
+            sum(team1_durations) / len(team1_durations) if team1_durations else 0
+        )
+        team2_avg_duration = (
+            sum(team2_durations) / len(team2_durations) if team2_durations else 0
+        )
+
+        return {
+            "total_possessions": len(possessions),
+            "team1_possessions": len(team1_possessions),
+            "team2_possessions": len(team2_possessions),
+            "team1_avg_possession_length_seconds": round(team1_avg_duration, 2),
+            "team2_avg_possession_length_seconds": round(team2_avg_duration, 2),
+            "possessions_list": possessions,
+        }
+
+    @staticmethod
     def parse_player_gamelog(
         html_content: str, teams_dict: Dict[str, str]
     ) -> Dict[str, Any]:

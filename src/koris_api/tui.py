@@ -86,6 +86,7 @@ class MatchViewScreen(Screen):
             yield DataTable(id="advanced_away_players_table")
             with Horizontal():
                 yield Button("Back", id="btn_back", variant="primary")
+                yield Button("Play-by-Play", id="btn_playbyplay", variant="success")
                 yield Button(
                     "Back to Matches", id="btn_back_to_matches", variant="default"
                 )
@@ -536,10 +537,112 @@ class MatchViewScreen(Screen):
         """Handle button presses."""
         if event.button.id == "btn_back":
             self.app.pop_screen()
+        elif event.button.id == "btn_playbyplay":
+            # Show play-by-play if we have a Genius Sports match ID
+            if self.boxscore_match_id:
+                self.show_playbyplay()
+            else:
+                # Update status to show error
+                loading = self.query_one("#advanced_boxscore_loading", Static)
+                loading.update(
+                    "[dim red]Play-by-play not available: Genius Sports match ID not found[/dim red]"
+                )
         elif event.button.id == "btn_back_to_matches":
             # Pop all screens until we're back at the main screen
             while len(self.app.screen_stack) > 1:
                 self.app.pop_screen()
+
+    def show_playbyplay(self) -> None:
+        """Show play-by-play data in a modal or new screen."""
+        if not self.boxscore_match_id:
+            return
+
+        # Show loading indicator
+        loading = self.query_one("#advanced_boxscore_loading", Static)
+        loading.update("[dim]Loading play-by-play data...[/dim]")
+
+        # Fetch play-by-play data
+        try:
+            playbyplay_data = GeniusSportsAPI.get_match_playbyplay(
+                str(self.boxscore_match_id)
+            )
+
+            # Create a formatted display
+            lines = []
+            lines.append(
+                f"\n[bold cyan]{'=' * 80}[/bold cyan]\n[bold yellow]PLAY-BY-PLAY[/bold yellow]\n[bold cyan]{'=' * 80}[/bold cyan]\n"
+            )
+
+            # Show match info
+            match_info = playbyplay_data.get("match_info", {})
+            if match_info:
+                lines.append(
+                    f"[bold]{match_info.get('home_team', 'Home')} {match_info.get('home_score', '-')} - {match_info.get('away_score', '-')} {match_info.get('away_team', 'Away')}[/bold]"
+                )
+                lines.append(
+                    f"Date: {match_info.get('datetime', 'N/A')} | Venue: {match_info.get('venue', 'N/A')}\n"
+                )
+
+            # Show possession statistics
+            possessions = playbyplay_data.get("possessions", {})
+            if possessions:
+                lines.append("[bold green]POSSESSION STATISTICS[/bold green]")
+                lines.append(
+                    f"Total Possessions: {possessions.get('total_possessions', 0)}"
+                )
+                lines.append(
+                    f"  Team 1 (Home): {possessions.get('team1_possessions', 0)} possessions, "
+                    f"Avg {possessions.get('team1_avg_possession_length_seconds', 0):.1f}s per possession"
+                )
+                lines.append(
+                    f"  Team 2 (Away): {possessions.get('team2_possessions', 0)} possessions, "
+                    f"Avg {possessions.get('team2_avg_possession_length_seconds', 0):.1f}s per possession"
+                )
+                lines.append("")
+
+            # Group events by period
+            events = playbyplay_data.get("events", [])
+            current_period = None
+
+            for event in events:
+                period = event.get("period")
+
+                # Add period header if it changed
+                if period != current_period:
+                    current_period = period
+                    lines.append(f"\n[bold green]--- {period} ---[/bold green]")
+
+                # Format event
+                time_str = event.get("time", "")
+                score = event.get("score", "")
+                action = event.get("action", "")
+                team = event.get("team", "")
+
+                # Color code by team
+                if team == "1":
+                    team_color = "cyan"
+                elif team == "2":
+                    team_color = "yellow"
+                else:
+                    team_color = "white"
+
+                # Build event line
+                event_parts = []
+                if time_str:
+                    event_parts.append(f"[dim]{time_str}[/dim]")
+                if score:
+                    event_parts.append(f"[bold]{score}[/bold]")
+                if action:
+                    event_parts.append(f"[{team_color}]{action}[/{team_color}]")
+
+                if event_parts:
+                    lines.append("  " + " | ".join(event_parts))
+
+            # Update display
+            loading.update("\n".join(lines))
+
+        except Exception as e:
+            loading.update(f"[dim red]Error loading play-by-play: {str(e)}[/dim red]")
 
     def action_back(self) -> None:
         """Go back to the main screen."""

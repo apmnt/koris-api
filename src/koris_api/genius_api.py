@@ -31,6 +31,23 @@ class GeniusSportsAPI:
         return GeniusSportsParser.parse_boxscore_html(response.text)
 
     @classmethod
+    def get_match_playbyplay(cls, match_id: str) -> Dict[str, Any]:
+        """
+        Fetch and parse play-by-play data from the Genius Sports hosted page.
+
+        Args:
+            match_id: The match identifier from Genius Sports
+
+        Returns:
+            Dictionary containing parsed play-by-play data with match info and events
+        """
+        url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/match/{match_id}/playbyplay"
+        response = requests.get(url)
+        response.raise_for_status()
+
+        return GeniusSportsParser.parse_playbyplay_html(response.text)
+
+    @classmethod
     def get_genius_teams(cls, competition_id: str) -> List[Dict[str, Any]]:
         """
         Fetch teams from Genius Sports teams page for a specific competition.
