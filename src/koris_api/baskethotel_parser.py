@@ -23,12 +23,44 @@ class BasketHotelParser:
         # We need to extract all update calls
         html_parts = []
 
-        # Find all MBT.API.update calls
-        pattern = r"MBT\.API\.update\('[\w-]+',\s*'(.+?)'\);"
-        matches = re.finditer(pattern, js_response, re.DOTALL)
+        idx = 0
+        token = "MBT.API.update("
+        while True:
+            start = js_response.find(token, idx)
+            if start == -1:
+                break
+            first_quote = js_response.find("'", start)
+            if first_quote == -1:
+                break
+            second_quote = js_response.find("'", first_quote + 1)
+            if second_quote == -1:
+                break
+            comma = js_response.find(",", second_quote)
+            if comma == -1:
+                break
+            html_start = js_response.find("'", comma)
+            if html_start == -1:
+                break
 
-        for match in matches:
-            html = match.group(1)
+            i = html_start + 1
+            escaped = False
+            html_end = None
+            while i < len(js_response):
+                ch = js_response[i]
+                if escaped:
+                    escaped = False
+                else:
+                    if ch == "\\":
+                        escaped = True
+                    elif ch == "'":
+                        html_end = i
+                        break
+                i += 1
+
+            if html_end is None:
+                break
+
+            html = js_response[html_start + 1 : html_end]
             # Unescape the HTML string
             html = html.replace("\\n", "\n")
             html = html.replace("\\r", "\r")
@@ -37,6 +69,7 @@ class BasketHotelParser:
             html = html.replace('\\"', '"')
             html = html.replace("\\/", "/")
             html_parts.append(html)
+            idx = html_end + 1
 
         return "\n".join(html_parts) if html_parts else js_response
 
@@ -131,6 +164,13 @@ class BasketHotelParser:
             if attendance_match:
                 game_data["game_info"]["attendance"] = int(attendance_match.group())
 
+        # Venue
+        venue_icon = soup.find("i", class_="fa-globe")
+        if venue_icon and venue_icon.parent:
+            venue_text = venue_icon.parent.get_text().strip()
+            if venue_text:
+                game_data["game_info"]["venue"] = venue_text
+
         # Game ID
         game_id_match = re.search(r"Ottelunumero:.*?(\d+)", html)
         if game_id_match:
@@ -177,13 +217,21 @@ class BasketHotelParser:
                         if len(value_divs) >= 2:
                             home_value = value_divs[0].get_text().strip()
                             away_value = value_divs[1].get_text().strip()
-
-                            leader_data = {
-                                "category": stat_type,
-                                "home": {"player": home_name, "value": int(home_value)},
-                                "away": {"player": away_name, "value": int(away_value)},
-                            }
-                            game_data["leaders"].append(leader_data)
+                            try:
+                                leader_data = {
+                                    "category": stat_type,
+                                    "home": {
+                                        "player": home_name,
+                                        "value": int(home_value),
+                                    },
+                                    "away": {
+                                        "player": away_name,
+                                        "value": int(away_value),
+                                    },
+                                }
+                                game_data["leaders"].append(leader_data)
+                            except ValueError:
+                                continue
 
         # Extract team stats
         stats_table = soup.find("table", class_="mbt-v2-game-scoring-table")

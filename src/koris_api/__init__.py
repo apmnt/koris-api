@@ -2,6 +2,9 @@ import argparse
 import json
 import requests
 import time
+import re
+from datetime import datetime
+from urllib.parse import urlencode
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, Any, List
@@ -9,6 +12,7 @@ from tqdm import tqdm
 from .basketfi_api import BasketFiAPI
 from .basketfi_parser import BasketFiParser
 from .baskethotel_api import BasketHotelAPI
+from .baskethotel_parser import BasketHotelParser
 from .genius_api import GeniusSportsAPI
 
 
@@ -68,6 +72,348 @@ def load_genius_ids(
 
     # Remove duplicates and empty strings
     return list(dict.fromkeys([id for id in genius_ids if id]))
+
+
+_BASKETHOTEL_DEFAULT_SEASON_ID = "121333"
+_BASKETHOTEL_DEFAULT_LEAGUE_ID = "2"
+_BASKETHOTEL_LEAGUE_ID_BY_CATEGORY = {
+    "4": "2",  # Korisliiga
+}
+_BASKETHOTEL_SEASON_CACHE: Dict[str, Dict[str, str]] = {}
+_BASKETHOTEL_TEAM_CACHE: Dict[str, Dict[str, str]] = {}
+_BASKETHOTEL_MIN_YEAR = 2010
+
+
+def _get_baskethotel_league_id(category_id: str) -> str:
+    return _BASKETHOTEL_LEAGUE_ID_BY_CATEGORY.get(
+        str(category_id), _BASKETHOTEL_DEFAULT_LEAGUE_ID
+    )
+
+
+def _extract_season_start_year(season_name: Optional[str]) -> Optional[int]:
+    if not season_name:
+        return None
+    if "-" in season_name:
+        try:
+            return int(season_name.split("-", 1)[0])
+        except ValueError:
+            return None
+    return None
+
+
+def _is_historical_season(season: Dict[str, Any]) -> bool:
+    season_year = _extract_season_start_year(season.get("season_name"))
+    if season_year is not None:
+        return season_year < 2022
+    season_start_date = season.get("season_start_date")
+    if season_start_date:
+        try:
+            return datetime.strptime(season_start_date, "%Y-%m-%d").year < 2022
+        except ValueError:
+            return False
+    return False
+
+
+def _parse_baskethotel_date(date_text: Optional[str]) -> Optional[str]:
+    if not date_text:
+        return None
+    try:
+        return datetime.strptime(date_text, "%d.%m.%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _parse_baskethotel_time(time_text: Optional[str]) -> Optional[str]:
+    if not time_text:
+        return None
+    cleaned = time_text.strip()
+    if len(cleaned) == 5 and cleaned[2] == ":":
+        return f"{cleaned}:00"
+    if len(cleaned) == 8 and cleaned[2] == ":" and cleaned[5] == ":":
+        return cleaned
+    return None
+
+
+def _fetch_baskethotel_seasons(league_id: str) -> Dict[str, str]:
+    if league_id in _BASKETHOTEL_SEASON_CACHE:
+        return _BASKETHOTEL_SEASON_CACHE[league_id]
+
+    params = {
+        "api": "b9680714b4026e011e13a43ccb7dfa201932958c",
+        "lang": "fi",
+        "nnav": "1",
+        "nav_object": "0",
+        "hide_full_birth_date": "1",
+        "flash": "0",
+        "request[0][container]": "view4",
+        "request[0][widget]": "320",  # season selector
+        "request[0][param][league_id]": league_id,
+        "request[0][param][template]": "v1",
+    }
+    url = f"https://widgets.baskethotel.com/widget-service/show?{urlencode(params)}"
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response.raise_for_status()
+    html = BasketHotelParser.extract_html_from_response(response.text)
+
+    season_map: Dict[str, str] = {}
+    for match in re.findall(r'value="(\d+)"[^>]*>([^<]+)<', html):
+        season_id, season_name = match
+        season_map[season_name.strip()] = season_id
+
+    _BASKETHOTEL_SEASON_CACHE[league_id] = season_map
+    return season_map
+
+
+def _resolve_baskethotel_season_id(
+    season_name: Optional[str], league_id: str
+) -> Optional[str]:
+    if not season_name:
+        return None
+    season_map = _fetch_baskethotel_seasons(league_id)
+    return season_map.get(season_name)
+
+
+def _augment_seasons_with_baskethotel(
+    seasons: List[Dict[str, Any]], category_id: str
+) -> List[Dict[str, Any]]:
+    league_id = _get_baskethotel_league_id(category_id)
+    if not league_id:
+        return seasons
+
+    season_map = _fetch_baskethotel_seasons(league_id)
+    existing_names = {s.get("season_name") for s in seasons if s.get("season_name")}
+    for season_name, season_id in season_map.items():
+        season_year = _extract_season_start_year(season_name)
+        if season_year is None or season_year < _BASKETHOTEL_MIN_YEAR:
+            continue
+        if season_name in existing_names:
+            continue
+        seasons.append(
+            {
+                "season_id": season_id,
+                "season_name": season_name,
+                "competition_id": season_name,
+            }
+        )
+
+    seasons.sort(
+        key=lambda season: _extract_season_start_year(season.get("season_name")) or 0,
+        reverse=True,
+    )
+    return seasons
+
+
+def _fetch_baskethotel_schedule_page_html(
+    season_id: str, league_id: str, page: int
+) -> str:
+    params = {
+        "api": "b9680714b4026e011e13a43ccb7dfa201932958c",
+        "lang": "fi",
+        "nnav": "1",
+        "nav_object": "0",
+        "hide_full_birth_date": "1",
+        "flash": "0",
+        "request[0][container]": "view4",
+        "request[0][widget]": "303",  # schedule long
+        "request[0][part]": "schedule_and_results",
+        "request[0][param][season_id]": season_id,
+        "request[0][param][league_id]": league_id,
+        "request[0][param][template]": "v1",
+        "request[0][param][page]": str(page),
+    }
+    url = f"https://widgets.baskethotel.com/widget-service/show?{urlencode(params)}"
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response.raise_for_status()
+    return BasketHotelParser.extract_html_from_response(response.text)
+
+
+def _fetch_baskethotel_team_map(season_id: str, league_id: str) -> Dict[str, str]:
+    cache_key = f"{league_id}:{season_id}"
+    if cache_key in _BASKETHOTEL_TEAM_CACHE:
+        return _BASKETHOTEL_TEAM_CACHE[cache_key]
+
+    params = {
+        "api": "b9680714b4026e011e13a43ccb7dfa201932958c",
+        "lang": "fi",
+        "nnav": "1",
+        "nav_object": "0",
+        "hide_full_birth_date": "1",
+        "flash": "0",
+        "request[0][container]": "view4",
+        "request[0][widget]": "303",
+        "request[0][param][season_id]": season_id,
+        "request[0][param][league_id]": league_id,
+        "request[0][param][template]": "v2",
+    }
+    url = f"https://widgets.baskethotel.com/widget-service/show?{urlencode(params)}"
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response.raise_for_status()
+    html = BasketHotelParser.extract_html_from_response(response.text)
+
+    team_map: Dict[str, str] = {}
+    select_start = html.find('id="2-303-filter-team"')
+    if select_start != -1:
+        segment = html[select_start : select_start + 5000]
+        options = re.findall(
+            r"<option value=\"(\d+)\"[^>]*>\s*([^<]+)\s*</option>",
+            segment,
+        )
+        for team_id, team_name in options:
+            cleaned_name = team_name.strip()
+            if cleaned_name:
+                team_map[cleaned_name] = team_id
+
+    _BASKETHOTEL_TEAM_CACHE[cache_key] = team_map
+    return team_map
+
+
+def _extract_baskethotel_game_ids(html: str) -> List[str]:
+    return re.findall(r"schedule-line-container-(\d+)", html)
+
+
+def _extract_baskethotel_schedule_page_count(html: str) -> int:
+    pages = [int(p) for p in re.findall(r'id="2-303-page-(\d+)"', html)]
+    return max(pages) if pages else 1
+
+
+def _fetch_baskethotel_schedule_game_ids(
+    season_id: str, league_id: str, verbose: bool
+) -> List[str]:
+    first_html = _fetch_baskethotel_schedule_page_html(season_id, league_id, page=1)
+    game_ids = set(_extract_baskethotel_game_ids(first_html))
+    total_pages = _extract_baskethotel_schedule_page_count(first_html)
+
+    for page in range(2, total_pages + 1):
+        page_html = _fetch_baskethotel_schedule_page_html(season_id, league_id, page)
+        game_ids.update(_extract_baskethotel_game_ids(page_html))
+
+    if verbose:
+        print(f"    ✓ Found {len(game_ids)} games in BasketHotel schedule")
+
+    return sorted(game_ids)
+
+
+def _merge_baskethotel_match(
+    base_match: Dict[str, Any], game_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    merged = dict(base_match)
+    game_info = game_data.get("game_info", {})
+    date_value = _parse_baskethotel_date(game_info.get("date"))
+    time_value = _parse_baskethotel_time(game_info.get("time"))
+    if date_value:
+        merged["date"] = date_value
+    if time_value:
+        merged["time"] = time_value
+    venue_value = game_info.get("venue")
+    if venue_value:
+        merged["venue"] = venue_value
+
+    score = game_data.get("score", {})
+    if "home" in score and score["home"] is not None:
+        merged["home_score"] = str(score["home"])
+    if "away" in score and score["away"] is not None:
+        merged["away_score"] = str(score["away"])
+    if merged.get("home_score") and merged.get("away_score"):
+        merged["status"] = "Played"
+
+    teams = game_data.get("teams", {})
+    home_name = teams.get("home", {}).get("name")
+    away_name = teams.get("away", {}).get("name")
+    if home_name:
+        merged["home_team"] = home_name
+    if away_name:
+        merged["away_team"] = away_name
+
+    return merged
+
+
+def _fetch_historical_matches(
+    matches: List[Dict[str, Any]],
+    season_name: str,
+    season_id: Optional[str],
+    category_id: str,
+    category_name: Optional[str],
+    max_workers: int,
+    verbose: bool,
+) -> List[Dict[str, Any]]:
+    client = BasketHotelAPI()
+    league_id = _get_baskethotel_league_id(category_id)
+    resolved_season_id = (
+        _resolve_baskethotel_season_id(season_name, league_id)
+        or season_id
+        or _BASKETHOTEL_DEFAULT_SEASON_ID
+    )
+    team_map = _fetch_baskethotel_team_map(resolved_season_id, league_id)
+
+    game_ids = _fetch_baskethotel_schedule_game_ids(
+        resolved_season_id, league_id, verbose
+    )
+    if not game_ids:
+        return []
+
+    def fetch_game(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+        try:
+            game_data = client.fetch_game_data(
+                str(game_id), season_id=resolved_season_id, league_id=league_id
+            )
+            base_match = {
+                "match_id": str(game_id),
+                "match_external_id": None,
+                "date": None,
+                "time": None,
+                "home_team": None,
+                "home_team_id": None,
+                "away_team": None,
+                "away_team_id": None,
+                "home_score": None,
+                "away_score": None,
+                "status": None,
+                "venue": None,
+                "competition": None,
+                "category": category_name,
+                "season": season_name,
+            }
+            merged = _merge_baskethotel_match(base_match, game_data)
+            merged["competition"] = merged.get("competition") or season_name
+            merged["category"] = merged.get("category") or category_name
+            home_name = merged.get("home_team")
+            away_name = merged.get("away_team")
+            if home_name and not merged.get("home_team_id"):
+                merged["home_team_id"] = team_map.get(home_name)
+            if away_name and not merged.get("away_team_id"):
+                merged["away_team_id"] = team_map.get(away_name)
+            return (merged, None)
+        except Exception as exc:
+            return (None, str(exc))
+
+    processed_matches: list[Dict[str, Any]] = []
+    games_failed = 0
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(fetch_game, game_id): game_id for game_id in game_ids}
+
+        with tqdm(
+            total=len(matches),
+            desc=f"    Fetching historical games ({season_name})",
+            disable=not verbose,
+        ) as pbar:
+            for future in as_completed(futures):
+                merged, error = future.result()
+                if merged and merged.get("home_score") and merged.get("away_score"):
+                    processed_matches.append(merged)
+                else:
+                    games_failed += 1
+                    if verbose and error:
+                        game_id = futures[future]
+                        tqdm.write(f"      ✗ Game {game_id}: {error}")
+                pbar.update(1)
+
+    if verbose:
+        print(
+            f"    ✓ Historical games fetched: {len(processed_matches)} played, {games_failed} failed"
+        )
+
+    return processed_matches
 
 
 # Backward compatibility alias
@@ -286,6 +632,7 @@ def download_league_all_seasons(
         return
 
     seasons = category_data["category"]["seasons"]
+    seasons = _augment_seasons_with_baskethotel(seasons, category_id)
     category_name = category_data["category"].get("category_name", "Unknown")
 
     if not seasons:
@@ -309,23 +656,39 @@ def download_league_all_seasons(
         season_data_id = season["season_id"]
         season_name = season["season_name"]
         season_competition_id = season["competition_id"]
+        is_historical = _is_historical_season(season)
 
         if verbose:
             print(f"[{idx}/{len(seasons)}] Processing season: {season_name}")
 
         try:
-            # Fetch matches for this season
-            matches_data = BasketFiAPI.get_matches(
-                competition_id=season_competition_id, category_id=category_id
-            )
-
-            matches = BasketFiParser.extract_matches(matches_data)
-            total_matches_found += len(matches)
+            if is_historical:
+                matches = []
+            else:
+                matches_data = BasketFiAPI.get_matches(
+                    competition_id=season_competition_id, category_id=category_id
+                )
+                matches = BasketFiParser.extract_matches(matches_data)
+                total_matches_found += len(matches)
 
             # Process matches for this season
-            processed_matches_raw = BasketFiParser.parse_matches(
-                matches, season_name=season_name, only_played=True
-            )
+            if is_historical:
+                if verbose:
+                    print("  - Using BasketHotel API for historical season data")
+                processed_matches_raw = _fetch_historical_matches(
+                    matches=matches,
+                    season_name=season_name,
+                    season_id=str(season_data_id) if season_data_id else None,
+                    category_id=category_id,
+                    category_name=category_name,
+                    max_workers=max_workers,
+                    verbose=verbose,
+                )
+                total_matches_found += len(processed_matches_raw)
+            else:
+                processed_matches_raw = BasketFiParser.parse_matches(
+                    matches, season_name=season_name, only_played=True
+                )
             # Add season_id to each match for league-comprehensive
             processed_matches = []
             for match_data in processed_matches_raw:
@@ -352,9 +715,14 @@ def download_league_all_seasons(
             all_matches.extend(processed_matches)
 
             if verbose:
-                print(
-                    f"  ✓ Found {len(matches)} matches, {len(processed_matches)} played"
-                )
+                if is_historical:
+                    print(
+                        f"  ✓ Found {len(processed_matches)} played matches"
+                    )
+                else:
+                    print(
+                        f"  ✓ Found {len(matches)} matches, {len(processed_matches)} played"
+                    )
 
             # Fetch advanced stats for this season if requested
             if include_advanced and matches_to_fetch_advanced:
@@ -443,7 +811,9 @@ def download_league_all_seasons(
                     "season_id": season_data_id,
                     "season_name": season_name,
                     "competition_id": season_competition_id,
-                    "total_matches": len(matches),
+                    "total_matches": len(processed_matches_raw)
+                    if is_historical
+                    else len(matches),
                     "played_matches": len(processed_matches),
                 }
             )
@@ -878,36 +1248,46 @@ def download_season_comprehensive(
                         "category_name", "Unknown"
                     )
                     seasons_list = fallback_data["category"].get("seasons", [])
-                    print(
-                        f"Error: Invalid season-id ({competition_id}) for category '{category_name}'."
-                    )
-                    print(f"\nAvailable seasons for category-id {category_id}:")
-                    for season in seasons_list:
+                    season_year = _extract_season_start_year(competition_id)
+                    if season_year is not None and season_year < 2022:
+                        category_data = fallback_data
+                    else:
                         print(
-                            f"  {season.get('competition_id', 'N/A'):15} - {season.get('season_name', 'Unknown')}"
+                            f"Error: Invalid season-id ({competition_id}) for category '{category_name}'."
                         )
-                    return
+                        print(f"\nAvailable seasons for category-id {category_id}:")
+                        for season in seasons_list:
+                            print(
+                                f"  {season.get('competition_id', 'N/A'):15} - {season.get('season_name', 'Unknown')}"
+                            )
+                        return
             except Exception:
                 pass
 
             # Fallback failed, show generic error
-            print(f"Error: Invalid season-id ({competition_id}).")
-            print("\nCommon category IDs:")
-            print("  4  - Korisliiga (Men's top division)")
-            print("  2  - Miesten I divisioona A (Men's 1st division A)")
-            print("  13 - Naisten Korisliiga (Women's top division)")
-            return
+            if "category" not in category_data:
+                print(f"Error: Invalid season-id ({competition_id}).")
+                print("\nCommon category IDs:")
+                print("  4  - Korisliiga (Men's top division)")
+                print("  2  - Miesten I divisioona A (Men's 1st division A)")
+                print("  13 - Naisten Korisliiga (Women's top division)")
+                return
 
     except Exception as e:
-        error_msg = "Error: Failed to fetch category/season information.\n"
-        error_msg += f"This usually means the category-id ({category_id}) or season-id ({competition_id}) is invalid.\n"
-        error_msg += f"Details: {str(e)}\n\n"
-        error_msg += "Common category IDs:\n"
-        error_msg += "  4  - Korisliiga (Men's top division)\n"
-        error_msg += "  2  - Miesten I divisioona A (Men's 1st division A)\n"
-        error_msg += "  13 - Naisten Korisliiga (Women's top division)\n"
-        print(error_msg)
-        return
+        season_year = _extract_season_start_year(competition_id)
+        if season_year is not None and season_year < 2022:
+            fallback_data = BasketFiAPI.get_category("huki2526", category_id)
+            category_data = fallback_data
+        else:
+            error_msg = "Error: Failed to fetch category/season information.\n"
+            error_msg += f"This usually means the category-id ({category_id}) or season-id ({competition_id}) is invalid.\n"
+            error_msg += f"Details: {str(e)}\n\n"
+            error_msg += "Common category IDs:\n"
+            error_msg += "  4  - Korisliiga (Men's top division)\n"
+            error_msg += "  2  - Miesten I divisioona A (Men's 1st division A)\n"
+            error_msg += "  13 - Naisten Korisliiga (Women's top division)\n"
+            print(error_msg)
+            return
 
     # Validate category data
     if "category" not in category_data:
@@ -930,7 +1310,10 @@ def download_season_comprehensive(
         valid_competition_ids = [
             s.get("competition_id") for s in seasons_list if s.get("competition_id")
         ]
-        if competition_id not in valid_competition_ids:
+        season_year = _extract_season_start_year(competition_id)
+        if competition_id not in valid_competition_ids and (
+            season_year is None or season_year >= 2022
+        ):
             print(
                 f"Error: Invalid season-id ({competition_id}) for category '{category_name}'."
             )
@@ -940,6 +1323,21 @@ def download_season_comprehensive(
                     f"  {season.get('competition_id', 'N/A'):15} - {season.get('season_name', 'Unknown')}"
                 )
             return
+
+    season_entry = None
+    if seasons_list:
+        for season in seasons_list:
+            if season.get("competition_id") == competition_id:
+                season_entry = season
+                if not season_name:
+                    season_name = season.get("season_name")
+                break
+
+    if season_entry:
+        is_historical = _is_historical_season(season_entry)
+    else:
+        season_year = _extract_season_start_year(season_name or competition_id)
+        is_historical = season_year is not None and season_year < 2022
 
     # Additional validation - check if category name is meaningful
     if category_name == "Unknown" or not category_name:
@@ -976,21 +1374,36 @@ def download_season_comprehensive(
     )
     matches = matches_data.get("matches", [])
 
-    if not matches:
+    if not matches and not is_historical:
         if verbose:
             print("No matches found.")
         comprehensive_data["metadata"]["total_matches"] = 0
         comprehensive_data["metadata"]["played_matches_saved"] = 0
+        processed_matches = []
     else:
         total_matches = len(matches)
 
-        if verbose:
+        if verbose and matches:
             print(f"Found {total_matches} matches")
 
         # Process basic match data first
-        processed_matches = BasketFiParser.parse_matches(
-            matches, season_name=season_name or competition_id, only_played=True
-        )
+        if is_historical:
+            if verbose:
+                print("  - Using BasketHotel API for historical season data")
+            processed_matches = _fetch_historical_matches(
+                matches=matches,
+                season_name=season_name or competition_id,
+                season_id=str(season_entry.get("season_id")) if season_entry else None,
+                category_id=category_id,
+                category_name=category_name,
+                max_workers=max_workers,
+                verbose=verbose,
+            )
+            total_matches = len(processed_matches)
+        else:
+            processed_matches = BasketFiParser.parse_matches(
+                matches, season_name=season_name or competition_id, only_played=True
+            )
         matches_to_fetch_advanced = []
 
         # Check if we should fetch advanced stats for matches
@@ -1559,6 +1972,7 @@ def download_league_comprehensive(
 
     category = category_data["category"]
     seasons = category["seasons"]
+    seasons = _augment_seasons_with_baskethotel(seasons, category_id)
     category_name = category.get("category_name", "Unknown")
 
     # Validate category name
@@ -1609,6 +2023,7 @@ def download_league_comprehensive(
         season_data_id = season["season_id"]
         season_name = season["season_name"]
         season_competition_id = season["competition_id"]
+        is_historical = _is_historical_season(season)
 
         if verbose:
             print(f"  [{idx}/{len(seasons)}] Processing season: {season_name}")
@@ -1622,18 +2037,33 @@ def download_league_comprehensive(
         }
 
         try:
-            # Fetch matches for this season
-            matches_data = BasketFiAPI.get_matches(
-                competition_id=season_competition_id, category_id=category_id
-            )
-
-            matches = BasketFiParser.extract_matches(matches_data)
-            total_matches_found += len(matches)
+            if is_historical:
+                matches = []
+            else:
+                matches_data = BasketFiAPI.get_matches(
+                    competition_id=season_competition_id, category_id=category_id
+                )
+                matches = BasketFiParser.extract_matches(matches_data)
+                total_matches_found += len(matches)
 
             # Process matches for this season
-            processed_matches = BasketFiParser.parse_matches(
-                matches, season_name=season_name, only_played=True
-            )
+            if is_historical:
+                if verbose:
+                    print("    - Using BasketHotel API for historical season data")
+                processed_matches = _fetch_historical_matches(
+                    matches=matches,
+                    season_name=season_name,
+                    season_id=str(season_data_id) if season_data_id else None,
+                    category_id=category_id,
+                    category_name=category_name,
+                    max_workers=max_workers,
+                    verbose=verbose,
+                )
+                total_matches_found += len(processed_matches)
+            else:
+                processed_matches = BasketFiParser.parse_matches(
+                    matches, season_name=season_name, only_played=True
+                )
 
             matches_to_fetch_advanced = []
 
@@ -1657,9 +2087,14 @@ def download_league_comprehensive(
             total_played_matches += len(processed_matches)
 
             if verbose:
-                print(
-                    f"    ✓ Found {len(matches)} matches, {len(processed_matches)} played"
-                )
+                if is_historical:
+                    print(
+                        f"    ✓ Found {len(processed_matches)} played matches"
+                    )
+                else:
+                    print(
+                        f"    ✓ Found {len(matches)} matches, {len(processed_matches)} played"
+                    )
 
             # Fetch advanced stats for this season if requested
             if include_advanced and matches_to_fetch_advanced:
@@ -1768,12 +2203,15 @@ def download_league_comprehensive(
                     )
 
                 try:
-                    # Pass competition_id and category_id to get historical roster data
-                    team_data = BasketFiAPI.get_team(
-                        str(team_id),
-                        competition_id=season_competition_id,
-                        category_id=category_id,
-                    )
+                    if is_historical:
+                        team_data = BasketFiAPI.get_team(str(team_id))
+                    else:
+                        # Pass competition_id and category_id to get historical roster data
+                        team_data = BasketFiAPI.get_team(
+                            str(team_id),
+                            competition_id=season_competition_id,
+                            category_id=category_id,
+                        )
                     if "team" in team_data:
                         teams_with_details.append(team_data["team"])
                     else:
