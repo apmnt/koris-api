@@ -3,10 +3,13 @@ import json
 import requests
 import time
 import re
+import asyncio
+import httpx
 from datetime import datetime
 from urllib.parse import urlencode
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 from typing import Optional, Dict, Any, List
 from tqdm import tqdm
 from .basketfi_api import BasketFiAPI
@@ -82,12 +85,26 @@ _BASKETHOTEL_LEAGUE_ID_BY_CATEGORY = {
 _BASKETHOTEL_SEASON_CACHE: Dict[str, Dict[str, str]] = {}
 _BASKETHOTEL_TEAM_CACHE: Dict[str, Dict[str, str]] = {}
 _BASKETHOTEL_MIN_YEAR = 2010
+_BASKETHOTEL_SESSION_LOCAL = threading.local()
 
 
 def _get_baskethotel_league_id(category_id: str) -> str:
     return _BASKETHOTEL_LEAGUE_ID_BY_CATEGORY.get(
         str(category_id), _BASKETHOTEL_DEFAULT_LEAGUE_ID
     )
+
+
+def _get_baskethotel_session() -> requests.Session:
+    session = getattr(_BASKETHOTEL_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=64, pool_maxsize=64
+        )
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _BASKETHOTEL_SESSION_LOCAL.session = session
+    return session
 
 
 def _extract_season_start_year(season_name: Optional[str]) -> Optional[int]:
@@ -353,8 +370,12 @@ def _fetch_historical_matches(
 
     def fetch_game(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
         try:
+            session = _get_baskethotel_session()
             game_data = client.fetch_game_data(
-                str(game_id), season_id=resolved_season_id, league_id=league_id
+                str(game_id),
+                season_id=resolved_season_id,
+                league_id=league_id,
+                session=session,
             )
             base_match = {
                 "match_id": str(game_id),
@@ -416,6 +437,464 @@ def _fetch_historical_matches(
     return processed_matches
 
 
+def _stat_value(value: Any) -> float:
+    if value is None:
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _stat_int(value: Any) -> int:
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _clean_player_name(name: str) -> str:
+    cleaned = name.strip()
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"^#?\d+", "", cleaned).strip()
+    return cleaned
+
+
+def _extract_team_stat(team: Dict[str, Any], stat_name: str) -> float:
+    totals = team.get("totals", {})
+    total_value = totals.get(stat_name)
+    if total_value not in (None, ""):
+        return _stat_value(total_value)
+
+    total = 0.0
+    for player in team.get("players", []):
+        total += _stat_value(player.get(stat_name, 0))
+    return total
+
+
+def _summarize_boxscore(boxscore: Dict[str, Any]) -> Dict[str, float]:
+    totals = {"rebounds": 0.0, "assists": 0.0, "steals": 0.0}
+    for team in boxscore.get("teams", []):
+        totals["rebounds"] += _extract_team_stat(team, "Total Rebounds")
+        totals["assists"] += _extract_team_stat(team, "Assists")
+        totals["steals"] += _extract_team_stat(team, "Steals")
+    return totals
+
+
+def _summarize_baskethotel_boxscore(boxscore: Dict[str, Any]) -> Dict[str, float]:
+    totals = {"rebounds": 0.0, "assists": 0.0, "steals": 0.0}
+    for team in boxscore.get("teams", []):
+        totals["rebounds"] += _stat_value(team.get("rebounds", 0))
+        totals["assists"] += _stat_value(team.get("assists", 0))
+        totals["steals"] += _stat_value(team.get("steals", 0))
+    return totals
+
+
+def download_season_advanced_averages(
+    category_id: str,
+    season_id: str,
+    output_file: str,
+    all_seasons: bool = False,
+    cache_file: Optional[str] = None,
+    max_workers: int = 5,
+    verbose: bool = True,
+) -> None:
+    """
+    Download season-level averages for rebounds, assists, and steals per game.
+
+    Uses Genius Sports boxscores per match and aggregates totals per season.
+    """
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cache: Dict[str, Dict[str, float]] = {}
+    cache_path = Path(cache_file) if cache_file else None
+    if cache_path and cache_path.exists():
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                cache = json.load(f)
+        except Exception:
+            cache = {}
+
+    season_entries: List[Dict[str, Any]] = []
+    season_ids: List[Dict[str, str]] = [{"season_id": season_id, "season_name": ""}]
+
+    if all_seasons:
+        try:
+            category_data = BasketFiAPI.get_category(season_id, category_id)
+            seasons = category_data.get("category", {}).get("seasons", [])
+            seasons = _augment_seasons_with_baskethotel(seasons, category_id)
+            season_ids = []
+            for season in seasons:
+                comp_id = season.get("competition_id") or season.get("season_id")
+                if comp_id:
+                    season_ids.append(
+                        {
+                            "season_id": str(comp_id),
+                            "season_name": season.get("season_name") or str(comp_id),
+                        }
+                    )
+        except Exception:
+            season_ids = [{"season_id": season_id, "season_name": season_id}]
+    elif not season_ids[0]["season_name"]:
+        season_ids[0]["season_name"] = season_id
+
+    for season in season_ids:
+        current_season_id = season["season_id"]
+        current_season_name = season.get("season_name") or current_season_id
+
+        is_historical = _is_historical_season(
+            {"season_name": current_season_name, "season_start_date": None}
+        )
+
+        match_ids: List[str] = []
+        resolved_season_id = None
+        league_id = None
+
+        if is_historical:
+            league_id = _get_baskethotel_league_id(category_id)
+            resolved_season_id = (
+                _resolve_baskethotel_season_id(current_season_name, league_id)
+                or current_season_id
+                or _BASKETHOTEL_DEFAULT_SEASON_ID
+            )
+            if verbose:
+                print(
+                    f"\nFetching historical matches for season {current_season_name}..."
+                )
+            match_ids = _fetch_baskethotel_schedule_game_ids(
+                str(resolved_season_id), str(league_id), verbose
+            )
+        else:
+            if verbose:
+                print(f"\nFetching matches for season {current_season_id}...")
+            matches_data = BasketFiAPI.get_matches(
+                competition_id=current_season_id, category_id=category_id
+            )
+            matches = BasketFiParser.extract_matches(matches_data)
+            processed_matches = BasketFiParser.parse_matches(
+                matches, season_name=current_season_name, only_played=True
+            )
+
+            match_ids = [
+                str(match.get("match_external_id"))
+                for match in processed_matches
+                if match.get("match_external_id")
+            ]
+
+        totals = {"rebounds": 0.0, "assists": 0.0, "steals": 0.0}
+        games_with_stats = 0
+        matches_to_fetch: List[str] = []
+
+        for match_id in match_ids:
+            cache_key = f"baskethotel:{match_id}" if is_historical else match_id
+            if cache_key in cache:
+                stats = cache[cache_key]
+                totals["rebounds"] += _stat_value(stats.get("rebounds", 0))
+                totals["assists"] += _stat_value(stats.get("assists", 0))
+                totals["steals"] += _stat_value(stats.get("steals", 0))
+                games_with_stats += 1
+            else:
+                matches_to_fetch.append(match_id)
+
+        if matches_to_fetch:
+            if verbose:
+                print(
+                    f"Fetching advanced boxscores for {len(matches_to_fetch)} matches..."
+                )
+
+            def fetch_boxscore_totals(
+                match_id: str,
+            ) -> tuple[str, Optional[Dict[str, float]], Optional[str]]:
+                try:
+                    if is_historical:
+                        raise RuntimeError("Historical matches use async fetching.")
+                    boxscore = GeniusSportsAPI.get_match_boxscore(match_id)
+                    return match_id, _summarize_boxscore(boxscore), None
+                except Exception as exc:
+                    return match_id, None, str(exc)
+
+            if is_historical:
+                async def fetch_boxscores_async(
+                    match_ids: List[str],
+                ) -> List[tuple[str, Optional[Dict[str, float]], Optional[str]]]:
+                    client = BasketHotelAPI()
+                    semaphore = asyncio.Semaphore(max_workers)
+                    results: List[tuple[str, Optional[Dict[str, float]], Optional[str]]] = []
+
+                    async with httpx.AsyncClient() as session:
+                        async def fetch_one(match_id: str):
+                            async with semaphore:
+                                try:
+                                    boxscore = await client.fetch_boxscore_data_async(
+                                        match_id,
+                                        season_id=str(resolved_season_id),
+                                        league_id=str(league_id),
+                                        client=session,
+                                    )
+                                    return (
+                                        match_id,
+                                        _summarize_baskethotel_boxscore(boxscore),
+                                        None,
+                                    )
+                                except Exception as exc:
+                                    return match_id, None, str(exc)
+
+                        tasks = [asyncio.create_task(fetch_one(mid)) for mid in match_ids]
+
+                        if verbose:
+                            for coro in tqdm(
+                                asyncio.as_completed(tasks),
+                                total=len(tasks),
+                                desc="Boxscores",
+                                unit="match",
+                            ):
+                                results.append(await coro)
+                        else:
+                            results = await asyncio.gather(*tasks)
+
+                    return results
+
+                results = asyncio.run(fetch_boxscores_async(matches_to_fetch))
+                for match_id, stats, error in results:
+                    if stats:
+                        cache_key = f"baskethotel:{match_id}"
+                        cache[cache_key] = stats
+                        totals["rebounds"] += _stat_value(stats.get("rebounds", 0))
+                        totals["assists"] += _stat_value(stats.get("assists", 0))
+                        totals["steals"] += _stat_value(stats.get("steals", 0))
+                        games_with_stats += 1
+                    elif verbose and error:
+                        tqdm.write(f"  ✗ Match {match_id}: {error}")
+            else:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = [
+                        executor.submit(fetch_boxscore_totals, match_id)
+                        for match_id in matches_to_fetch
+                    ]
+
+                    iterator = as_completed(futures)
+                    if verbose:
+                        iterator = tqdm(
+                            iterator,
+                            total=len(futures),
+                            desc="Boxscores",
+                            unit="match",
+                        )
+
+                    for future in iterator:
+                        match_id, stats, error = future.result()
+                        if stats:
+                            cache_key = match_id
+                            cache[cache_key] = stats
+                            totals["rebounds"] += _stat_value(stats.get("rebounds", 0))
+                            totals["assists"] += _stat_value(stats.get("assists", 0))
+                            totals["steals"] += _stat_value(stats.get("steals", 0))
+                            games_with_stats += 1
+                        elif verbose and error:
+                            tqdm.write(f"  ✗ Match {match_id}: {error}")
+
+            if cache_path:
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    json.dump(cache, f, indent=2)
+
+        averages = {
+            "rebounds": totals["rebounds"] / games_with_stats
+            if games_with_stats
+            else 0.0,
+            "assists": totals["assists"] / games_with_stats if games_with_stats else 0.0,
+            "steals": totals["steals"] / games_with_stats if games_with_stats else 0.0,
+        }
+
+        season_entries.append(
+            {
+                "season_id": current_season_id,
+                "season_name": current_season_name,
+                "games": games_with_stats,
+                "totals": totals,
+                "averages": averages,
+            }
+        )
+
+    output_data = {
+        "metadata": {
+            "category_id": category_id,
+            "season_reference_id": season_id,
+            "all_seasons": all_seasons,
+            "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
+        "seasons": season_entries,
+    }
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(output_data, f, indent=2, ensure_ascii=False)
+
+    if verbose:
+        print(f"\nSaved season averages to {output_path.absolute()}")
+        print("\nSeason averages per game (both teams combined):")
+        header = f"{'Season':<12} {'Games':>6} {'Reb':>8} {'Ast':>8} {'Stl':>8}"
+        print(header)
+        print("-" * len(header))
+        for season in season_entries:
+            avg = season["averages"]
+            print(
+                f"{season['season_name']:<12} {season['games']:>6} "
+                f"{avg['rebounds']:>8.2f} {avg['assists']:>8.2f} {avg['steals']:>8.2f}"
+            )
+
+
+def download_season_game_leaders(
+    category_id: str,
+    season_id: str,
+    output_file: str,
+    max_workers: int = 10,
+    verbose: bool = True,
+) -> None:
+    """
+    Download per-game player leaders (points, rebounds, assists, steals) for a season.
+
+    Uses BasketHotel for historical seasons (pre-2022).
+    """
+    season_name = season_id
+    if not _is_historical_season({"season_name": season_name}):
+        raise ValueError(
+            "season-game-leaders currently supports historical seasons (pre-2022) only."
+        )
+
+    league_id = _get_baskethotel_league_id(category_id)
+    resolved_season_id = (
+        _resolve_baskethotel_season_id(season_name, league_id)
+        or season_id
+        or _BASKETHOTEL_DEFAULT_SEASON_ID
+    )
+
+    game_ids = _fetch_baskethotel_schedule_game_ids(
+        str(resolved_season_id), str(league_id), verbose
+    )
+    if not game_ids:
+        raise ValueError("No game IDs found for this season.")
+
+    client = BasketHotelAPI()
+
+    async def fetch_one(match_id: str, session: httpx.AsyncClient):
+        try:
+            boxscore = await client.fetch_boxscore_data_async(
+                match_id,
+                season_id=str(resolved_season_id),
+                league_id=str(league_id),
+                client=session,
+            )
+        except Exception as exc:
+            return {"game_id": match_id, "error": str(exc)}
+
+        game_info = boxscore.get("game_info", {})
+        game_teams = boxscore.get("game_teams", {})
+        home_team = game_teams.get("home", {}).get("name")
+        away_team = game_teams.get("away", {}).get("name")
+        game_date = _parse_baskethotel_date(game_info.get("date"))
+        game_label = None
+        if home_team and away_team:
+            game_label = f"{home_team} vs {away_team}"
+
+        leaders = {
+            "points": {"value": -1},
+            "rebounds": {"value": -1},
+            "assists": {"value": -1},
+            "steals": {"value": -1},
+        }
+
+        for team in boxscore.get("teams", []):
+            team_name = team.get("team_name")
+            for player in team.get("players", []) or []:
+                name = _clean_player_name(
+                    player.get("Player") or player.get("Pelaaja") or ""
+                )
+                if not name:
+                    continue
+                points = _stat_int(player.get("PIST"))
+                rebounds = _stat_int(player.get("LEV"))
+                assists = _stat_int(player.get("S"))
+                steals = _stat_int(player.get("R"))
+
+                if points > leaders["points"]["value"]:
+                    leaders["points"] = {
+                        "player": name,
+                        "team": team_name,
+                        "value": points,
+                    }
+                if rebounds > leaders["rebounds"]["value"]:
+                    leaders["rebounds"] = {
+                        "player": name,
+                        "team": team_name,
+                        "value": rebounds,
+                    }
+                if assists > leaders["assists"]["value"]:
+                    leaders["assists"] = {
+                        "player": name,
+                        "team": team_name,
+                        "value": assists,
+                    }
+                if steals > leaders["steals"]["value"]:
+                    leaders["steals"] = {
+                        "player": name,
+                        "team": team_name,
+                        "value": steals,
+                    }
+
+        return {
+            "game_id": match_id,
+            "game_date": game_date,
+            "home_team": home_team,
+            "away_team": away_team,
+            "game": game_label,
+            "leaders": leaders,
+        }
+
+    async def run_all():
+        limits = httpx.Limits(max_connections=max_workers, max_keepalive_connections=24)
+        async with httpx.AsyncClient(limits=limits, timeout=20.0) as session:
+            sem = asyncio.Semaphore(max_workers)
+
+            async def guarded(mid: str):
+                async with sem:
+                    return await fetch_one(mid, session)
+
+            tasks = [asyncio.create_task(guarded(mid)) for mid in game_ids]
+            results = []
+            iterator = asyncio.as_completed(tasks)
+            if verbose:
+                iterator = tqdm(
+                    iterator, total=len(tasks), desc="Boxscores", unit="match"
+                )
+            for coro in iterator:
+                results.append(await coro)
+            return results
+
+    results = asyncio.run(run_all())
+
+    output = {
+        "metadata": {
+            "season_name": season_name,
+            "season_id": str(resolved_season_id),
+            "league_id": str(league_id),
+            "games": len(game_ids),
+            "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
+        "games": sorted(results, key=lambda x: int(x["game_id"])),
+    }
+
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+
+    if verbose:
+        print(f"\nSaved season leaders to {output_path.absolute()}")
+
+
 # Backward compatibility alias
 KorisAPI = BasketFiAPI
 
@@ -428,6 +907,8 @@ __all__ = [
     "download_season_comprehensive",
     "download_team_season",
     "download_league_comprehensive",
+    "download_season_advanced_averages",
+    "download_season_game_leaders",
     "download_old_game",
     "download_old_games_bulk",
     "download_old_games_from_file",
@@ -2286,8 +2767,15 @@ examples:
   # Option 3: All seasons with all teams and their matches
   uv run koris-api league-comprehensive --category-id 4 --output-dir korisliiga_data
 
+  # Option 4: Season averages for rebounds/assists/steals (Genius Sports boxscores)
+  uv run koris-api season-advanced-averages --category-id 4 --season-id huki2526 --all-seasons --output season_avgs.json
+
+  # Option 5: Historical season game leaders (BasketHotel boxscores)
+  uv run koris-api season-game-leaders --category-id 4 --season-id 2015-2016 --output season_leaders.json
+
   # Add --adv-players to include per-match player stats from advanced boxscores
   # Add --adv-teams to include team season statistics (averages, shooting, totals)
+  # Add --cache-file to reuse boxscore summaries across runs
 
 common category IDs:
   4  - Korisliiga (Men's top division)
@@ -2312,6 +2800,8 @@ notes:
             "season-comprehensive",
             "team-season",
             "league-comprehensive",
+            "season-advanced-averages",
+            "season-game-leaders",
         ],
         help="Action to perform",
     )
@@ -2367,6 +2857,15 @@ notes:
         "--adv-teams",
         action="store_true",
         help="Include team season statistics (averages, shooting, totals) from Genius Sports",
+    )
+    parser.add_argument(
+        "--all-seasons",
+        action="store_true",
+        help="Include all seasons for the category (season-advanced-averages)",
+    )
+    parser.add_argument(
+        "--cache-file",
+        help="Cache file for advanced boxscore summaries (season-advanced-averages)",
     )
     parser.add_argument(
         "--concurrency",
@@ -2500,6 +2999,54 @@ notes:
                 output_dir=args.output_dir,
                 season_id=args.season_id,
                 include_advanced=args.adv_players,
+                max_workers=args.concurrency,
+                verbose=not args.quiet,
+            )
+
+        # Option 4: Season averages for rebounds/assists/steals from advanced boxscores
+        elif args.action == "season-advanced-averages":
+            if not args.category_id:
+                print("Error: --category-id is required for season-advanced-averages")
+                print(
+                    "Example: uv run koris-api season-advanced-averages --category-id 4 --season-id huki2526 --all-seasons --output season_avgs.json"
+                )
+                return
+
+            if not args.output:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                args.output = f"season_advanced_averages_{timestamp}.json"
+
+            download_season_advanced_averages(
+                category_id=args.category_id,
+                season_id=args.season_id,
+                output_file=args.output,
+                all_seasons=args.all_seasons,
+                cache_file=args.cache_file,
+                max_workers=args.concurrency,
+                verbose=not args.quiet,
+            )
+
+        # Option 5: Historical season game leaders from BasketHotel boxscores
+        elif args.action == "season-game-leaders":
+            if not args.category_id:
+                print("Error: --category-id is required for season-game-leaders")
+                print(
+                    "Example: uv run koris-api season-game-leaders --category-id 4 --season-id 2015-2016 --output season_leaders.json"
+                )
+                return
+
+            if not args.season_id:
+                print("Error: --season-id is required for season-game-leaders")
+                return
+
+            if not args.output:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                args.output = f"season_game_leaders_{timestamp}.json"
+
+            download_season_game_leaders(
+                category_id=args.category_id,
+                season_id=args.season_id,
+                output_file=args.output,
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
             )

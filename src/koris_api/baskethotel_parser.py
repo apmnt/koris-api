@@ -254,3 +254,132 @@ class BasketHotelParser:
                         game_data["team_stats"][stat_name] = {"value": home_value}
 
         return game_data
+
+    @staticmethod
+    def parse_boxscore_html(html: str) -> Dict[str, Any]:
+        """
+        Parse BasketHotel boxscore HTML to extract team totals.
+
+        Returns:
+            Dictionary containing team totals and player rows.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        table = soup.find("table")
+        if not table or not isinstance(table, Tag):
+            return {"teams": []}
+
+        teams: list[Dict[str, Any]] = []
+        current_team: str | None = None
+        current_team_players: list[Dict[str, Any]] = []
+        current_team_has_totals = False
+        headers: list[str] | None = None
+        header_indexes: dict[str, int] = {}
+
+        def _header_index(name: str) -> int | None:
+            indices = [i for i, h in enumerate(headers or []) if h.upper() == name]
+            return indices[-1] if indices else None
+
+        for row in table.find_all("tr"):
+            cells = row.find_all(["th", "td"])
+            if not cells:
+                continue
+
+            values = [cell.get_text(strip=True) for cell in cells]
+            if not any(values):
+                continue
+
+            if values[0] and "MIN" not in values and headers is None:
+                current_team = values[0]
+                continue
+
+            if "MIN" in values:
+                if current_team and current_team_players and not current_team_has_totals:
+                    teams.append(
+                        {
+                            "team_name": current_team,
+                            "players": current_team_players,
+                        }
+                    )
+                current_team_players = []
+                current_team_has_totals = False
+                if values[0] != "MIN":
+                    current_team = values[0]
+                    headers = ["Player"] + values[1:]
+                else:
+                    headers = ["Player"] + values
+                header_indexes = {
+                    "LEV": _header_index("LEV"),
+                    "S": _header_index("S"),
+                    "R": _header_index("R"),
+                }
+                continue
+
+            non_empty = [val for val in values if val]
+            if len(non_empty) == 1:
+                candidate = non_empty[0]
+                lowered = candidate.lower()
+                if lowered in ("joukkue", "yhteensä", "yhteensa"):
+                    continue
+                if lowered.startswith("valmentaja"):
+                    continue
+                current_team = candidate
+                continue
+
+            if values[0].lower() in ("yhteensä", "yhteensa"):
+                if not headers:
+                    continue
+                if len(values) == len(headers) - 1:
+                    values = [""] + values
+                totals: Dict[str, Any] = {"team_name": current_team}
+                for key, header_name in (
+                    ("rebounds", "LEV"),
+                    ("assists", "S"),
+                    ("steals", "R"),
+                ):
+                    idx = header_indexes.get(header_name)
+                    if idx is None or idx >= len(values):
+                        totals[key] = 0
+                        continue
+                    try:
+                        totals[key] = int(values[idx]) if values[idx] else 0
+                    except ValueError:
+                        totals[key] = 0
+                totals_entry = {
+                    "team_name": current_team,
+                    "players": current_team_players,
+                    "totals": totals,
+                    "rebounds": totals.get("rebounds", 0),
+                    "assists": totals.get("assists", 0),
+                    "steals": totals.get("steals", 0),
+                }
+                teams.append(totals_entry)
+                current_team_players = []
+                current_team_has_totals = True
+                continue
+
+            if values[0].startswith("Valmentaja"):
+                continue
+
+            if values[0].lower() == "joukkue":
+                continue
+
+            if headers:
+                row_values = list(values)
+                if len(row_values) < len(headers):
+                    row_values += [""] * (len(headers) - len(row_values))
+                if len(row_values) > len(headers):
+                    row_values = row_values[: len(headers)]
+                player = {headers[idx]: row_values[idx] for idx in range(len(headers))}
+                player["team_name"] = current_team
+                current_team_players.append(player)
+                continue
+
+        if current_team and current_team_players and not current_team_has_totals:
+            teams.append(
+                {
+                    "team_name": current_team,
+                    "players": current_team_players,
+                }
+            )
+
+        return {"teams": teams}
