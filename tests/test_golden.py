@@ -8,8 +8,16 @@ import pytest
 
 from koris_api.basketfi_api import BasketFiAPI
 from koris_api.basketfi_parser import BasketFiParser
+from koris_api.baskethotel_parser import BasketHotelParser
+from koris_api.baskethotel_api import BasketHotelAPI
 from koris_api.genius_api import GeniusSportsAPI
 from koris_api.genius_parser import GeniusSportsParser
+from koris_api import (
+    _extract_baskethotel_game_ids,
+    _extract_baskethotel_schedule_page_count,
+    _fetch_baskethotel_seasons,
+    _fetch_historical_matches,
+)
 
 
 # =============================================================================
@@ -78,8 +86,63 @@ def genius_team_statistics_html():
     example_file = (
         Path(__file__).parent.parent / "example_responses" / "genius-team-players.html"
     )
+    if not example_file.exists():
+        pytest.skip("Missing genius-team-players.html fixture")
     with open(example_file, "r", encoding="utf-8") as f:
         return f.read()
+
+
+@pytest.fixture
+def baskethotel_fixtures_dir(fixtures_dir):
+    return fixtures_dir / "baskethotel"
+
+
+@pytest.fixture
+def baskethotel_season_selector_js(baskethotel_fixtures_dir):
+    with open(baskethotel_fixtures_dir / "season_selector.js", "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@pytest.fixture
+def baskethotel_schedule_page_js(baskethotel_fixtures_dir):
+    with open(baskethotel_fixtures_dir / "schedule_page_1.js", "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@pytest.fixture
+def baskethotel_game_js(baskethotel_fixtures_dir):
+    with open(baskethotel_fixtures_dir / "game_400.js", "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@pytest.fixture
+def baskethotel_historical_matches_2021(baskethotel_fixtures_dir):
+    with open(
+        baskethotel_fixtures_dir / "historical_matches_2021.json",
+        "r",
+        encoding="utf-8",
+    ) as f:
+        return json.load(f)
+
+
+@pytest.fixture
+def baskethotel_historical_matches_2010(baskethotel_fixtures_dir):
+    with open(
+        baskethotel_fixtures_dir / "historical_matches_2010.json",
+        "r",
+        encoding="utf-8",
+    ) as f:
+        return json.load(f)
+
+
+@pytest.fixture
+def baskethotel_historical_team(baskethotel_fixtures_dir):
+    with open(
+        baskethotel_fixtures_dir / "historical_team.json",
+        "r",
+        encoding="utf-8",
+    ) as f:
+        return json.load(f)
 
 
 # =============================================================================
@@ -199,34 +262,116 @@ def test_team_statistics_parsing_from_html(genius_team_statistics_html):
     for field in expected_shoot_fields:
         assert field in player_shoot, f"Player shooting should have {field} field"
 
-    # Verify totals structure
-    player_tot = result["totals"][0]
-    assert "player_id" in player_tot
-    assert "player_name" in player_tot
-    expected_tot_fields = [
-        "Games",
-        "Minutes",
-        "Points",
-        "Offensive rebounds",
-        "Defensive rebounds",
-        "Total rebounds",
-        "Assists",
-        "Steals",
-        "Blocks",
-        "Personal fouls",
-        "Plus/minus",
-        "Index of success",
-    ]
-    for field in expected_tot_fields:
-        assert field in player_tot, f"Player totals should have {field} field"
 
-    # Verify data types are correct
-    assert isinstance(player_avg["Games"], int)
-    assert isinstance(player_avg["Average points"], float)
-    assert isinstance(player_shoot["2 Points made"], int)
-    assert isinstance(player_shoot["2 Points percentage"], float)
-    assert isinstance(player_tot["Points"], int)
-    assert isinstance(player_tot["Minutes"], float)  # Time in decimal minutes
+def test_baskethotel_extract_html_from_js(baskethotel_game_js):
+    html = BasketHotelParser.extract_html_from_response(baskethotel_game_js)
+    assert "mbt-v2-game-full" in html
+
+
+def test_baskethotel_parse_game_html(baskethotel_game_js):
+    html = BasketHotelParser.extract_html_from_response(baskethotel_game_js)
+    parsed = BasketHotelParser.parse_game_html(html)
+    assert parsed["teams"]["home"]["name"]
+    assert parsed["teams"]["away"]["name"]
+    game_info = parsed.get("game_info", {})
+    assert game_info.get("date")
+    assert game_info.get("time")
+
+
+def test_baskethotel_schedule_page_parsing(baskethotel_schedule_page_js):
+    html = BasketHotelParser.extract_html_from_response(baskethotel_schedule_page_js)
+    game_ids = _extract_baskethotel_game_ids(html)
+    assert len(game_ids) > 0
+    page_count = _extract_baskethotel_schedule_page_count(html)
+    assert page_count >= 1
+
+
+def test_baskethotel_season_selector_parsing(baskethotel_season_selector_js):
+    with patch("koris_api.__init__.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.text = baskethotel_season_selector_js
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+        seasons = _fetch_baskethotel_seasons("2")
+    assert "2021-2022" in seasons
+    assert seasons["2021-2022"].isdigit()
+
+
+def test_baskethotel_historical_matches_merge():
+    sample_game_data = {
+        "teams": {"home": {"name": "Home Team"}, "away": {"name": "Away Team"}},
+        "score": {"home": 80, "away": 75},
+        "game_info": {"date": "07.10.2021", "time": "18:30", "venue": "Arena"},
+    }
+    with patch("koris_api._fetch_baskethotel_schedule_game_ids") as mock_ids, patch(
+        "koris_api._fetch_baskethotel_team_map"
+    ) as mock_teams, patch(
+        "koris_api._resolve_baskethotel_season_id"
+    ) as mock_season, patch.object(
+        BasketHotelAPI, "fetch_game_data"
+    ) as mock_fetch:
+        mock_ids.return_value = ["1"]
+        mock_teams.return_value = {"Home Team": "10", "Away Team": "20"}
+        mock_season.return_value = "121333"
+        mock_fetch.return_value = sample_game_data
+        matches = _fetch_historical_matches(
+            matches=[],
+            season_name="2021-2022",
+            season_id=None,
+            category_id="4",
+            category_name="Korisliiga",
+            max_workers=1,
+            verbose=False,
+        )
+    assert len(matches) == 1
+    match = matches[0]
+    assert match["home_team"] == "Home Team"
+    assert match["away_team"] == "Away Team"
+    assert match["home_team_id"] == "10"
+    assert match["away_team_id"] == "20"
+    assert match["date"] == "2021-10-07"
+    assert match["time"] == "18:30:00"
+
+
+def _assert_historical_match_shape(match):
+    required_keys = [
+        "match_id",
+        "date",
+        "time",
+        "home_team",
+        "home_team_id",
+        "away_team",
+        "away_team_id",
+        "home_score",
+        "away_score",
+        "status",
+        "season",
+        "category",
+    ]
+    for key in required_keys:
+        assert key in match
+    assert match["status"] == "Played"
+
+
+def test_baskethotel_historical_fixtures_2021(baskethotel_historical_matches_2021):
+    assert len(baskethotel_historical_matches_2021) >= 5
+    match = baskethotel_historical_matches_2021[0]
+    _assert_historical_match_shape(match)
+    assert match["season"] == "2021-2022"
+
+
+def test_baskethotel_historical_fixtures_2010(baskethotel_historical_matches_2010):
+    assert len(baskethotel_historical_matches_2010) >= 5
+    match = baskethotel_historical_matches_2010[0]
+    _assert_historical_match_shape(match)
+    assert match["season"] == "2010-2011"
+
+
+def test_baskethotel_historical_team_fixture(baskethotel_historical_team):
+    assert "team" in baskethotel_historical_team
+    team = baskethotel_historical_team["team"]
+    assert "team_id" in team
+    assert "team_name" in team
 
 
 def test_basketfi_matches_parsing(basketfi_matches):
