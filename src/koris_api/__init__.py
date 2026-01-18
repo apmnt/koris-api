@@ -17,6 +17,7 @@ from .basketfi_parser import BasketFiParser
 from .baskethotel_api import BasketHotelAPI
 from .baskethotel_parser import BasketHotelParser
 from .genius_api import GeniusSportsAPI
+from .boxscore_normalizer import normalize_boxscore
 
 
 def load_genius_ids(
@@ -799,6 +800,7 @@ def download_season_game_leaders(
         if home_team and away_team:
             game_label = f"{home_team} vs {away_team}"
 
+        normalized = normalize_boxscore(boxscore, source="baskethotel")
         leaders = {
             "points": {"value": -1},
             "rebounds": {"value": -1},
@@ -806,18 +808,16 @@ def download_season_game_leaders(
             "steals": {"value": -1},
         }
 
-        for team in boxscore.get("teams", []):
+        for team in normalized.get("teams", []):
             team_name = team.get("team_name")
             for player in team.get("players", []) or []:
-                name = _clean_player_name(
-                    player.get("Player") or player.get("Pelaaja") or ""
-                )
+                name = _clean_player_name(player.get("player") or "")
                 if not name:
                     continue
-                points = _stat_int(player.get("PIST"))
-                rebounds = _stat_int(player.get("LEV"))
-                assists = _stat_int(player.get("S"))
-                steals = _stat_int(player.get("R"))
+                points = _stat_int(player.get("points"))
+                rebounds = _stat_int(player.get("rebounds_total"))
+                assists = _stat_int(player.get("assists"))
+                steals = _stat_int(player.get("steals"))
 
                 if points > leaders["points"]["value"]:
                     leaders["points"] = {
@@ -905,8 +905,11 @@ __all__ = [
     "BasketHotelAPI",
     "GeniusSportsAPI",
     "download_season_comprehensive",
+    "download_baskethotel_season_boxscores",
+    "download_matches_with_boxscores",
     "download_team_season",
     "download_league_comprehensive",
+    "download_league_boxscores_all_seasons",
     "download_season_advanced_averages",
     "download_season_game_leaders",
     "download_old_game",
@@ -921,6 +924,7 @@ def download_matches_with_boxscores(
     category_id: str,
     output_file: str,
     include_advanced: bool = False,
+    limit_games: Optional[int] = None,
     max_workers: int = 5,
     verbose: bool = True,
 ) -> None:
@@ -943,6 +947,11 @@ def download_matches_with_boxscores(
 
     # Process basic match data first
     processed_matches = BasketFiParser.parse_matches(matches, only_played=True)
+    if limit_games is not None and include_advanced:
+        candidate_limit = max(limit_games * 30, limit_games)
+        processed_matches = processed_matches[:candidate_limit]
+    elif limit_games is not None:
+        processed_matches = processed_matches[:limit_games]
     matches_to_fetch_advanced = []
 
     # Check if we should fetch advanced stats for matches
@@ -952,7 +961,7 @@ def download_matches_with_boxscores(
             if external_id:
                 matches_to_fetch_advanced.append(
                     {
-                        "index": len(processed_matches) - 1,
+                        "index": idx,
                         "external_id": external_id,
                         "home_team": match_data["home_team"],
                         "away_team": match_data["away_team"],
@@ -1009,7 +1018,9 @@ def download_matches_with_boxscores(
                     index, boxscore, error, error_type = future.result()
 
                     if boxscore:
-                        processed_matches[index]["advanced_boxscore"] = boxscore
+                        processed_matches[index]["boxscore"] = normalize_boxscore(
+                            boxscore, source="genius"
+                        )
                         matches_with_advanced += 1
                     else:
                         matches_failed += 1
@@ -1041,19 +1052,46 @@ def download_matches_with_boxscores(
 
                     pbar.update(1)
 
+    if limit_games is not None and include_advanced:
+        def has_player_stats(match: Dict[str, Any]) -> bool:
+            boxscore = match.get("boxscore") or {}
+            teams = boxscore.get("teams") or []
+            return any(team.get("players") for team in teams)
+
+        preferred = [m for m in processed_matches if has_player_stats(m)]
+        if len(preferred) >= limit_games:
+            processed_matches = preferred[:limit_games]
+        else:
+            preferred_ids = {m.get("match_id") for m in preferred}
+            remainder = [
+                m for m in processed_matches if m.get("match_id") not in preferred_ids
+            ]
+            processed_matches = (preferred + remainder)[:limit_games]
+
+    matches_with_advanced = sum(1 for match in processed_matches if "boxscore" in match)
+    matches_failed = sum(
+        1 for match in processed_matches if "advanced_boxscore_error" in match
+    )
+
     # Save to file
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     result = {
         "metadata": {
-            "season_id": season_id,
             "category_id": category_id,
+            "season_id": season_id,
+            "season_name": season_id,
+            "source": "genius",
+            "league_id": None,
             "total_matches_in_season": total_matches,
+            "total_games_requested": None,
             "played_matches_saved": len(processed_matches),
-            "matches_with_advanced_stats": matches_with_advanced,
+            "matches_with_boxscore": matches_with_advanced,
             "matches_failed": matches_failed,
             "include_advanced_stats": include_advanced,
+            "limit_games": limit_games,
+            "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
         },
         "matches": processed_matches,
     }
@@ -1090,6 +1128,95 @@ def download_matches_with_boxscores(
                     ):
                         print(f"    • {err_type}: {count}")
         print(f"{'=' * 60}")
+
+
+def download_league_boxscores_all_seasons(
+    category_id: str,
+    output_dir: str,
+    start_year: int = 2010,
+    max_workers: int = 5,
+    verbose: bool = True,
+) -> None:
+    """
+    Download boxscores + player data for all seasons from start_year to newest.
+
+    Historical seasons (pre-2022) are fetched from BasketHotel.
+    Modern seasons (2022+) use season-comprehensive with advanced boxscores.
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    if verbose:
+        print(f"\n{'=' * 80}")
+        print("LEAGUE BOXSCORES (ALL SEASONS)")
+        print(f"{'=' * 80}")
+        print(f"Category ID: {category_id}")
+        print(f"Start year: {start_year}")
+        print(f"Output directory: {output_path.absolute()}")
+        print(f"{'=' * 80}\n")
+
+    try:
+        category_data = BasketFiAPI.get_category("huki2526", category_id)
+    except Exception as e:
+        print(f"Error: Failed to fetch category info: {e}")
+        return
+
+    if "category" not in category_data or "seasons" not in category_data["category"]:
+        print(f"Error: Could not retrieve seasons for category-id ({category_id}).")
+        return
+
+    category = category_data["category"]
+    category_name = category.get("category_name", str(category_id))
+    safe_category = (
+        category_name.lower().replace(" ", "_").replace("/", "_").replace("__", "_")
+    )
+
+    seasons = category["seasons"]
+    seasons = _augment_seasons_with_baskethotel(seasons, category_id)
+
+    filtered = []
+    for season in seasons:
+        season_name = season.get("season_name")
+        season_year = _extract_season_start_year(season_name)
+        if season_year is None or season_year < start_year:
+            continue
+        filtered.append(season)
+
+    if not filtered:
+        print("No seasons found for the requested year range.")
+        return
+
+    if verbose:
+        print(f"Found {len(filtered)} seasons to download.")
+
+    for idx, season in enumerate(filtered, 1):
+        season_name = season.get("season_name") or season.get("competition_id")
+        competition_id = season.get("competition_id") or season.get("season_id")
+        is_historical = _is_historical_season(season)
+
+        if verbose:
+            print(f"\n[{idx}/{len(filtered)}] Processing season {season_name}")
+
+        if is_historical:
+            output_file = output_path / f"{safe_category}_{season_name}_baskethotel.json"
+            download_baskethotel_season_boxscores(
+                category_id=category_id,
+                season_id=season_name or str(competition_id),
+                output_file=str(output_file),
+                max_workers=max_workers,
+                verbose=verbose,
+            )
+        else:
+            output_file = output_path / f"{safe_category}_{season_name}_genius.json"
+            download_season_comprehensive(
+                category_id=category_id,
+                competition_id=str(competition_id or season_name),
+                output_file=str(output_file),
+                season_name=season_name,
+                include_advanced=True,
+                max_workers=max_workers,
+                verbose=verbose,
+            )
 
 
 def download_league_all_seasons(
@@ -1249,7 +1376,9 @@ def download_league_all_seasons(
                             index, boxscore, error, error_type = future.result()
 
                             if boxscore:
-                                all_matches[index]["advanced_boxscore"] = boxscore
+                                all_matches[index]["boxscore"] = normalize_boxscore(
+                                    boxscore, source="genius"
+                                )
                                 season_advanced += 1
                                 total_advanced_stats += 1
                             else:
@@ -1663,6 +1792,194 @@ def download_old_games_from_file(
     )
 
 
+def download_baskethotel_season_boxscores(
+    category_id: str,
+    season_id: str,
+    output_file: str,
+    limit_games: Optional[int] = None,
+    max_workers: int = 5,
+    verbose: bool = True,
+) -> None:
+    """
+    Download BasketHotel boxscores (with player rows) for every game in a season.
+
+    Args:
+        category_id: League category identifier (e.g., "4" for Korisliiga)
+        season_id: BasketHotel season name (e.g., "2015-2016") or season ID
+        output_file: Path where output file will be saved
+        max_workers: Number of concurrent workers for parallel downloads
+        verbose: Whether to show progress output
+    """
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    league_id = _get_baskethotel_league_id(category_id)
+    resolved_season_id = (
+        _resolve_baskethotel_season_id(season_id, league_id) or season_id
+    )
+
+    if verbose:
+        print(f"Fetching BasketHotel boxscores for {season_id}...")
+        print(f"  League ID: {league_id}")
+        print(f"  Season ID: {resolved_season_id}")
+        print(f"  Concurrency: {max_workers} workers")
+        print(f"  Output: {output_path.absolute()}")
+        print(f"{'=' * 60}\n")
+
+    game_ids = _fetch_baskethotel_schedule_game_ids(
+        str(resolved_season_id), league_id, verbose
+    )
+    if limit_games is not None:
+        game_ids = list(game_ids)[:limit_games]
+
+    if not game_ids:
+        print("No games found in BasketHotel schedule.")
+        return
+
+    client = BasketHotelAPI()
+    matches_data: list[Dict[str, Any]] = []
+    errors: list[Dict[str, Any]] = []
+
+    def fetch_game(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+        try:
+            boxscore = client.fetch_boxscore_data(
+                game_id=str(game_id),
+                season_id=str(resolved_season_id),
+                league_id=str(league_id),
+            )
+            return (boxscore, None)
+        except Exception as exc:
+            return (None, str(exc))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(fetch_game, game_id): game_id for game_id in game_ids
+        }
+        with tqdm(
+            total=len(game_ids),
+            desc="Fetching BasketHotel boxscores",
+            disable=not verbose,
+        ) as pbar:
+            for future in as_completed(futures):
+                game_id = futures[future]
+                boxscore, error = future.result()
+                if boxscore:
+                    game_info = boxscore.get("game_info", {})
+                    teams_info = boxscore.get("game_teams", {})
+                    home_team = teams_info.get("home", {}).get("name")
+                    away_team = teams_info.get("away", {}).get("name")
+                    normalized_boxscore = normalize_boxscore(
+                        boxscore, source="baskethotel"
+                    )
+                    teams = normalized_boxscore.get("teams", [])
+                    teams_by_name = {
+                        team.get("team_name"): team
+                        for team in teams
+                        if team.get("team_name")
+                    }
+
+                    def _normalize_team_name(name: Optional[str]) -> str:
+                        if not name:
+                            return ""
+                        return re.sub(r"[^a-z0-9]", "", name.lower())
+
+                    home_score = None
+                    away_score = None
+                    if home_team:
+                        home_key = _normalize_team_name(home_team)
+                        for team_name, team in teams_by_name.items():
+                            team_key = _normalize_team_name(team_name)
+                            if team_key and (team_key in home_key or home_key in team_key):
+                                home_score = team["totals"].get("points")
+                                team["team_name"] = home_team
+                                for player in team.get("players", []):
+                                    player["team"] = home_team
+                                break
+                    if away_team:
+                        away_key = _normalize_team_name(away_team)
+                        for team_name, team in teams_by_name.items():
+                            team_key = _normalize_team_name(team_name)
+                            if team_key and (team_key in away_key or away_key in team_key):
+                                away_score = team["totals"].get("points")
+                                team["team_name"] = away_team
+                                for player in team.get("players", []):
+                                    player["team"] = away_team
+                                break
+
+                    if home_score is None or away_score is None:
+                        if len(teams) == 2:
+                            if home_score is None:
+                                home_score = teams[0]["totals"].get("points")
+                                if home_team:
+                                    teams[0]["team_name"] = home_team
+                                    for player in teams[0].get("players", []):
+                                        player["team"] = home_team
+                            if away_score is None:
+                                away_score = teams[1]["totals"].get("points")
+                                if away_team:
+                                    teams[1]["team_name"] = away_team
+                                    for player in teams[1].get("players", []):
+                                        player["team"] = away_team
+                    status = "Played" if home_score is not None and away_score is not None else None
+
+                    matches_data.append(
+                        {
+                            "match_id": str(game_id),
+                            "match_external_id": None,
+                            "date": game_info.get("date"),
+                            "time": game_info.get("time"),
+                            "home_team": home_team,
+                            "home_team_id": None,
+                            "away_team": away_team,
+                            "away_team_id": None,
+                            "home_score": home_score,
+                            "away_score": away_score,
+                            "status": status,
+                            "venue": game_info.get("venue"),
+                            "competition": season_id,
+                            "category": None,
+                            "season": season_id,
+                            "boxscore": normalized_boxscore,
+                        }
+                    )
+                else:
+                    errors.append({"game_id": str(game_id), "error": error})
+                    if verbose and error:
+                        tqdm.write(f"  ✗ Game {game_id}: {error}")
+                pbar.update(1)
+
+    result = {
+        "metadata": {
+            "category_id": category_id,
+            "season_id": str(resolved_season_id),
+            "season_name": season_id,
+            "source": "baskethotel",
+            "league_id": str(league_id),
+            "total_matches_in_season": None,
+            "total_games_requested": len(game_ids),
+            "played_matches_saved": len(matches_data),
+            "matches_with_boxscore": len(matches_data),
+            "matches_failed": len(errors),
+            "include_advanced_stats": True,
+            "limit_games": limit_games,
+            "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
+        "matches": matches_data,
+        "errors": errors,
+    }
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+
+    if verbose:
+        print(f"\n{'=' * 60}")
+        print(f"✓ Successfully fetched {len(matches_data)}/{len(game_ids)} games")
+        if errors:
+            print(f"  - Failed: {len(errors)}")
+        print(f"  - Saved to: {output_path}")
+        print(f"{'=' * 60}")
+
+
 def download_season_comprehensive(
     category_id: str,
     competition_id: str,
@@ -1952,7 +2269,9 @@ def download_season_comprehensive(
                         index, boxscore, error, error_type = future.result()
 
                         if boxscore:
-                            processed_matches[index]["advanced_boxscore"] = boxscore
+                            processed_matches[index]["boxscore"] = normalize_boxscore(
+                                boxscore, source="genius"
+                            )
                             matches_with_advanced += 1
                         else:
                             matches_failed += 1
@@ -2054,7 +2373,7 @@ def download_season_comprehensive(
         print(f"  - Teams: {len(teams_with_details)}")
         if include_advanced:
             matches_with_player_data = sum(
-                1 for m in comprehensive_data["matches"] if "advanced_boxscore" in m
+                1 for m in comprehensive_data["matches"] if "boxscore" in m
             )
             print(f"  - Matches with player data: {matches_with_player_data}")
         print(f"{'=' * 80}\n")
@@ -2284,7 +2603,9 @@ def download_team_season(
                         index, boxscore, error, error_type = future.result()
 
                         if boxscore:
-                            processed_matches[index]["advanced_boxscore"] = boxscore
+                            processed_matches[index]["boxscore"] = normalize_boxscore(
+                                boxscore, source="genius"
+                            )
                             matches_with_advanced += 1
                         else:
                             matches_failed += 1
@@ -2367,7 +2688,7 @@ def download_team_season(
         print(f"  - Matches: {len(result_data['matches'])} (played matches)")
         if include_advanced:
             matches_with_player_data = sum(
-                1 for m in result_data["matches"] if "advanced_boxscore" in m
+                1 for m in result_data["matches"] if "boxscore" in m
             )
             print(f"  - Matches with player data: {matches_with_player_data}")
         if include_team_stats and "team_statistics" in result_data:
@@ -2621,7 +2942,9 @@ def download_league_comprehensive(
                             index, boxscore, error, error_type = future.result()
 
                             if boxscore:
-                                processed_matches[index]["advanced_boxscore"] = boxscore
+                                processed_matches[index]["boxscore"] = normalize_boxscore(
+                                    boxscore, source="genius"
+                                )
                                 season_advanced += 1
                                 total_advanced_stats += 1
                             else:
@@ -2761,11 +3084,20 @@ examples:
   # Option 1: All teams with their matches from one season
   uv run koris-api season-comprehensive --category-id 4 --season-id huki2526 --output season.json
   
+  # Option 1b: Match list with boxscores (optionally limit games)
+  uv run koris-api season-boxscores --category-id 4 --season-id 2024-2025 --adv-players --limit-games 1 --output season_boxscores.json
+
   # Option 2: All matches of one team from one season
   uv run koris-api team-season --team-id 19281 --season-id 2024-2025 --output team.json
 
+  # Option 2b: Historical season boxscores (BasketHotel)
+  uv run koris-api season-baskethotel-boxscores --category-id 4 --season-id 2015-2016 --output season_boxscores.json
+
   # Option 3: All seasons with all teams and their matches
   uv run koris-api league-comprehensive --category-id 4 --output-dir korisliiga_data
+
+  # Option 6: All seasons from 2010 with player boxscores
+  uv run koris-api league-boxscores-all-seasons --category-id 4 --output-dir korisliiga_boxscores
 
   # Option 4: Season averages for rebounds/assists/steals (Genius Sports boxscores)
   uv run koris-api season-advanced-averages --category-id 4 --season-id huki2526 --all-seasons --output season_avgs.json
@@ -2798,8 +3130,11 @@ notes:
         "action",
         choices=[
             "season-comprehensive",
+            "season-boxscores",
+            "season-baskethotel-boxscores",
             "team-season",
             "league-comprehensive",
+            "league-boxscores-all-seasons",
             "season-advanced-averages",
             "season-game-leaders",
         ],
@@ -2809,6 +3144,12 @@ notes:
         "--season-id",
         default="huki2526",
         help="Season ID (default: huki2526 for current season)",
+    )
+    parser.add_argument(
+        "--start-year",
+        type=int,
+        default=2010,
+        help="Start year for all-seasons downloads (default: 2010)",
     )
     parser.add_argument(
         "--category-id",
@@ -2845,6 +3186,11 @@ notes:
         help="Output file path (auto-generated if not specified)",
     )
     parser.add_argument(
+        "--limit-games",
+        type=int,
+        help="Limit number of games fetched (useful for samples)",
+    )
+    parser.add_argument(
         "--output-dir",
         help="Output directory for comprehensive downloads (for league-comprehensive)",
     )
@@ -2870,8 +3216,8 @@ notes:
     parser.add_argument(
         "--concurrency",
         type=int,
-        default=10,
-        help="Concurrent workers for advanced stats (default: 10)",
+        default=40,
+        help="Concurrent workers for advanced stats (default: 40)",
     )
     parser.add_argument(
         "--quiet",
@@ -2926,6 +3272,31 @@ notes:
                 output_file=args.output,
                 season_name=season_name,
                 include_advanced=args.adv_players,
+                max_workers=args.concurrency,
+                verbose=not args.quiet,
+            )
+
+        # Option 1b: Match list with boxscores (optional limit)
+        elif args.action == "season-boxscores":
+            if not args.season_id:
+                print("Error: --season-id is required for season-boxscores action")
+                print(
+                    "Example: uv run koris-api season-boxscores --category-id 4 --season-id 2024-2025 --adv-players --limit-games 1 --output season_boxscores.json"
+                )
+                return
+
+            if not args.output:
+                from datetime import datetime
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                args.output = f"season_boxscores_{args.season_id}_{timestamp}.json"
+
+            download_matches_with_boxscores(
+                season_id=args.season_id,
+                category_id=args.category_id,
+                output_file=args.output,
+                include_advanced=args.adv_players,
+                limit_games=args.limit_games,
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
             )
@@ -2985,6 +3356,34 @@ notes:
                 verbose=not args.quiet,
             )
 
+        # Option 2b: BasketHotel boxscores for a historical season
+        elif args.action == "season-baskethotel-boxscores":
+            if not args.category_id:
+                print("Error: --category-id is required for season-baskethotel-boxscores")
+                print(
+                    "Example: uv run koris-api season-baskethotel-boxscores --category-id 4 --season-id 2015-2016 --output season_boxscores.json"
+                )
+                return
+
+            if not args.season_id:
+                print("Error: --season-id is required for season-baskethotel-boxscores")
+                return
+
+            if not args.output:
+                from datetime import datetime
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                args.output = f"season_baskethotel_boxscores_{timestamp}.json"
+
+            download_baskethotel_season_boxscores(
+                category_id=args.category_id,
+                season_id=args.season_id,
+                output_file=args.output,
+                limit_games=args.limit_games,
+                max_workers=args.concurrency,
+                verbose=not args.quiet,
+            )
+
         # Option 3: All seasons with all teams and their matches
         elif args.action == "league-comprehensive":
             # Validate output directory
@@ -2999,6 +3398,22 @@ notes:
                 output_dir=args.output_dir,
                 season_id=args.season_id,
                 include_advanced=args.adv_players,
+                max_workers=args.concurrency,
+                verbose=not args.quiet,
+            )
+
+        # Option 3b: All seasons from start year with player boxscores
+        elif args.action == "league-boxscores-all-seasons":
+            if not args.output_dir:
+                from datetime import datetime
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                args.output_dir = f"league_boxscores_{args.category_id}_{timestamp}"
+
+            download_league_boxscores_all_seasons(
+                category_id=args.category_id,
+                output_dir=args.output_dir,
+                start_year=args.start_year,
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
             )
