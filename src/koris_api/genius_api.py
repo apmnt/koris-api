@@ -14,7 +14,14 @@ class GeniusSportsAPI:
     """Client for scraping basketball data from Genius Sports hosted pages."""
 
     @classmethod
-    def get_match_boxscore(cls, match_id: str) -> Dict[str, Any]:
+    def get_match_boxscore(
+        cls,
+        match_id: str,
+        session: Optional[requests.Session] = None,
+        retries: int = 3,
+        backoff_seconds: float = 0.6,
+        timeout_seconds: float = 15.0,
+    ) -> Dict[str, Any]:
         """
         Fetch and parse box score data from the Genius Sports hosted page.
 
@@ -25,8 +32,16 @@ class GeniusSportsAPI:
             Dictionary containing parsed box score data with team stats and player stats
         """
         url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{match_id}/boxscore"
-        response = requests.get(url)
-        response.raise_for_status()
+        client = session or requests
+        attempt = 0
+        while True:
+            attempt += 1
+            response = client.get(url, timeout=timeout_seconds)
+            if response.status_code >= 500 and attempt <= retries:
+                time.sleep(backoff_seconds * attempt)
+                continue
+            response.raise_for_status()
+            break
 
         return GeniusSportsParser.parse_boxscore_html(response.text)
 

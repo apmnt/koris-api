@@ -87,6 +87,7 @@ _BASKETHOTEL_SEASON_CACHE: Dict[str, Dict[str, str]] = {}
 _BASKETHOTEL_TEAM_CACHE: Dict[str, Dict[str, str]] = {}
 _BASKETHOTEL_MIN_YEAR = 2010
 _BASKETHOTEL_SESSION_LOCAL = threading.local()
+_GENIUS_SESSION_LOCAL = threading.local()
 
 
 def _get_baskethotel_league_id(category_id: str) -> str:
@@ -105,6 +106,19 @@ def _get_baskethotel_session() -> requests.Session:
         session.mount("https://", adapter)
         session.mount("http://", adapter)
         _BASKETHOTEL_SESSION_LOCAL.session = session
+    return session
+
+
+def _get_genius_session(pool_size: int = 64) -> requests.Session:
+    session = getattr(_GENIUS_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=pool_size, pool_maxsize=pool_size
+        )
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _GENIUS_SESSION_LOCAL.session = session
     return session
 
 
@@ -613,7 +627,10 @@ def download_season_advanced_averages(
                 try:
                     if is_historical:
                         raise RuntimeError("Historical matches use async fetching.")
-                    boxscore = GeniusSportsAPI.get_match_boxscore(match_id)
+                    session = _get_genius_session(max_workers)
+                    boxscore = GeniusSportsAPI.get_match_boxscore(
+                        match_id, session=session
+                    )
                     return match_id, _summarize_boxscore(boxscore), None
                 except Exception as exc:
                     return match_id, None, str(exc)
@@ -983,8 +1000,9 @@ def download_matches_with_boxscores(
         ) -> tuple[int, Optional[Dict[str, Any]], Optional[str], Optional[str]]:
             """Fetch box score for a single match. Returns (index, boxscore_data, error_msg, error_type)."""
             try:
+                session = _get_genius_session(max_workers)
                 boxscore = GeniusSportsAPI.get_match_boxscore(
-                    str(match_info["external_id"])
+                    str(match_info["external_id"]), session=session
                 )
                 return (match_info["index"], boxscore, None, None)
             except requests.exceptions.HTTPError as e:
@@ -1342,8 +1360,9 @@ def download_league_all_seasons(
                 ) -> tuple[int, Optional[Dict[str, Any]], Optional[str], Optional[str]]:
                     """Fetch box score for a single match. Returns (index, boxscore_data, error_msg, error_type)."""
                     try:
+                        session = _get_genius_session(max_workers)
                         boxscore = GeniusSportsAPI.get_match_boxscore(
-                            str(match_info["external_id"])
+                            str(match_info["external_id"]), session=session
                         )
                         return (match_info["index"], boxscore, None, None)
                     except requests.exceptions.HTTPError as e:
@@ -1842,10 +1861,12 @@ def download_baskethotel_season_boxscores(
 
     def fetch_game(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
         try:
+            session = _get_baskethotel_session()
             boxscore = client.fetch_boxscore_data(
                 game_id=str(game_id),
                 season_id=str(resolved_season_id),
                 league_id=str(league_id),
+                session=session,
             )
             return (boxscore, None)
         except Exception as exc:
@@ -2234,8 +2255,9 @@ def download_season_comprehensive(
             ) -> tuple[int, Optional[Dict[str, Any]], Optional[str], Optional[str]]:
                 """Fetch box score for a single match. Returns (index, boxscore_data, error_msg, error_type)."""
                 try:
+                    session = _get_genius_session(max_workers)
                     boxscore = GeniusSportsAPI.get_match_boxscore(
-                        str(match_info["external_id"])
+                        str(match_info["external_id"]), session=session
                     )
                     return (match_info["index"], boxscore, None, None)
                 except requests.exceptions.HTTPError as e:
@@ -2572,8 +2594,9 @@ def download_team_season(
             ) -> tuple[int, Optional[Dict[str, Any]], Optional[str], Optional[str]]:
                 """Fetch box score for a single match."""
                 try:
+                    session = _get_genius_session(max_workers)
                     boxscore = GeniusSportsAPI.get_match_boxscore(
-                        str(match_info["external_id"])
+                        str(match_info["external_id"]), session=session
                     )
                     return (match_info["index"], boxscore, None, None)
                 except requests.exceptions.HTTPError as e:
@@ -2908,8 +2931,9 @@ def download_league_comprehensive(
                 ) -> tuple[int, Optional[Dict[str, Any]], Optional[str], Optional[str]]:
                     """Fetch box score for a single match. Returns (index, boxscore_data, error_msg, error_type)."""
                     try:
+                        session = _get_genius_session(max_workers)
                         boxscore = GeniusSportsAPI.get_match_boxscore(
-                            str(match_info["external_id"])
+                            str(match_info["external_id"]), session=session
                         )
                         return (match_info["index"], boxscore, None, None)
                     except requests.exceptions.HTTPError as e:
