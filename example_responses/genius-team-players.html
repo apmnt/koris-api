@@ -1,1134 +1,591 @@
 <!doctype html>
 <html>
-    <head>
-        <link rel="stylesheet" href="https://hosted.dcd.shared.geniussports.com/css/hs-style.css?v=4.0">
-        <link rel="stylesheet" type="text/css" href="https://hosted.dcd.shared.geniussports.com/css/footable.bootstrap.min.css" media="screen">
-        <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
-        <link rel="stylesheet" type="text/css" href="https://hosted.dcd.shared.geniussports.com/css/print.css" media="print">
-        <!-- <link rel="stylesheet" type="text/css" href="https://hosted.dcd.shared.geniussports.com/css/theme.css" media="screen"> -->
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-        <meta name="keywords" content="">
-        <meta name="description" content="">
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-        <script src="//code.jquery.com/jquery-3.2.1.min.js"></script>
-        <script src="https://hosted.dcd.shared.geniussports.com/js/footable.min.js"></script>
-
-        <!-- footable decimal number formatter -->
-        <script>
-            function formatter(valueOrElement){
-                if (FooTable.is.jq(valueOrElement)) {
-                    return valueOrElement.data('value') || valueOrElement.text();
-                }
-
-                if (FooTable.is.defined(valueOrElement) && valueOrElement != null){
-                    return valueOrElement+'';
-                }
-
-                return null;
-            }
-        </script>
-
-        <script type="text/javascript">
-            var mobileScreen = 0;
-            if(jQuery(window).width() < 991)  {
-                mobileScreen = 1;
-            }
-        </script>
-
-        <script src="https://hosted.dcd.shared.geniussports.com/js/hosted.js?v=4.0"></script>
-        <script src="https://hosted.dcd.shared.geniussports.com/js/toggleclasses.js"></script>
-        <!-- Language en -->
-        <style>
-            .page-nav, .table-wrap th, .template-wrap th,.leader-first .ld-info{background:#212121;}
-            .match-details-wrap, .table-wrap th, .template-wrap th,.leader-first .ld-info, .match-venue a{color:#DDDDDD}
-            .match-header .name a,
-            .match-wrap .sched-teams .team-name span,
-            .playerblock a,
-            .teams-list-page .team-link a,
-            .template-wrap a,
-            .table-wrap a,
-            .template-wrap a.teamnames,
-            .template-wrap table a, 
-            .alphabet li a {
-                color:#0D47A1}
-            
-        </style>
-        <title></title>
-        <link rel="canonical" href="https://geniussports.com"/>
-        <meta name="robots" content="noindex" />
-    </head>
-    <body dir="ltr" class = "_user_552 _comp_42145 _team_40154 ltr  ">
-        <div class="hs-page hs-container" id="hs-container">
-                        <div class="leagueHeader hs-container">
-                                                                                    <h1></h1>
-                    <h3>Miesten I divisioona A</h3>
-            </div>
-                                    <div class="language-chooser hs-container">
-                <div class="lang-select">
-<select name = "chooselanguage" id = "languageChooser">
-    <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/team/40154/statistics"  SELECTED  >English</option>
-</select>
-</div>
-            </div> 
-            <a href="#" onClick="printElem('hs-container','https://hosted.dcd.shared.geniussports.com'); return false" class="print-link"><img src="https://hosted.dcd.shared.geniussports.com/images/print-icon.png" alt="Print" id="print-button" /></a>
-            
-            
-                            <div class="hs-page-nav hs-navbar">
-                    <div id ="hs-navigation">
-    <div class="hs-navbar-container">
-        <label for="menu-drop" class="toggle-menu">
-            <span class="hs-hamburger"></span>Menu        </label>
-        <input type="checkbox" id="menu-drop" />
-        <ul class="hs-nav hs-navbar-nav">
-                                <li><a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/schedule?" class = "">Schedule</a></li>
-                                        <li><a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/standings?" class = "">Standings</a></li>
-                                        <li><a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/leaders?" class = "">Leaders</a></li>
-                                            <li><a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/statistics/team?" class = "">Statistics</a></li>
-                                        <li><a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/teams?" class = "team40154statistics activeitem ">Teams</a></li>
-                            <li><a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/players?" class = "">Players</a></li>
-                </ul>
-    </div>
-</div>
-                </div>
-            
-            <div class="selector-wrap">
-                <div class="hs-container noresize">
-                    <div class="comp-selector">
-                                                                                <select name = "compId" id = "competitionChooser">
-                                     <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/38758/team/40154/statistics"  >16-vuotiaat pojat,  SM-sarja</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39781/team/40154/statistics"  >16-vuotiaat pojat, valtakunn. I divisioona</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39681/team/40154/statistics"  >16-vuotiaat tytöt, SM-sarja</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39782/team/40154/statistics"  >16-vuotiaat tytöt, valtakunn. I divisioona</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39679/team/40154/statistics"  >17-vuotiaat pojat, SM-sarja</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39680/team/40154/statistics"  >17-vuotiaat pojat, valtakunn. I divisioona</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39682/team/40154/statistics"  >17-vuotiaat tytöt, SM-sarja</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39683/team/40154/statistics"  >17-vuotiaat tytöt, valtakunn. I divisioona</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39812/team/40154/statistics"  >19-vuotiaat pojat, SM-sarja</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39813/team/40154/statistics"  >19-vuotiaat pojat, valtakunn. I divisioona</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39815/team/40154/statistics"  >19-vuotiaat tytöt, SM-sarja</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39816/team/40154/statistics"  >19-vuotiaat tytöt, valtakunn. I divisioona</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39344/team/40154/statistics"  >Korisliiga</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39440/team/40154/statistics"  >Korisliiga</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39346/team/40154/statistics"  >Miesten I divisioona A</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39347/team/40154/statistics"  >Miesten I divisioona B</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39348/team/40154/statistics"  >Naisten I divisioona</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39345/team/40154/statistics"  >Naisten Korisliiga</option>
-                                <option value = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39513/team/40154/statistics"  >Naisten Korisliiga</option>
-                </select>
-                <select name = "year" id = "yearChooser">
-                    <option value = "2025" >2025</option>
-                    <option value = "2024" >2024</option>
-                </select>
-    
-<script>
-    jQuery(document).ready(function() {
-        var compdata = [];
-                var compId = '38758';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','16-vuotiaat pojat,  SM-sarja', 122, '2024', 38758]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/38758/team/40154/statistics','16-vuotiaat pojat,  SM-sarja', 122, '2024', 38758]);
-        }
-                var compId = '39781';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','16-vuotiaat pojat, valtakunn. I divisioona', 122, '2024', 39781]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39781/team/40154/statistics','16-vuotiaat pojat, valtakunn. I divisioona', 122, '2024', 39781]);
-        }
-                var compId = '39681';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','16-vuotiaat tytöt, SM-sarja', 122, '2024', 39681]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39681/team/40154/statistics','16-vuotiaat tytöt, SM-sarja', 122, '2024', 39681]);
-        }
-                var compId = '39782';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','16-vuotiaat tytöt, valtakunn. I divisioona', 122, '2024', 39782]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39782/team/40154/statistics','16-vuotiaat tytöt, valtakunn. I divisioona', 122, '2024', 39782]);
-        }
-                var compId = '39679';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','17-vuotiaat pojat, SM-sarja', 122, '2024', 39679]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39679/team/40154/statistics','17-vuotiaat pojat, SM-sarja', 122, '2024', 39679]);
-        }
-                var compId = '39680';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','17-vuotiaat pojat, valtakunn. I divisioona', 122, '2024', 39680]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39680/team/40154/statistics','17-vuotiaat pojat, valtakunn. I divisioona', 122, '2024', 39680]);
-        }
-                var compId = '39682';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','17-vuotiaat tytöt, SM-sarja', 122, '2024', 39682]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39682/team/40154/statistics','17-vuotiaat tytöt, SM-sarja', 122, '2024', 39682]);
-        }
-                var compId = '39683';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','17-vuotiaat tytöt, valtakunn. I divisioona', 122, '2024', 39683]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39683/team/40154/statistics','17-vuotiaat tytöt, valtakunn. I divisioona', 122, '2024', 39683]);
-        }
-                var compId = '39812';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','19-vuotiaat pojat, SM-sarja', 122, '2024', 39812]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39812/team/40154/statistics','19-vuotiaat pojat, SM-sarja', 122, '2024', 39812]);
-        }
-                var compId = '39813';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','19-vuotiaat pojat, valtakunn. I divisioona', 122, '2024', 39813]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39813/team/40154/statistics','19-vuotiaat pojat, valtakunn. I divisioona', 122, '2024', 39813]);
-        }
-                var compId = '39815';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','19-vuotiaat tytöt, SM-sarja', 122, '2024', 39815]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39815/team/40154/statistics','19-vuotiaat tytöt, SM-sarja', 122, '2024', 39815]);
-        }
-                var compId = '39816';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','19-vuotiaat tytöt, valtakunn. I divisioona', 122, '2024', 39816]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39816/team/40154/statistics','19-vuotiaat tytöt, valtakunn. I divisioona', 122, '2024', 39816]);
-        }
-                var compId = '39344';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','Korisliiga', 122, '2024', 39344]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39344/team/40154/statistics','Korisliiga', 122, '2024', 39344]);
-        }
-                var compId = '39440';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','Korisliiga', 122, '2025', 39440]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39440/team/40154/statistics','Korisliiga', 122, '2025', 39440]);
-        }
-                var compId = '39346';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','Miesten I divisioona A', 122, '2024', 39346]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39346/team/40154/statistics','Miesten I divisioona A', 122, '2024', 39346]);
-        }
-                var compId = '39347';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','Miesten I divisioona B', 122, '2024', 39347]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39347/team/40154/statistics','Miesten I divisioona B', 122, '2024', 39347]);
-        }
-                var compId = '39348';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','Naisten I divisioona', 122, '2024', 39348]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39348/team/40154/statistics','Naisten I divisioona', 122, '2024', 39348]);
-        }
-                var compId = '39345';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','Naisten Korisliiga', 122, '2024', 39345]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39345/team/40154/statistics','Naisten Korisliiga', 122, '2024', 39345]);
-        }
-                var compId = '39513';
-        var compPathPart = '';
-        if (compId == 0){
-            compdata.push(['','','','','']);
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/all/team/40154/statistics','Naisten Korisliiga', 122, '2025', 39513]);
-        } else {
-            compdata.push(['https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/39513/team/40154/statistics','Naisten Korisliiga', 122, '2025', 39513]);
-        }
-        
-        function resetFilters() {
-            compId = 42145;
-            for(i = 0; i< compdata.length; i++) {
-                var cId = compdata[i][4];
-                if(compId == cId)   {
-                    jQuery('#yearChooser').val(compdata[i][3]);
-                    jQuery('#leagueChooser').val(compdata[i][2]);
-                }
-            }
-        }
-
-        function updateComps()  {
-            var year = jQuery('#yearChooser').val();
-            var league = jQuery('#leagueChooser').val();
-            var str = '<option value = ""></option>';
-            compId = jQuery('#competitionChooser').val() || '';
-            for(i = 0; i< compdata.length; i++) {
-                if(
-                    (!league || compdata[i][2] == league)
-                    && (!year || compdata[i][3] == year)
-                )   {
-                    selected = '';
-                    if(42145 == compdata[i][4]) {
-                        selected = 'SELECTED';
-                    }
-                    str = str + '<option value = "' + compdata[i][0] + '" ' + selected + '>' + compdata[i][1] + '</option>';
-                } else if (compdata[i][3] == 0){
-                    str = str + '<option value = "' + compdata[i][0] + '">' + compdata[i][1] + '</option>';
-                }
-            }
-            jQuery('#competitionChooser').html(str);
-        }
-        jQuery('#leagueChooser').change(function()    {
-            updateComps();
-        });
-        jQuery('#yearChooser').change(function()    {
-            updateComps();
-        });
-        jQuery('#competitionChooser').change(function()    {
-          var url = jQuery(this).val();
-          if (url) {
-                          window.location = url;
-                      }
-          return false;
-        });
-        resetFilters();
-        updateComps();
-    });
-
-</script>                                            </div>
-                </div>
-            </div>
-            <div class="hs-container noresize main-container">
-                <div class="hs-row">
-                    <div class="hs-col-full">
-                        <div class="template-wrap page-team">
-        <div class="team-header fake-table">
-                    <div class="logo team-detail">
-                <img src="https://images.statsengine.playbyplay.api.geniussports.com/290d15c65b64fc424cf4d4adc85657bcS1.png" alt="ACO Basket">
-            </div>
-                <div class="team-name fake-cell">
-            <h1 class="team-title">ACO Basket</h1>
-        </div>
-    </div>
-        <div>
-        <h2>Contact Details</h2>
-        Oulu<br>                                                                    </div>
-                	
-<div class="selection-scroll">
-	<div id = "teamnavigation" class="generic-list-menu">
-
-	            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/team/40154/home" class = "menuoption ">Summary</a>
-	                    <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/team/40154/roster" class = "menuoption ">Roster</a>
-    	            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/team/40154/staff" class = "menuoption ">Coaches</a>
-		
-
-	                    <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/team/40154/schedule" class = "menuoption ">Schedule</a>
-		            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/team/40154/statistics" class = "menuoption  currentoption ">Statistics</a>
-		        
-	</div>
-</div>
-
-<h4 class="team-page-title">Statistics</h4>
-
-
-            <h4>Averages</h4>
-             <div class="table-wrap heading">
-    <table class = "tableClass footable team-stats">
-        <thead>
+  <head>
+    <title>Team Statistics</title>
+  </head>
+  <body>
+    <h1 class="team-title">ACO Basket</h1>
+    <h2>Contact Details</h2>
+    Oulu<br />
+    <h4>Averages</h4>
+    <table class="tableClass">
+      <thead>
         <tr>
-            <th data-type="html" data-sort-use="text" data-sort-initial="ascending">Player</th>
-                                                                                                                            <th title = "Games" data-type="number" data-decimal-separator="." data-thousand-separator=",">G</th>
-                                                                                                                <th title = "Games started" data-type="number" data-decimal-separator="." data-thousand-separator=",">GS</th>
-                                                                                                                <th title = "Average minutes" data-type="number" data-decimal-separator="." data-thousand-separator=",">MPG</th>
-                                                                                                                <th title = "Average points" data-type="number" data-decimal-separator="." data-thousand-separator=",">PPG</th>
-                                                                                                                <th title = "Average offensive rebounds" data-type="number" data-decimal-separator="." data-thousand-separator=",">ORPG</th>
-                                                                                                                <th title = "Average defensive rebounds" data-type="number" data-decimal-separator="." data-thousand-separator=",">DRPG</th>
-                                                                                                                <th title = "Average total rebounds" data-type="number" data-decimal-separator="." data-thousand-separator=",">RPG</th>
-                                                                                                                <th title = "Average assists" data-type="number" data-decimal-separator="." data-thousand-separator=",">APG</th>
-                                                                                                                <th title = "Average steals" data-type="number" data-decimal-separator="." data-thousand-separator=",">STPG</th>
-                                                                                                                <th title = "Average blocks" data-type="number" data-decimal-separator="." data-thousand-separator=",">BLKPG</th>
-                                                                                                                <th title = "Average personal fouls" data-type="number" data-decimal-separator="." data-thousand-separator=",">PFPG</th>
-                                                                                                                <th title = "Average turnovers" data-type="number" data-decimal-separator="." data-thousand-separator=",">TOPG</th>
-                                                                                                                <th title = "Average +/-" data-type="number" data-decimal-separator="." data-thousand-separator=",">+/- PG</th>
-                    </tr>
-        </thead>
-    <tbody>
+          <th data-type="html">Player</th>
+          <th title="Games">G</th>
+          <th title="Games started">GS</th>
+          <th title="Average minutes">MIN</th>
+          <th title="Average points">PTS</th>
+          <th title="Average offensive rebounds">OREB</th>
+          <th title="Average defensive rebounds">DREB</th>
+          <th title="Average total rebounds">TREB</th>
+          <th title="Average assists">AST</th>
+          <th title="Average steals">STL</th>
+          <th title="Average blocks">BLK</th>
+          <th title="Average personal fouls">PF</th>
+          <th title="Average turnovers">TO</th>
+          <th title="Average +/-">+/-</th>
+        </tr>
+      </thead>
+      <tbody>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/383609?">Ville Koivisto</a>
-                    </td>
-
-                                 <td>3</td>
-                                             <td>0</td>
-                                             <td>5.0</td>
-                                             <td>2.0</td>
-                                             <td>0.3</td>
-                                             <td>0.7</td>
-                                             <td>1.0</td>
-                                             <td>0.3</td>
-                                             <td>0.3</td>
-                                             <td>0.0</td>
-                                             <td>2.7</td>
-                                             <td>0.7</td>
-                                             <td>-1.0</td>
-                        </tr>
+          <td><a href="/person/40001">Player 1</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/436923?">Tiitus Kuukkanen</a>
-                    </td>
-
-                                 <td>1</td>
-                                             <td>0</td>
-                                             <td>11.7</td>
-                                             <td>13.0</td>
-                                             <td>1.0</td>
-                                             <td>0.0</td>
-                                             <td>1.0</td>
-                                             <td>1.0</td>
-                                             <td>1.0</td>
-                                             <td>0.0</td>
-                                             <td>1.0</td>
-                                             <td>1.0</td>
-                                             <td>18.0</td>
-                        </tr>
+          <td><a href="/person/40002">Player 2</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/456639?">Henry Boyd</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td>3</td>
-                                             <td>24.4</td>
-                                             <td>8.3</td>
-                                             <td>0.8</td>
-                                             <td>3.0</td>
-                                             <td>3.8</td>
-                                             <td>2.5</td>
-                                             <td>3.0</td>
-                                             <td>0.3</td>
-                                             <td>2.8</td>
-                                             <td>2.8</td>
-                                             <td>17.0</td>
-                        </tr>
+          <td><a href="/person/40003">Player 3</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/734821?">Santeri Roiko</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td>0</td>
-                                             <td>11.7</td>
-                                             <td>2.0</td>
-                                             <td>0.5</td>
-                                             <td>1.3</td>
-                                             <td>1.8</td>
-                                             <td>0.5</td>
-                                             <td>0.3</td>
-                                             <td>0.0</td>
-                                             <td>1.8</td>
-                                             <td>0.0</td>
-                                             <td>8.3</td>
-                        </tr>
+          <td><a href="/person/40004">Player 4</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1127268?">Eino Pällijeff</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td>1</td>
-                                             <td>26.5</td>
-                                             <td>8.3</td>
-                                             <td>0.8</td>
-                                             <td>3.0</td>
-                                             <td>3.8</td>
-                                             <td>2.5</td>
-                                             <td>0.8</td>
-                                             <td>1.0</td>
-                                             <td>1.8</td>
-                                             <td>2.3</td>
-                                             <td>15.0</td>
-                        </tr>
+          <td><a href="/person/40005">Player 5</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1303478?">Viljami Valkama</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td>4</td>
-                                             <td>27.3</td>
-                                             <td>13.3</td>
-                                             <td>0.5</td>
-                                             <td>2.0</td>
-                                             <td>2.5</td>
-                                             <td>3.0</td>
-                                             <td>0.8</td>
-                                             <td>0.0</td>
-                                             <td>2.5</td>
-                                             <td>1.3</td>
-                                             <td>20.0</td>
-                        </tr>
+          <td><a href="/person/40006">Player 6</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1313980?">Johannes Rainto</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td>3</td>
-                                             <td>23.6</td>
-                                             <td>6.3</td>
-                                             <td>0.3</td>
-                                             <td>1.8</td>
-                                             <td>2.0</td>
-                                             <td>0.8</td>
-                                             <td>1.3</td>
-                                             <td>0.0</td>
-                                             <td>1.0</td>
-                                             <td>0.5</td>
-                                             <td>12.0</td>
-                        </tr>
+          <td><a href="/person/40007">Player 7</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1878563?">William De Santana</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td>1</td>
-                                             <td>20.4</td>
-                                             <td>11.3</td>
-                                             <td>0.8</td>
-                                             <td>2.3</td>
-                                             <td>3.0</td>
-                                             <td>2.3</td>
-                                             <td>1.8</td>
-                                             <td>0.0</td>
-                                             <td>1.8</td>
-                                             <td>1.0</td>
-                                             <td>7.3</td>
-                        </tr>
+          <td><a href="/person/40008">Player 8</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1958268?">Eino Pääkkönen</a>
-                    </td>
-
-                                 <td>1</td>
-                                             <td>0</td>
-                                             <td>4.4</td>
-                                             <td>0.0</td>
-                                             <td>0.0</td>
-                                             <td>0.0</td>
-                                             <td>0.0</td>
-                                             <td>1.0</td>
-                                             <td>0.0</td>
-                                             <td>0.0</td>
-                                             <td>3.0</td>
-                                             <td>1.0</td>
-                                             <td>7.0</td>
-                        </tr>
+          <td><a href="/person/40009">Player 9</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/2317556?">Kaspian Sirviö</a>
-                    </td>
-
-                                 <td>1</td>
-                                             <td>0</td>
-                                             <td>5.0</td>
-                                             <td>0.0</td>
-                                             <td>2.0</td>
-                                             <td>2.0</td>
-                                             <td>4.0</td>
-                                             <td>1.0</td>
-                                             <td>0.0</td>
-                                             <td>0.0</td>
-                                             <td>1.0</td>
-                                             <td>1.0</td>
-                                             <td>10.0</td>
-                        </tr>
+          <td><a href="/person/40010">Player 10</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/2532854?">Tyler Harris</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td>4</td>
-                                             <td>30.3</td>
-                                             <td>18.5</td>
-                                             <td>1.5</td>
-                                             <td>5.8</td>
-                                             <td>7.3</td>
-                                             <td>3.5</td>
-                                             <td>2.5</td>
-                                             <td>0.0</td>
-                                             <td>2.5</td>
-                                             <td>2.3</td>
-                                             <td>24.8</td>
-                        </tr>
+          <td><a href="/person/40011">Player 11</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/2532855?">Kyle Johnson</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td>4</td>
-                                             <td>26.8</td>
-                                             <td>12.5</td>
-                                             <td>3.0</td>
-                                             <td>8.3</td>
-                                             <td>11.3</td>
-                                             <td>4.5</td>
-                                             <td>1.8</td>
-                                             <td>1.5</td>
-                                             <td>3.5</td>
-                                             <td>3.8</td>
-                                             <td>20.3</td>
-                        </tr>
-        </tbody>
-</table>
-</div>
-
-            <h4>Shooting Statistics</h4>
-            <div class="table-wrap heading">
-    <table class = "tableClass footable team-stats">
-    <thead>
+          <td><a href="/person/40012">Player 12</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="18.5">18.5</td>
+          <td data-sort-value="7.2">7.2</td>
+          <td data-sort-value="1.1">1.1</td>
+          <td data-sort-value="2.2">2.2</td>
+          <td data-sort-value="3.3">3.3</td>
+          <td data-sort-value="1.4">1.4</td>
+          <td data-sort-value="0.8">0.8</td>
+          <td data-sort-value="0.3">0.3</td>
+          <td data-sort-value="2.1">2.1</td>
+          <td data-sort-value="1.2">1.2</td>
+          <td data-sort-value="0.5">0.5</td>
+        </tr>
+      </tbody>
+    </table>
+    <h4>Shooting Statistics</h4>
+    <table class="tableClass">
+      <thead>
         <tr>
-            <th data-type="html" data-sort-use="text" data-sort-initial="ascending">Player</th>
-                                                                                                                            <th title = "2 Points made"
-                    data-type="number"
-                    data-decimal-separator="."
-                    data-parser="formatter"
-                    data-thousand-separator=",">2PM</th>
-                                                                                                                <th title = "2 Points attempted"
-                    data-type="number"
-                    data-decimal-separator="."
-                    data-parser="formatter"
-                    data-thousand-separator=",">2PA</th>
-                                                                                                                <th title = "2 Points percentage"
-                    data-type="number"
-                    data-decimal-separator="."
-                    data-parser="formatter"
-                    data-thousand-separator=",">2P%</th>
-                                                                                                                <th title = "3 Points made"
-                    data-type="number"
-                    data-decimal-separator="."
-                    data-parser="formatter"
-                    data-thousand-separator=",">3PM</th>
-                                                                                                                <th title = "3 Points attempted"
-                    data-type="number"
-                    data-decimal-separator="."
-                    data-parser="formatter"
-                    data-thousand-separator=",">3PA</th>
-                                                                                                                <th title = "3 Point percentage"
-                    data-type="number"
-                    data-decimal-separator="."
-                    data-parser="formatter"
-                    data-thousand-separator=",">3P%</th>
-                                                                                                                <th title = "Free throws made"
-                    data-type="number"
-                    data-decimal-separator="."
-                    data-parser="formatter"
-                    data-thousand-separator=",">FTM</th>
-                                                                                                                <th title = "Free throws attempted"
-                    data-type="number"
-                    data-decimal-separator="."
-                    data-parser="formatter"
-                    data-thousand-separator=",">FTA</th>
-                                                                                                                <th title = "Free throw percentage"
-                    data-type="number"
-                    data-decimal-separator="."
-                    data-parser="formatter"
-                    data-thousand-separator=",">FT%</th>
-                    </tr>
-    </thead>
-    <tbody>
+          <th data-type="html">Player</th>
+          <th title="2 Points made">2PM</th>
+          <th title="2 Points attempted">2PA</th>
+          <th title="2 Points percentage">2P%</th>
+          <th title="3 Points made">3PM</th>
+          <th title="3 Points attempted">3PA</th>
+          <th title="3 Point percentage">3P%</th>
+          <th title="Free throws made">FTM</th>
+          <th title="Free throws attempted">FTA</th>
+          <th title="Free throw percentage">FT%</th>
+        </tr>
+      </thead>
+      <tbody>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/383609?">Ville Koivisto</a>
-                    </td>
-
-                                 <td data-sort-value="1">1</td>
-                                             <td data-sort-value="5">5</td>
-                                             <td data-sort-value="0.2">20.0</td>
-                                             <td data-sort-value="1">1</td>
-                                             <td data-sort-value="4">4</td>
-                                             <td data-sort-value="0.25">25.0</td>
-                                             <td data-sort-value="1">1</td>
-                                             <td data-sort-value="2">2</td>
-                                             <td data-sort-value="0.5">50.0</td>
-                        </tr>
+          <td><a href="/person/40001">Player 1</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/436923?">Tiitus Kuukkanen</a>
-                    </td>
-
-                                 <td data-sort-value="5">5</td>
-                                             <td data-sort-value="5">5</td>
-                                             <td data-sort-value="1">100.0</td>
-                                             <td data-sort-value="1">1</td>
-                                             <td data-sort-value="2">2</td>
-                                             <td data-sort-value="0.5">50.0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0.0</td>
-                        </tr>
+          <td><a href="/person/40002">Player 2</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/456639?">Henry Boyd</a>
-                    </td>
-
-                                 <td data-sort-value="3">3</td>
-                                             <td data-sort-value="5">5</td>
-                                             <td data-sort-value="0.6">60.0</td>
-                                             <td data-sort-value="9">9</td>
-                                             <td data-sort-value="18">18</td>
-                                             <td data-sort-value="0.5">50.0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0.0</td>
-                        </tr>
+          <td><a href="/person/40003">Player 3</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/734821?">Santeri Roiko</a>
-                    </td>
-
-                                 <td data-sort-value="1">1</td>
-                                             <td data-sort-value="1">1</td>
-                                             <td data-sort-value="1">100.0</td>
-                                             <td data-sort-value="2">2</td>
-                                             <td data-sort-value="9">9</td>
-                                             <td data-sort-value="0.222222">22.2</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0.0</td>
-                        </tr>
+          <td><a href="/person/40004">Player 4</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1127268?">Eino Pällijeff</a>
-                    </td>
-
-                                 <td data-sort-value="9">9</td>
-                                             <td data-sort-value="18">18</td>
-                                             <td data-sort-value="0.5">50.0</td>
-                                             <td data-sort-value="5">5</td>
-                                             <td data-sort-value="14">14</td>
-                                             <td data-sort-value="0.357143">35.7</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="4">4</td>
-                                             <td data-sort-value="0">0.0</td>
-                        </tr>
+          <td><a href="/person/40005">Player 5</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1303478?">Viljami Valkama</a>
-                    </td>
-
-                                 <td data-sort-value="12">12</td>
-                                             <td data-sort-value="17">17</td>
-                                             <td data-sort-value="0.705882">70.6</td>
-                                             <td data-sort-value="8">8</td>
-                                             <td data-sort-value="22">22</td>
-                                             <td data-sort-value="0.363636">36.4</td>
-                                             <td data-sort-value="5">5</td>
-                                             <td data-sort-value="5">5</td>
-                                             <td data-sort-value="1">100.0</td>
-                        </tr>
+          <td><a href="/person/40006">Player 6</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1313980?">Johannes Rainto</a>
-                    </td>
-
-                                 <td data-sort-value="7">7</td>
-                                             <td data-sort-value="11">11</td>
-                                             <td data-sort-value="0.636364">63.6</td>
-                                             <td data-sort-value="3">3</td>
-                                             <td data-sort-value="13">13</td>
-                                             <td data-sort-value="0.230769">23.1</td>
-                                             <td data-sort-value="2">2</td>
-                                             <td data-sort-value="2">2</td>
-                                             <td data-sort-value="1">100.0</td>
-                        </tr>
+          <td><a href="/person/40007">Player 7</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1878563?">William De Santana</a>
-                    </td>
-
-                                 <td data-sort-value="11">11</td>
-                                             <td data-sort-value="17">17</td>
-                                             <td data-sort-value="0.647059">64.7</td>
-                                             <td data-sort-value="7">7</td>
-                                             <td data-sort-value="14">14</td>
-                                             <td data-sort-value="0.5">50.0</td>
-                                             <td data-sort-value="2">2</td>
-                                             <td data-sort-value="3">3</td>
-                                             <td data-sort-value="0.666667">66.7</td>
-                        </tr>
+          <td><a href="/person/40008">Player 8</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1958268?">Eino Pääkkönen</a>
-                    </td>
-
-                                 <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0.0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0.0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0.0</td>
-                        </tr>
+          <td><a href="/person/40009">Player 9</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/2317556?">Kaspian Sirviö</a>
-                    </td>
-
-                                 <td data-sort-value="0">0</td>
-                                             <td data-sort-value="1">1</td>
-                                             <td data-sort-value="0">0.0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0.0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0</td>
-                                             <td data-sort-value="0">0.0</td>
-                        </tr>
+          <td><a href="/person/40010">Player 10</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/2532854?">Tyler Harris</a>
-                    </td>
-
-                                 <td data-sort-value="26">26</td>
-                                             <td data-sort-value="39">39</td>
-                                             <td data-sort-value="0.666667">66.7</td>
-                                             <td data-sort-value="3">3</td>
-                                             <td data-sort-value="11">11</td>
-                                             <td data-sort-value="0.272727">27.3</td>
-                                             <td data-sort-value="13">13</td>
-                                             <td data-sort-value="20">20</td>
-                                             <td data-sort-value="0.65">65.0</td>
-                        </tr>
+          <td><a href="/person/40011">Player 11</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/2532855?">Kyle Johnson</a>
-                    </td>
-
-                                 <td data-sort-value="21">21</td>
-                                             <td data-sort-value="41">41</td>
-                                             <td data-sort-value="0.512195">51.2</td>
-                                             <td data-sort-value="1">1</td>
-                                             <td data-sort-value="2">2</td>
-                                             <td data-sort-value="0.5">50.0</td>
-                                             <td data-sort-value="5">5</td>
-                                             <td data-sort-value="10">10</td>
-                                             <td data-sort-value="0.5">50.0</td>
-                        </tr>
-        </tbody>
-</table>
-</div>
-
-
-
-            <h4>Totals</h4>
-            <div class="table-wrap heading">
-    <table class = "tableClass footable team-stats">
-    <thead>
+          <td><a href="/person/40012">Player 12</a></td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="60">60</td>
+          <td data-sort-value="50.0">50.0</td>
+          <td data-sort-value="10">10</td>
+          <td data-sort-value="25">25</td>
+          <td data-sort-value="40.0">40.0</td>
+          <td data-sort-value="12">12</td>
+          <td data-sort-value="15">15</td>
+          <td data-sort-value="80.0">80.0</td>
+        </tr>
+      </tbody>
+    </table>
+    <h4>Totals</h4>
+    <table class="tableClass">
+      <thead>
         <tr>
-            <th data-type="html" data-sort-use="text" data-sort-initial="ascending">Player</th>
-                                                                                                                            <th title = "Games" data-type="number" data-decimal-separator="." data-thousand-separator=",">G</th>
-                                                                                                                <th title = "Minutes" data-type="text" data-decimal-separator="." data-thousand-separator=",">Min</th>
-                                                                                                                <th title = "Points" data-type="number" data-decimal-separator="." data-thousand-separator=",">PTS</th>
-                                                                                                                <th title = "Offensive rebounds" data-type="number" data-decimal-separator="." data-thousand-separator=",">OFF</th>
-                                                                                                                <th title = "Defensive rebounds" data-type="number" data-decimal-separator="." data-thousand-separator=",">DEF</th>
-                                                                                                                <th title = "Total rebounds" data-type="number" data-decimal-separator="." data-thousand-separator=",">REB</th>
-                                                                                                                <th title = "Assists" data-type="number" data-decimal-separator="." data-thousand-separator=",">AST</th>
-                                                                                                                <th title = "Steals" data-type="number" data-decimal-separator="." data-thousand-separator=",">STL</th>
-                                                                                                                <th title = "Blocks" data-type="number" data-decimal-separator="." data-thousand-separator=",">BLK</th>
-                                                                                                                <th title = "Personal fouls" data-type="number" data-decimal-separator="." data-thousand-separator=",">PF</th>
-                                                                                                                <th title = "Plus/minus" data-type="number" data-decimal-separator="." data-thousand-separator=",">+/-</th>
-                                                                                                                <th title = "Index of success" data-type="number" data-decimal-separator="." data-thousand-separator=",">Index</th>
-                    </tr>
-    </thead>
-    <tbody>
+          <th data-type="html">Player</th>
+          <th title="Games">G</th>
+          <th title="Minutes">MIN</th>
+          <th title="Points">PTS</th>
+          <th title="Offensive rebounds">OREB</th>
+          <th title="Defensive rebounds">DREB</th>
+          <th title="Total rebounds">TREB</th>
+          <th title="Assists">AST</th>
+          <th title="Steals">STL</th>
+          <th title="Blocks">BLK</th>
+          <th title="Personal fouls">PF</th>
+          <th title="Plus/minus">+/-</th>
+          <th title="Index of success">IOS</th>
+        </tr>
+      </thead>
+      <tbody>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/383609?">Ville Koivisto</a>
-                    </td>
-
-                                 <td>3</td>
-                                             <td data-sort-value="14.886667">14:53</td>
-                                             <td>6</td>
-                                             <td>1</td>
-                                             <td>2</td>
-                                             <td>3</td>
-                                             <td>1</td>
-                                             <td>1</td>
-                                             <td>0</td>
-                                             <td>8</td>
-                                             <td>-3</td>
-                                             <td>-7.0</td>
-                        </tr>
+          <td><a href="/person/40001">Player 1</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/436923?">Tiitus Kuukkanen</a>
-                    </td>
-
-                                 <td>1</td>
-                                             <td data-sort-value="11.733333">11:43</td>
-                                             <td>13</td>
-                                             <td>1</td>
-                                             <td>0</td>
-                                             <td>1</td>
-                                             <td>1</td>
-                                             <td>1</td>
-                                             <td>0</td>
-                                             <td>1</td>
-                                             <td>18</td>
-                                             <td>13.0</td>
-                        </tr>
+          <td><a href="/person/40002">Player 2</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/456639?">Henry Boyd</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td data-sort-value="97.596666">97:35</td>
-                                             <td>33</td>
-                                             <td>3</td>
-                                             <td>12</td>
-                                             <td>15</td>
-                                             <td>10</td>
-                                             <td>12</td>
-                                             <td>1</td>
-                                             <td>11</td>
-                                             <td>68</td>
-                                             <td>41.0</td>
-                        </tr>
+          <td><a href="/person/40003">Player 3</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/734821?">Santeri Roiko</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td data-sort-value="46.78">46:46</td>
-                                             <td>8</td>
-                                             <td>2</td>
-                                             <td>5</td>
-                                             <td>7</td>
-                                             <td>2</td>
-                                             <td>1</td>
-                                             <td>0</td>
-                                             <td>7</td>
-                                             <td>33</td>
-                                             <td>4.0</td>
-                        </tr>
+          <td><a href="/person/40004">Player 4</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1127268?">Eino Pällijeff</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td data-sort-value="106.135">106:08</td>
-                                             <td>33</td>
-                                             <td>3</td>
-                                             <td>12</td>
-                                             <td>15</td>
-                                             <td>10</td>
-                                             <td>3</td>
-                                             <td>4</td>
-                                             <td>7</td>
-                                             <td>60</td>
-                                             <td>29.0</td>
-                        </tr>
+          <td><a href="/person/40005">Player 5</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1303478?">Viljami Valkama</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td data-sort-value="109.171667">109:10</td>
-                                             <td>53</td>
-                                             <td>2</td>
-                                             <td>8</td>
-                                             <td>10</td>
-                                             <td>12</td>
-                                             <td>3</td>
-                                             <td>0</td>
-                                             <td>10</td>
-                                             <td>80</td>
-                                             <td>49.0</td>
-                        </tr>
+          <td><a href="/person/40006">Player 6</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1313980?">Johannes Rainto</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td data-sort-value="94.393333">94:23</td>
-                                             <td>25</td>
-                                             <td>1</td>
-                                             <td>7</td>
-                                             <td>8</td>
-                                             <td>3</td>
-                                             <td>5</td>
-                                             <td>0</td>
-                                             <td>4</td>
-                                             <td>48</td>
-                                             <td>23.0</td>
-                        </tr>
+          <td><a href="/person/40007">Player 7</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1878563?">William De Santana</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td data-sort-value="81.386667">81:23</td>
-                                             <td>45</td>
-                                             <td>3</td>
-                                             <td>9</td>
-                                             <td>12</td>
-                                             <td>9</td>
-                                             <td>7</td>
-                                             <td>0</td>
-                                             <td>7</td>
-                                             <td>29</td>
-                                             <td>55.0</td>
-                        </tr>
+          <td><a href="/person/40008">Player 8</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/1958268?">Eino Pääkkönen</a>
-                    </td>
-
-                                 <td>1</td>
-                                             <td data-sort-value="4.433333">4:25</td>
-                                             <td>0</td>
-                                             <td>0</td>
-                                             <td>0</td>
-                                             <td>0</td>
-                                             <td>1</td>
-                                             <td>0</td>
-                                             <td>0</td>
-                                             <td>3</td>
-                                             <td>7</td>
-                                             <td>-3.0</td>
-                        </tr>
+          <td><a href="/person/40009">Player 9</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/2317556?">Kaspian Sirviö</a>
-                    </td>
-
-                                 <td>1</td>
-                                             <td data-sort-value="5.016667">5:01</td>
-                                             <td>0</td>
-                                             <td>2</td>
-                                             <td>2</td>
-                                             <td>4</td>
-                                             <td>1</td>
-                                             <td>0</td>
-                                             <td>0</td>
-                                             <td>1</td>
-                                             <td>10</td>
-                                             <td>1.0</td>
-                        </tr>
+          <td><a href="/person/40010">Player 10</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/2532854?">Tyler Harris</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td data-sort-value="121.263334">121:15</td>
-                                             <td>74</td>
-                                             <td>6</td>
-                                             <td>23</td>
-                                             <td>29</td>
-                                             <td>14</td>
-                                             <td>10</td>
-                                             <td>0</td>
-                                             <td>10</td>
-                                             <td>99</td>
-                                             <td>97.0</td>
-                        </tr>
+          <td><a href="/person/40011">Player 11</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
         <tr>
-        <td>
-                            <a href = "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/person/2532855?">Kyle Johnson</a>
-                    </td>
-
-                                 <td>4</td>
-                                             <td data-sort-value="107.203333">107:12</td>
-                                             <td>50</td>
-                                             <td>12</td>
-                                             <td>33</td>
-                                             <td>45</td>
-                                             <td>18</td>
-                                             <td>7</td>
-                                             <td>6</td>
-                                             <td>14</td>
-                                             <td>81</td>
-                                             <td>77.0</td>
-                        </tr>
-    </tbody>
-</table>
-</div>
-</div>
-                    </div>
-                </div>
-            </div>
-            <script type="text/javascript">
-                jQuery('table.footable').each(function (index, value) {
-                    if(!jQuery(this).is('[class*="footable-done"]')) {
-                        jQuery(this).addClass('footable-done');
-                        var table = jQuery(this);
-                        jQuery(this).footable({
-                           "sorting": {
-                               "enabled": true
-                           },
-                           'on': {
-                               'postinit.ft.table': function (e, ft) {
-                                   jQuery(this).show();
-                               }
-                           },
-                       });
-                    }
-                });
-
-                var popupMessage = "Popup Blocker is enabled - Please add this site to your exception list in order to print";
-            </script>
-            
-                                        <script>
-                    jQuery(document).ready(function() {
-                        validateSetup(1,['hosted.dcd.shared.geniussports.com','basket.fi','korisliiga.fi','hosted.dcd.shared.geniussports.com'],'/FBAA/en/invalidreferrer');
-                    });
-                </script>
-            
-            
-            <script src="https://zz.connextra.com/dcs/tagController/tag/4cd48cd7dd8d/Hosted_Solutions" async defer></script>
-        </div>
-    </body>
+          <td><a href="/person/40012">Player 12</a></td>
+          <td data-sort-value="20">20</td>
+          <td data-sort-value="350.0">350.0</td>
+          <td data-sort-value="144">144</td>
+          <td data-sort-value="22">22</td>
+          <td data-sort-value="44">44</td>
+          <td data-sort-value="66">66</td>
+          <td data-sort-value="28">28</td>
+          <td data-sort-value="16">16</td>
+          <td data-sort-value="6">6</td>
+          <td data-sort-value="30">30</td>
+          <td data-sort-value="5">5</td>
+          <td data-sort-value="12">12</td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
 </html>
-

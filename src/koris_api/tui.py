@@ -10,6 +10,19 @@ from textual.binding import Binding
 from textual.screen import Screen
 from .basketfi_api import BasketFiAPI
 from .genius_api import GeniusSportsAPI
+from .boxscore_normalizer import normalize_boxscore
+from .__init__ import (
+    _augment_seasons_with_baskethotel,
+    _extract_season_start_year,
+    _fetch_baskethotel_schedule_game_ids,
+    _fetch_baskethotel_team_map,
+    _get_baskethotel_league_id,
+    _get_baskethotel_session,
+    _merge_baskethotel_match,
+    _resolve_baskethotel_season_id,
+)
+from .baskethotel_api import BasketHotelAPI
+from .__init__ import _augment_seasons_with_baskethotel
 
 
 class MatchViewScreen(Screen):
@@ -56,14 +69,26 @@ class MatchViewScreen(Screen):
         Binding("q", "quit", "Quit", show=True),
     ]
 
-    def __init__(self, match_id: str, home_team: str, away_team: str):
+    def __init__(
+        self,
+        match_id: str,
+        home_team: str,
+        away_team: str,
+        season_name: Optional[str] = None,
+        category_id: Optional[str] = None,
+        match_summary: Optional[dict] = None,
+    ):
         super().__init__()
         self.match_id = match_id
         self.home_team = home_team
         self.away_team = away_team
+        self.season_name = season_name
+        self.category_id = category_id
+        self.match_summary = match_summary or {}
         self.match_data: Optional[dict] = None
         self.boxscore_data: Optional[dict] = None
         self.boxscore_match_id: Optional[str] = None  # Genius Sports match ID
+        self.is_historical = False
 
     def compose(self) -> ComposeResult:
         """Create the match view layout."""
@@ -73,13 +98,13 @@ class MatchViewScreen(Screen):
                 f"Loading {self.home_team} vs {self.away_team}...",
                 id="match_info_display",
             )
-            yield Static("", id="home_team_header")
-            yield DataTable(id="home_players_table")
-            yield Static("", id="away_team_header")
-            yield DataTable(id="away_players_table")
             # Advanced box score section
             yield Static("", id="advanced_boxscore_header")
             yield Static("", id="advanced_boxscore_loading")
+            yield Static("", id="advanced_match_totals_header")
+            yield DataTable(id="advanced_match_totals_table")
+            yield Static("", id="advanced_team_totals_header")
+            yield DataTable(id="advanced_team_totals_table")
             yield Static("", id="advanced_home_team_header")
             yield DataTable(id="advanced_home_players_table")
             yield Static("", id="advanced_away_team_header")
@@ -94,9 +119,13 @@ class MatchViewScreen(Screen):
 
     def on_mount(self) -> None:
         """Fetch and display match data when screen is mounted."""
+        season_year = _extract_season_start_year(self.season_name)
+        self.is_historical = season_year is not None and season_year < 2022
+        if self.match_summary.get("boxscore"):
+            self.boxscore_data = self.match_summary.get("boxscore")
         self.load_match_data()
-        # Start loading advanced box score in the background
-        self.load_advanced_boxscore()
+        if not self.boxscore_data:
+            self.load_advanced_boxscore()
 
     def load_match_data(self) -> None:
         """Fetch and display match information."""
@@ -104,16 +133,35 @@ class MatchViewScreen(Screen):
 
         try:
             display.update("Loading match data...")
-            data = BasketFiAPI.get_match(self.match_id)
-
-            if "match" in data:
-                self.match_data = data["match"]
-                # Extract Genius Sports match ID if available
-                if self.match_data and "match_external_id" in self.match_data:
-                    self.boxscore_match_id = self.match_data["match_external_id"]
+            if self.is_historical:
+                self.match_data = {
+                    "club_A_name": self.match_summary.get("Home Team", self.home_team),
+                    "club_B_name": self.match_summary.get("Away Team", self.away_team),
+                    "date": self.match_summary.get("Date"),
+                    "time": self.match_summary.get("Time"),
+                    "venue_name": self.match_summary.get("Venue"),
+                    "venue_city": "",
+                    "competition_name": self.match_summary.get(
+                        "Competition", self.season_name or "Historical Season"
+                    ),
+                    "category_name": self.match_summary.get("Category", ""),
+                    "status": self.match_summary.get("Status", "Played"),
+                    "fs_A": self.match_summary.get("Home Score"),
+                    "fs_B": self.match_summary.get("Away Score"),
+                    "lineups": [],
+                }
                 self.render_match_info()
             else:
-                display.update(f"No data found for match {self.match_id}")
+                data = BasketFiAPI.get_match(self.match_id)
+
+                if "match" in data:
+                    self.match_data = data["match"]
+                    # Extract Genius Sports match ID if available
+                    if self.match_data and "match_external_id" in self.match_data:
+                        self.boxscore_match_id = self.match_data["match_external_id"]
+                    self.render_match_info()
+                else:
+                    display.update(f"No data found for match {self.match_id}")
 
         except Exception as e:
             display.update(f"Error loading match data: {str(e)}")
@@ -176,124 +224,16 @@ class MatchViewScreen(Screen):
         display = self.query_one("#match_info_display", Static)
         display.update("\n".join(info_lines))
 
-        # Render player stats tables
-        self.render_player_stats()
-
-    def render_player_stats(self) -> None:
-        """Render player statistics tables."""
-        if not self.match_data:
-            return
-
-        match = self.match_data
-
-        # Get lineups (player stats)
-        lineups = match.get("lineups", [])
-
-        # Separate by team
-        team_a_players = [
-            p for p in lineups if p.get("team_id") == match.get("team_A_id")
-        ]
-        team_b_players = [
-            p for p in lineups if p.get("team_id") == match.get("team_B_id")
-        ]
-
-        # Home team players (Team A)
-        home_table = self.query_one("#home_players_table", DataTable)
-        home_table.clear(columns=True)
-
-        # Add columns with fixed widths for consistency
-        home_table.add_column("#", width=5)
-        home_table.add_column("Player", width=25)
-        home_table.add_column("PTS", width=6)
-        home_table.add_column("FG", width=6)
-        home_table.add_column("3PT", width=6)
-        home_table.add_column("FT", width=6)
-        home_table.add_column("AST", width=6)
-        home_table.add_column("BLK", width=6)
-        home_table.add_column("FOUL", width=6)
-        home_table.add_column("MIN", width=6)
-
-        if team_a_players:
-            home_table.show_header = True
-            home_table.zebra_stripes = True
-            home_table.cursor_type = "none"
-
-            # Add title
-            home_header = self.query_one("#home_team_header", Static)
-            home_header.update(
-                f"\n[bold cyan]{match.get('club_A_name', 'Home Team')} - Player Statistics[/bold cyan]"
-            )
-
-            for player in sorted(
-                team_a_players, key=lambda p: int(p.get("pos_id", "999"))
-            ):
-                home_table.add_row(
-                    player.get("shirt_number", "-"),
-                    player.get("player_name", "Unknown"),
-                    str(player.get("points", "0")),
-                    str(player.get("goals", "0")),  # Field goals made
-                    str(player.get("goals", "0")),  # 3-pointers (same as goals for now)
-                    str(
-                        player.get("goals", "0")
-                    ),  # Free throws (same as goals for now)
-                    str(player.get("assists", "0")),
-                    str(player.get("blocks", "0")),
-                    str(player.get("fouls", "0")),
-                    str(player.get("playing_time_min", "0")),
-                )
-
-        # Away team players (Team B)
-        away_table = self.query_one("#away_players_table", DataTable)
-        away_table.clear(columns=True)
-
-        # Add columns with same fixed widths for consistency
-        away_table.add_column("#", width=5)
-        away_table.add_column("Player", width=25)
-        away_table.add_column("PTS", width=6)
-        away_table.add_column("FG", width=6)
-        away_table.add_column("3PT", width=6)
-        away_table.add_column("FT", width=6)
-        away_table.add_column("AST", width=6)
-        away_table.add_column("BLK", width=6)
-        away_table.add_column("FOUL", width=6)
-        away_table.add_column("MIN", width=6)
-
-        if team_b_players:
-            away_table.show_header = True
-            away_table.zebra_stripes = True
-            away_table.cursor_type = "none"
-
-            # Add title for away team
-            away_header = self.query_one("#away_team_header", Static)
-            away_header.update(
-                f"\n[bold cyan]{match.get('club_B_name', 'Away Team')} - Player Statistics[/bold cyan]"
-            )
-
-            for player in sorted(
-                team_b_players, key=lambda p: int(p.get("pos_id", "999"))
-            ):
-                away_table.add_row(
-                    player.get("shirt_number", "-"),
-                    player.get("player_name", "Unknown"),
-                    str(player.get("points", "0")),
-                    str(player.get("goals", "0")),
-                    str(player.get("goals", "0")),
-                    str(player.get("goals", "0")),
-                    str(player.get("assists", "0")),
-                    str(player.get("blocks", "0")),
-                    str(player.get("fouls", "0")),
-                    str(player.get("playing_time_min", "0")),
-                )
-
     def load_advanced_boxscore(self) -> None:
         """Load advanced box score data in the background using a worker."""
         # Show loading indicator
         loading = self.query_one("#advanced_boxscore_loading", Static)
         header = self.query_one("#advanced_boxscore_header", Static)
-
-        header.update(
-            "\n[bold cyan]{'=' * 80}[/bold cyan]\n[bold yellow]ADVANCED BOX SCORE (Genius Sports)[/bold yellow]\n[bold cyan]{'=' * 80}[/bold cyan]"
-        )
+        if self.boxscore_data:
+            loading.update("[dim]Boxscore already loaded.[/dim]")
+            return
+        source_label = "BasketHotel" if self.is_historical else "Genius Sports"
+        header.update("")
         loading.update("[dim]Loading advanced statistics...[/dim]")
 
         # Run the fetch in a worker to avoid blocking the UI
@@ -302,6 +242,26 @@ class MatchViewScreen(Screen):
     def _fetch_boxscore_worker(self) -> dict | None:
         """Worker function to fetch box score data."""
         try:
+            if self.is_historical:
+                if not self.season_name or not self.category_id:
+                    return {
+                        "error": "Season or category not available for BasketHotel match"
+                    }
+                league_id = _get_baskethotel_league_id(str(self.category_id))
+                resolved_season_id = (
+                    _resolve_baskethotel_season_id(self.season_name, league_id)
+                    or self.season_name
+                )
+                session = _get_baskethotel_session()
+                boxscore_data = BasketHotelAPI().fetch_boxscore_data(
+                    str(self.match_id),
+                    season_id=str(resolved_season_id),
+                    league_id=str(league_id),
+                    session=session,
+                )
+                normalized = normalize_boxscore(boxscore_data, source="baskethotel")
+                return {"data": normalized}
+
             if not self.boxscore_match_id:
                 return {"error": "Genius Sports match ID not available for this match"}
 
@@ -309,7 +269,8 @@ class MatchViewScreen(Screen):
             boxscore_data = GeniusSportsAPI.get_match_boxscore(
                 str(self.boxscore_match_id)
             )
-            return {"data": boxscore_data}
+            normalized = normalize_boxscore(boxscore_data, source="genius")
+            return {"data": normalized}
 
         except Exception as e:
             return {"error": str(e)}
@@ -353,11 +314,15 @@ class MatchViewScreen(Screen):
         if len(teams) < 2:
             return
 
+        match_totals = self.boxscore_data.get("match_totals", {})
+        self._render_match_totals(match_totals)
+        self._render_team_totals(teams)
+
         # Render home team (first team in the list)
         home_team = teams[0]
         home_header = self.query_one("#advanced_home_team_header", Static)
         home_header.update(
-            f"\n[bold cyan]{home_team.get('team_name', 'Home Team')} - Advanced Statistics[/bold cyan]"
+            f"\n[bold cyan]{home_team.get('team_name', 'Home Team')} - Player Statistics[/bold cyan]"
         )
 
         home_table = self.query_one("#advanced_home_players_table", DataTable)
@@ -369,11 +334,13 @@ class MatchViewScreen(Screen):
         home_table.add_column("MIN", width=6)
         home_table.add_column("PTS", width=5)
         home_table.add_column("2PM-A", width=8)
-        home_table.add_column("2P%", width=6)
         home_table.add_column("3PM-A", width=8)
-        home_table.add_column("3P%", width=6)
         home_table.add_column("FTM-A", width=8)
+        home_table.add_column("2P%", width=6)
+        home_table.add_column("3P%", width=6)
         home_table.add_column("FT%", width=6)
+        home_table.add_column("OFF", width=5)
+        home_table.add_column("DEF", width=5)
         home_table.add_column("REB", width=5)
         home_table.add_column("AST", width=5)
         home_table.add_column("STL", width=5)
@@ -381,6 +348,7 @@ class MatchViewScreen(Screen):
         home_table.add_column("TO", width=5)
         home_table.add_column("PF", width=5)
         home_table.add_column("+/-", width=5)
+        home_table.add_column("IDX", width=5)
 
         home_table.show_header = True
         home_table.zebra_stripes = True
@@ -388,47 +356,32 @@ class MatchViewScreen(Screen):
 
         # Add player rows
         for player in home_team.get("players", []):
-            # Format minutes (convert from decimal to MM:SS)
-            mins = player.get("Minutes", 0)
-            if isinstance(mins, (int, float)):
-                total_seconds = int(mins * 60)
-                min_part = total_seconds // 60
-                sec_part = total_seconds % 60
-                mins_display = f"{min_part}:{sec_part:02d}"
-            else:
-                mins_display = str(mins)
-
-            # Format percentages
-            fg2_pct = player.get("2 Points Percentage", 0)
-            if isinstance(fg2_pct, (int, float)):
-                fg2_pct = f"{fg2_pct * 100:.1f}" if fg2_pct <= 1 else f"{fg2_pct:.1f}"
-
-            fg3_pct = player.get("3 Point Percentage", 0)
-            if isinstance(fg3_pct, (int, float)):
-                fg3_pct = f"{fg3_pct * 100:.1f}" if fg3_pct <= 1 else f"{fg3_pct:.1f}"
-
-            ft_pct = player.get("Free Throw Percentage", 0)
-            if isinstance(ft_pct, (int, float)):
-                ft_pct = f"{ft_pct * 100:.1f}" if ft_pct <= 1 else f"{ft_pct:.1f}"
+            mins_display = self._format_minutes(player.get("Minutes"))
+            fg2_pct = self._format_pct(player.get("2P%"))
+            fg3_pct = self._format_pct(player.get("3P%"))
+            ft_pct = self._format_pct(player.get("FT%"))
 
             home_table.add_row(
-                str(player.get("Shirt Number", "-")),
-                player.get("Player", "Unknown")[:19],  # Truncate long names
+                str(player.get("player_number", "-")),
+                str(player.get("player", "Unknown"))[:19],  # Truncate long names
                 mins_display,
                 str(player.get("Points", 0)),
-                f"{player.get('2 Points Made', 0)}-{player.get('2 Points Attempted', 0)}",
+                f"{player.get('2PM', 0)}-{player.get('2PA', 0)}",
+                f"{player.get('3PM', 0)}-{player.get('3PA', 0)}",
+                f"{player.get('FTM', 0)}-{player.get('FTA', 0)}",
                 fg2_pct,
-                f"{player.get('3 Points Made', 0)}-{player.get('3 Points Atttempted', 0)}",
                 fg3_pct,
-                f"{player.get('Free Throws Made', 0)}-{player.get('Free Throws Attempted', 0)}",
                 ft_pct,
-                str(player.get("Total Rebounds", 0)),
-                str(player.get("Assists", 0)),
-                str(player.get("Steals", 0)),
-                str(player.get("Blocks", 0)),
-                str(player.get("Turnovers", 0)),
-                str(player.get("Personal Foul", 0)),
-                str(player.get("Plus/Minus", 0)),
+                str(player.get("OFF", 0)),
+                str(player.get("DEF", 0)),
+                str(player.get("REB", 0)),
+                str(player.get("AST", 0)),
+                str(player.get("STL", 0)),
+                str(player.get("BLK", 0)),
+                str(player.get("TO", 0)),
+                str(player.get("PF", 0)),
+                str(player.get("+/-", 0)),
+                str(player.get("Index", 0)),
             )
 
         # Show coaching staff
@@ -440,14 +393,14 @@ class MatchViewScreen(Screen):
             else:
                 coach_text += "[/dim]"
             home_header.update(
-                f"\n[bold cyan]{home_team.get('team_name', 'Home Team')} - Advanced Statistics[/bold cyan]\n{coach_text}"
+                f"\n[bold cyan]{home_team.get('team_name', 'Home Team')} - Player Statistics[/bold cyan]\n{coach_text}"
             )
 
         # Render away team (second team in the list)
         away_team = teams[1]
         away_header = self.query_one("#advanced_away_team_header", Static)
         away_header.update(
-            f"\n[bold cyan]{away_team.get('team_name', 'Away Team')} - Advanced Statistics[/bold cyan]"
+            f"\n[bold cyan]{away_team.get('team_name', 'Away Team')} - Player Statistics[/bold cyan]"
         )
 
         away_table = self.query_one("#advanced_away_players_table", DataTable)
@@ -459,11 +412,13 @@ class MatchViewScreen(Screen):
         away_table.add_column("MIN", width=6)
         away_table.add_column("PTS", width=5)
         away_table.add_column("2PM-A", width=8)
-        away_table.add_column("2P%", width=6)
         away_table.add_column("3PM-A", width=8)
-        away_table.add_column("3P%", width=6)
         away_table.add_column("FTM-A", width=8)
+        away_table.add_column("2P%", width=6)
+        away_table.add_column("3P%", width=6)
         away_table.add_column("FT%", width=6)
+        away_table.add_column("OFF", width=5)
+        away_table.add_column("DEF", width=5)
         away_table.add_column("REB", width=5)
         away_table.add_column("AST", width=5)
         away_table.add_column("STL", width=5)
@@ -471,6 +426,7 @@ class MatchViewScreen(Screen):
         away_table.add_column("TO", width=5)
         away_table.add_column("PF", width=5)
         away_table.add_column("+/-", width=5)
+        away_table.add_column("IDX", width=5)
 
         away_table.show_header = True
         away_table.zebra_stripes = True
@@ -478,47 +434,32 @@ class MatchViewScreen(Screen):
 
         # Add player rows
         for player in away_team.get("players", []):
-            # Format minutes (convert from decimal to MM:SS)
-            mins = player.get("Minutes", 0)
-            if isinstance(mins, (int, float)):
-                total_seconds = int(mins * 60)
-                min_part = total_seconds // 60
-                sec_part = total_seconds % 60
-                mins_display = f"{min_part}:{sec_part:02d}"
-            else:
-                mins_display = str(mins)
-
-            # Format percentages
-            fg2_pct = player.get("2 Points Percentage", 0)
-            if isinstance(fg2_pct, (int, float)):
-                fg2_pct = f"{fg2_pct * 100:.1f}" if fg2_pct <= 1 else f"{fg2_pct:.1f}"
-
-            fg3_pct = player.get("3 Point Percentage", 0)
-            if isinstance(fg3_pct, (int, float)):
-                fg3_pct = f"{fg3_pct * 100:.1f}" if fg3_pct <= 1 else f"{fg3_pct:.1f}"
-
-            ft_pct = player.get("Free Throw Percentage", 0)
-            if isinstance(ft_pct, (int, float)):
-                ft_pct = f"{ft_pct * 100:.1f}" if ft_pct <= 1 else f"{ft_pct:.1f}"
+            mins_display = self._format_minutes(player.get("Minutes"))
+            fg2_pct = self._format_pct(player.get("2P%"))
+            fg3_pct = self._format_pct(player.get("3P%"))
+            ft_pct = self._format_pct(player.get("FT%"))
 
             away_table.add_row(
-                str(player.get("Shirt Number", "-")),
-                player.get("Player", "Unknown")[:19],  # Truncate long names
+                str(player.get("player_number", "-")),
+                str(player.get("player", "Unknown"))[:19],  # Truncate long names
                 mins_display,
                 str(player.get("Points", 0)),
-                f"{player.get('2 Points Made', 0)}-{player.get('2 Points Attempted', 0)}",
+                f"{player.get('2PM', 0)}-{player.get('2PA', 0)}",
+                f"{player.get('3PM', 0)}-{player.get('3PA', 0)}",
+                f"{player.get('FTM', 0)}-{player.get('FTA', 0)}",
                 fg2_pct,
-                f"{player.get('3 Points Made', 0)}-{player.get('3 Points Atttempted', 0)}",
                 fg3_pct,
-                f"{player.get('Free Throws Made', 0)}-{player.get('Free Throws Attempted', 0)}",
                 ft_pct,
-                str(player.get("Total Rebounds", 0)),
-                str(player.get("Assists", 0)),
-                str(player.get("Steals", 0)),
-                str(player.get("Blocks", 0)),
-                str(player.get("Turnovers", 0)),
-                str(player.get("Personal Foul", 0)),
-                str(player.get("Plus/Minus", 0)),
+                str(player.get("OFF", 0)),
+                str(player.get("DEF", 0)),
+                str(player.get("REB", 0)),
+                str(player.get("AST", 0)),
+                str(player.get("STL", 0)),
+                str(player.get("BLK", 0)),
+                str(player.get("TO", 0)),
+                str(player.get("PF", 0)),
+                str(player.get("+/-", 0)),
+                str(player.get("Index", 0)),
             )
 
         # Show coaching staff
@@ -530,7 +471,113 @@ class MatchViewScreen(Screen):
             else:
                 coach_text += "[/dim]"
             away_header.update(
-                f"\n[bold cyan]{away_team.get('team_name', 'Away Team')} - Advanced Statistics[/bold cyan]\n{coach_text}"
+                f"\n[bold cyan]{away_team.get('team_name', 'Away Team')} - Player Statistics[/bold cyan]\n{coach_text}"
+            )
+
+
+    def _format_minutes(self, value: object) -> str:
+        if value is None:
+            return "-"
+        return str(value)
+
+    def _format_pct(self, value: object) -> str:
+        try:
+            return f"{float(value):.1f}"
+        except (TypeError, ValueError):
+            return "0.0"
+
+    def _render_match_totals(self, totals: dict) -> None:
+        header = self.query_one("#advanced_match_totals_header", Static)
+        table = self.query_one("#advanced_match_totals_table", DataTable)
+        header.update("\n[bold cyan]Match Totals[/bold cyan]")
+        table.clear(columns=True)
+        table.add_columns(
+            "PTS",
+            "2PM-A",
+            "2P%",
+            "3PM-A",
+            "3P%",
+            "FTM-A",
+            "FT%",
+            "OFF",
+            "DEF",
+            "REB",
+            "AST",
+            "STL",
+            "BLK",
+            "TO",
+            "PF",
+            "IDX",
+        )
+        table.show_header = True
+        table.zebra_stripes = True
+        table.cursor_type = "none"
+        table.add_row(
+            str(totals.get("Points", 0)),
+            f"{totals.get('2PM', 0)}-{totals.get('2PA', 0)}",
+            self._format_pct(totals.get("2P%")),
+            f"{totals.get('3PM', 0)}-{totals.get('3PA', 0)}",
+            self._format_pct(totals.get("3P%")),
+            f"{totals.get('FTM', 0)}-{totals.get('FTA', 0)}",
+            self._format_pct(totals.get("FT%")),
+            str(totals.get("OFF", 0)),
+            str(totals.get("DEF", 0)),
+            str(totals.get("REB", 0)),
+            str(totals.get("AST", 0)),
+            str(totals.get("STL", 0)),
+            str(totals.get("BLK", 0)),
+            str(totals.get("TO", 0)),
+            str(totals.get("PF", 0)),
+            str(totals.get("Index", 0)),
+        )
+
+    def _render_team_totals(self, teams: list) -> None:
+        header = self.query_one("#advanced_team_totals_header", Static)
+        table = self.query_one("#advanced_team_totals_table", DataTable)
+        header.update("\n[bold cyan]Team Totals[/bold cyan]")
+        table.clear(columns=True)
+        table.add_columns(
+            "Team",
+            "PTS",
+            "2PM-A",
+            "2P%",
+            "3PM-A",
+            "3P%",
+            "FTM-A",
+            "FT%",
+            "OFF",
+            "DEF",
+            "REB",
+            "AST",
+            "STL",
+            "BLK",
+            "TO",
+            "PF",
+            "IDX",
+        )
+        table.show_header = True
+        table.zebra_stripes = True
+        table.cursor_type = "none"
+        for team in teams:
+            totals = team.get("totals", {})
+            table.add_row(
+                str(team.get("team_name", "Team")),
+                str(totals.get("Points", 0)),
+                f"{totals.get('2PM', 0)}-{totals.get('2PA', 0)}",
+                self._format_pct(totals.get("2P%")),
+                f"{totals.get('3PM', 0)}-{totals.get('3PA', 0)}",
+                self._format_pct(totals.get("3P%")),
+                f"{totals.get('FTM', 0)}-{totals.get('FTA', 0)}",
+                self._format_pct(totals.get("FT%")),
+                str(totals.get("OFF", 0)),
+                str(totals.get("DEF", 0)),
+                str(totals.get("REB", 0)),
+                str(totals.get("AST", 0)),
+                str(totals.get("STL", 0)),
+                str(totals.get("BLK", 0)),
+                str(totals.get("TO", 0)),
+                str(totals.get("PF", 0)),
+                str(totals.get("Index", 0)),
             )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -1081,6 +1128,12 @@ class KorisApp(App):
         color: $text;
         padding: 1;
     }
+
+    #loading_bar {
+        height: 1;
+        padding: 0 1;
+        color: $primary;
+    }
     
     #controls {
         height: auto;
@@ -1129,10 +1182,18 @@ class KorisApp(App):
         self.current_data = None
         self.seasons = {}  # Will be populated when category data is fetched
         self.current_season = None
+        self.current_season_name = None
         self.save_format = "json"  # Default save format
+        self.include_boxscores = False
         self.matches_data = []  # Store matches for saving
         self.show_upcoming = True  # Show upcoming games by default
         self.last_fetch_time = 0  # Store last fetch duration
+        self._historical_fetch_context = None
+        self._historical_fetch_start = None
+        self._boxscore_save_context = None
+        self._historical_matches_cache = {}
+        self._active_fetch_id = 0
+        self._matches_table_initialized = False
 
     def load_categories(self) -> dict:
         """Load categories from JSON file"""
@@ -1186,9 +1247,19 @@ class KorisApp(App):
                     id="format_select",
                     prompt="Save Format",
                 )
+                yield Select(
+                    options=[
+                        ("Save Matches Only", "matches"),
+                        ("Include Boxscores", "boxscores"),
+                    ],
+                    value="matches",
+                    id="boxscore_select",
+                    prompt="Save Boxscores",
+                )
                 yield Button("Save Data", id="btn_save", variant="success")
 
         yield Static("Ready - Select a category to load seasons", id="status")
+        yield Static("", id="loading_bar")
         yield DataTable(id="data_table")
         yield Footer()
 
@@ -1222,6 +1293,7 @@ class KorisApp(App):
                 season_data = self.seasons[str(event.value)]
                 self.current_season = str(event.value)
                 self.current_competition_id = season_data["competition_id"]
+                self.current_season_name = season_data.get("season_name")
                 status = self.query_one("#status", Static)
                 status.update(
                     f"Selected season: {season_data['season_name']} - Loading matches..."
@@ -1239,6 +1311,10 @@ class KorisApp(App):
                 return
             # Re-render matches with new filter
             self.render_matches()
+        elif event.select.id == "boxscore_select":
+            if event.value == Select.BLANK or not event.value:
+                return
+            self.include_boxscores = str(event.value) == "boxscores"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses"""
@@ -1270,6 +1346,9 @@ class KorisApp(App):
 
         if row_index < len(filtered_matches):
             match = filtered_matches[row_index]
+            season_name = self.current_season_name or self.current_season
+            season_year = _extract_season_start_year(season_name)
+            is_historical = season_year is not None and season_year < 2022
 
             # Check which cell was clicked (column index)
             # Columns: "Home Team"(0), "Score"(1), "Away Team"(2), "Date"(3), "Time"(4)
@@ -1293,6 +1372,9 @@ class KorisApp(App):
                                 str(match_id),
                                 match.get("Home Team", ""),
                                 match.get("Away Team", ""),
+                                season_name=season_name,
+                                category_id=self.current_category,
+                                match_summary=match if is_historical else None,
                             )
                         )
 
@@ -1324,6 +1406,9 @@ class KorisApp(App):
             # Extract seasons from the response
             if "category" in data and "seasons" in data["category"]:
                 seasons_list = data["category"]["seasons"]
+                seasons_list = _augment_seasons_with_baskethotel(
+                    seasons_list, self.current_category
+                )
                 self.seasons = {}
                 season_options = []
 
@@ -1340,6 +1425,7 @@ class KorisApp(App):
                     first_season_id = seasons_list[0]["season_id"]
                     self.current_season = first_season_id
                     self.current_competition_id = seasons_list[0]["competition_id"]
+                    self.current_season_name = seasons_list[0].get("season_name")
                     season_select.value = first_season_id
 
                     # Auto-fetch matches for the first season
@@ -1358,6 +1444,310 @@ class KorisApp(App):
             status.update(f"Error loading seasons: {str(e)}")
             status.add_class("error")
 
+    def _format_progress_bar(self, current: int, total: int, width: int = 30) -> str:
+        if total <= 0:
+            return ""
+        filled = int((current / total) * width)
+        return f"[{'#' * filled}{'.' * (width - filled)}] {current}/{total}"
+
+    def _update_loading_bar(
+        self, current: int, total: int, message: Optional[str] = None
+    ) -> None:
+        if message:
+            status = self.query_one("#status", Static)
+            status.update(message)
+        loading = self.query_one("#loading_bar", Static)
+        if total:
+            loading.update(self._format_progress_bar(current, total))
+        else:
+            loading.update("Loading...")
+
+    def _clear_loading_bar(self) -> None:
+        loading = self.query_one("#loading_bar", Static)
+        loading.update("")
+
+    def _init_matches_table(self) -> None:
+        table = self.query_one(DataTable)
+        if self._matches_table_initialized:
+            return
+        table.clear(columns=True)
+        table.add_columns("Home Team", "Score", "Away Team", "Date", "Time")
+        self._matches_table_initialized = True
+
+    def _current_filter(self) -> str:
+        filter_select = self.query_one("#filter_select", Select)
+        return (
+            str(filter_select.value) if filter_select.value != Select.BLANK else "all"
+        )
+
+    def _match_passes_filter(self, match_row: dict, filter_value: str) -> bool:
+        if filter_value == "all":
+            return True
+        if filter_value == "played":
+            return match_row["is_played"]
+        return not match_row["is_played"]
+
+    def _append_match_row(self, match_row: dict) -> None:
+        self._init_matches_table()
+        current_filter = self._current_filter()
+        if not self._match_passes_filter(match_row, current_filter):
+            return
+        table = self.query_one(DataTable)
+        score = f"{match_row['Home Score']} - {match_row['Away Score']}"
+        table.add_row(
+            match_row["Home Team"],
+            score,
+            match_row["Away Team"],
+            match_row["Date"],
+            match_row["Time"],
+        )
+
+    def _update_status_counts(self, season_name: str) -> None:
+        status = self.query_one("#status", Static)
+        total_matches = len(self.matches_data)
+        current_filter = self._current_filter()
+        filtered_count = sum(
+            1 for match in self.matches_data if self._match_passes_filter(match, current_filter)
+        )
+        if current_filter == "all":
+            status.update(
+                f"Loaded {total_matches} matches for {season_name} in {self.last_fetch_time}ms"
+            )
+        else:
+            filter_name = "played" if current_filter == "played" else "upcoming"
+            status.update(
+                f"Showing {filtered_count} {filter_name} of {total_matches} matches for {season_name} (loaded in {self.last_fetch_time}ms)"
+            )
+        status.remove_class("error")
+        status.add_class("info")
+
+    def _start_historical_fetch(self, season_data: dict, season_name: str) -> None:
+        cache_key = f"{self.current_category}:{season_name}"
+        cached = self._historical_matches_cache.get(cache_key)
+        if cached is not None:
+            self._clear_loading_bar()
+            self._process_matches_payload({"matches": cached}, season_name, True)
+            return
+
+        self._matches_table_initialized = False
+        self._init_matches_table()
+        self._historical_fetch_context = {
+            "season_data": season_data,
+            "season_name": season_name,
+            "category_id": self.current_category,
+            "category_name": self.categories[self.current_category]["category_name"],
+        }
+        import time
+
+        self._historical_fetch_start = time.time()
+        self._active_fetch_id += 1
+        self._historical_fetch_context["fetch_id"] = self._active_fetch_id
+        self.matches_data = []
+        self._update_loading_bar(0, 0, f"Loading historical season {season_name}...")
+        self.run_worker(
+            self._fetch_historical_matches_worker, exclusive=True, thread=True
+        )
+
+    def _fetch_historical_matches_worker(self) -> dict:
+        context = self._historical_fetch_context or {}
+        season_data = context.get("season_data", {})
+        season_name = context.get("season_name", "")
+        category_id = context.get("category_id", "")
+        category_name = context.get("category_name", "")
+        fetch_id = context.get("fetch_id")
+
+        league_id = _get_baskethotel_league_id(str(category_id))
+        resolved_season_id = (
+            _resolve_baskethotel_season_id(season_name, league_id)
+            or season_data.get("season_id")
+            or season_name
+        )
+        team_map = _fetch_baskethotel_team_map(str(resolved_season_id), str(league_id))
+        game_ids = _fetch_baskethotel_schedule_game_ids(
+            str(resolved_season_id), str(league_id), False
+        )
+
+        total = len(game_ids)
+        self.call_from_thread(
+            self._update_loading_bar,
+            0,
+            total,
+            f"Loading historical season {season_name}...",
+        )
+
+        client = BasketHotelAPI()
+        session = _get_baskethotel_session()
+        processed_matches = []
+
+        for idx, game_id in enumerate(game_ids, start=1):
+            try:
+                game_data = client.fetch_game_data(
+                    str(game_id),
+                    season_id=str(resolved_season_id),
+                    league_id=str(league_id),
+                    session=session,
+                )
+                base_match = {
+                    "match_id": str(game_id),
+                    "match_external_id": None,
+                    "date": None,
+                    "time": None,
+                    "home_team": None,
+                    "home_team_id": None,
+                    "away_team": None,
+                    "away_team_id": None,
+                    "home_score": None,
+                    "away_score": None,
+                    "status": None,
+                    "venue": None,
+                    "competition": season_name,
+                    "category": category_name,
+                    "season": season_name,
+                }
+                merged = _merge_baskethotel_match(base_match, game_data)
+                home_name = merged.get("home_team")
+                away_name = merged.get("away_team")
+                if home_name and not merged.get("home_team_id"):
+                    merged["home_team_id"] = team_map.get(home_name)
+                if away_name and not merged.get("away_team_id"):
+                    merged["away_team_id"] = team_map.get(away_name)
+                processed_matches.append(merged)
+                self.call_from_thread(
+                    self._on_historical_match_loaded,
+                    fetch_id,
+                    merged,
+                    idx,
+                    total,
+                    season_name,
+                )
+            except Exception:
+                pass
+
+            self.call_from_thread(self._update_loading_bar, idx, total)
+
+        return {
+            "matches": processed_matches,
+            "season_name": season_name,
+            "fetch_id": fetch_id,
+        }
+
+    def _on_historical_match_loaded(
+        self,
+        fetch_id: int,
+        match: dict,
+        current: int,
+        total: int,
+        season_name: str,
+    ) -> None:
+        if fetch_id != self._active_fetch_id:
+            return
+        match_row = self._append_match(match, season_name, True)
+        self._append_match_row(match_row)
+        self._update_loading_bar(
+            current, total, f"Loading historical season {season_name}..."
+        )
+
+    def _append_match(
+        self, match: dict, season_name: str, is_historical: bool
+    ) -> dict:
+        if is_historical:
+            home_team = match.get("home_team", "N/A")
+            away_team = match.get("away_team", "N/A")
+            date = match.get("date", "N/A")
+            time_str = match.get("time", "N/A")
+            match_status = match.get("status", "Scheduled")
+            home_score = match.get("home_score", "-")
+            away_score = match.get("away_score", "-")
+            team_a_id = match.get("home_team_id", "")
+            team_b_id = match.get("away_team_id", "")
+            match_id = match.get("match_id", "")
+            match_external_id = ""
+            venue = match.get("venue", "N/A")
+            competition = match.get("competition", "N/A")
+            category = match.get("category", "N/A")
+        else:
+            home_team = match.get("club_A_name", match.get("team_A_name", "N/A"))
+            away_team = match.get("club_B_name", match.get("team_B_name", "N/A"))
+            date = match.get("date", "N/A")
+            time_str = match.get("time", "N/A")
+            match_status = match.get("status", "Scheduled")
+            home_score = match.get("fs_A", "-")
+            away_score = match.get("fs_B", "-")
+            team_a_id = match.get("team_A_id", "")
+            team_b_id = match.get("team_B_id", "")
+            match_id = match.get("match_id", "")
+            match_external_id = match.get("match_external_id", "")
+            venue = match.get("venue_name", "N/A")
+            competition = match.get("competition_name", "N/A")
+            category = match.get("category_name", "N/A")
+
+        if time_str and time_str != "N/A" and len(time_str) >= 5:
+            time_str = time_str[:5]
+        if not home_score or home_score == "":
+            home_score = "-"
+        if not away_score or away_score == "":
+            away_score = "-"
+
+        is_played = home_score != "-" and away_score != "-"
+
+        match_row = {
+            "Match ID": match_id,
+            "Match External ID": match_external_id,
+            "Date": date,
+            "Time": time_str,
+            "Home Team": home_team,
+            "Home Team ID": team_a_id,
+            "Home Score": home_score,
+            "Away Score": away_score,
+            "Away Team": away_team,
+            "Away Team ID": team_b_id,
+            "Status": match_status,
+            "Venue": venue,
+            "Competition": competition,
+            "Category": category,
+            "Season": season_name,
+            "is_played": is_played,
+        }
+        self.matches_data.append(
+            {
+                "Match ID": match_id,
+                "Match External ID": match_external_id,
+                "Date": date,
+                "Time": time_str,
+                "Home Team": home_team,
+                "Home Team ID": team_a_id,
+                "Home Score": home_score,
+                "Away Score": away_score,
+                "Away Team": away_team,
+                "Away Team ID": team_b_id,
+                "Status": match_status,
+                "Venue": venue,
+                "Competition": competition,
+                "Category": category,
+                "Season": season_name,
+                "is_played": is_played,
+            }
+        )
+        return match_row
+
+    def _process_matches_payload(
+        self, data: dict, season_name: str, is_historical: bool
+    ) -> None:
+        status = self.query_one("#status", Static)
+        self.current_data = data
+        self.matches_data = []
+
+        if "matches" in data and len(data["matches"]) > 0:
+            matches = data["matches"]
+            for match in matches:
+                self._append_match(match, season_name, is_historical)
+
+            self.render_matches()
+        else:
+            status.update(f"No matches found for season {season_name}")
+            status.remove_class("info")
+            status.add_class("error")
+
     def fetch_matches(self) -> None:
         """Fetch and display matches"""
         status = self.query_one("#status", Static)
@@ -1368,7 +1758,21 @@ class KorisApp(App):
             return
 
         try:
-            status.update(f"Fetching matches for {self.current_season}...")
+            season_data = self.seasons.get(str(self.current_season), {})
+            season_name = (
+                season_data.get("season_name")
+                or self.current_season_name
+                or self.current_season
+            )
+
+            season_year = _extract_season_start_year(season_name)
+            is_historical = season_year is not None and season_year < 2022
+
+            if is_historical and season_data.get("competition_id") == season_name:
+                self._start_historical_fetch(season_data, season_name)
+                return
+
+            status.update(f"Fetching matches for {season_name}...")
 
             # Track fetch time
             import time
@@ -1384,64 +1788,8 @@ class KorisApp(App):
             # Calculate fetch time in milliseconds
             self.last_fetch_time = int((time.time() - start_time) * 1000)
 
-            # Clear matches data for saving
-            self.matches_data = []
-
-            # Add matches to data - the matches are directly under the "matches" key
-            if "matches" in data and len(data["matches"]) > 0:
-                matches = data["matches"]
-                for match in matches:
-                    # Team A is home, Team B is away
-                    home_team = match.get(
-                        "club_A_name", match.get("team_A_name", "N/A")
-                    )
-                    away_team = match.get(
-                        "club_B_name", match.get("team_B_name", "N/A")
-                    )
-                    date = match.get("date", "N/A")
-                    time_str = match.get("time", "N/A")
-                    if time_str and time_str != "N/A" and len(time_str) >= 5:
-                        time_str = time_str[:5]  # Show only HH:MM
-                    match_status = match.get("status", "Scheduled")
-
-                    # Get score - fs_A and fs_B are the final scores
-                    home_score = match.get("fs_A", "-")
-                    away_score = match.get("fs_B", "-")
-                    if not home_score or home_score == "":
-                        home_score = "-"
-                    if not away_score or away_score == "":
-                        away_score = "-"
-
-                    # Determine if match has been played
-                    is_played = home_score != "-" and away_score != "-"
-
-                    # Store for saving and filtering
-                    self.matches_data.append(
-                        {
-                            "Match ID": match.get("match_id", ""),
-                            "Date": date,
-                            "Time": time_str,
-                            "Home Team": home_team,
-                            "Home Team ID": match.get("team_A_id", ""),
-                            "Home Score": home_score,
-                            "Away Score": away_score,
-                            "Away Team": away_team,
-                            "Away Team ID": match.get("team_B_id", ""),
-                            "Status": match_status,
-                            "Venue": match.get("venue_name", "N/A"),
-                            "Competition": match.get("competition_name", "N/A"),
-                            "Category": match.get("category_name", "N/A"),
-                            "Season": self.current_season,
-                            "is_played": is_played,
-                        }
-                    )
-
-                # Render matches with current filter
-                self.render_matches()
-            else:
-                status.update(f"No matches found for season {self.current_season}")
-                status.remove_class("info")
-                status.add_class("error")
+            self._clear_loading_bar()
+            self._process_matches_payload(data, season_name, False)
 
         except Exception as e:
             status.update(f"Error: {str(e)}")
@@ -1455,8 +1803,8 @@ class KorisApp(App):
         filter_select = self.query_one("#filter_select", Select)
 
         # Clear and set up table
-        table.clear(columns=True)
-        table.add_columns("Home Team", "Score", "Away Team", "Date", "Time")
+        self._matches_table_initialized = False
+        self._init_matches_table()
 
         # Get current filter
         current_filter = (
@@ -1487,19 +1835,9 @@ class KorisApp(App):
         # Update status with count and time
         total_matches = len(self.matches_data)
         filtered_count = len(filtered_matches)
+        season_name = self.current_season_name or self.current_season
 
-        if current_filter == "all":
-            status.update(
-                f"Loaded {total_matches} matches for {self.current_season} in {self.last_fetch_time}ms"
-            )
-        else:
-            filter_name = "played" if current_filter == "played" else "upcoming"
-            status.update(
-                f"Showing {filtered_count} {filter_name} of {total_matches} matches for {self.current_season} (loaded in {self.last_fetch_time}ms)"
-            )
-
-        status.remove_class("error")
-        status.add_class("info")
+        self._update_status_counts(season_name)
 
     def save_data(self) -> None:
         """Save the current matches data to a file"""
@@ -1512,6 +1850,11 @@ class KorisApp(App):
             return
 
         try:
+            if self.include_boxscores and self.save_format != "json":
+                status.update("Boxscore save is only available for JSON output.")
+                status.add_class("error")
+                return
+
             # Get current filter
             current_filter = (
                 str(filter_select.value)
@@ -1538,14 +1881,17 @@ class KorisApp(App):
             )
             category_name = category_name.replace(" ", "_").replace("/", "_")
             season = (
-                self.current_season.replace("-", "_")
-                if self.current_season
+                (self.current_season_name or self.current_season).replace("-", "_")
+                if (self.current_season_name or self.current_season)
                 else "season"
             )
             filter_suffix = f"_{current_filter}" if current_filter != "all" else ""
 
             if self.save_format == "json":
                 filename = f"matches_{category_name}_{season}{filter_suffix}.json"
+                if self.include_boxscores:
+                    self._start_boxscore_save(filtered_matches, filename)
+                    return
                 with open(filename, "w", encoding="utf-8") as f:
                     json.dump(filtered_matches, f, indent=2, ensure_ascii=False)
                 status.update(f"Saved {len(filtered_matches)} matches to {filename}")
@@ -1569,6 +1915,121 @@ class KorisApp(App):
             status.update(f"Error saving data: {str(e)}")
             status.remove_class("info")
             status.add_class("error")
+
+    def _start_boxscore_save(self, matches: list, filename: str) -> None:
+        self._boxscore_save_context = {
+            "matches": matches,
+            "filename": filename,
+            "season_name": self.current_season_name or self.current_season,
+            "category_id": self.current_category,
+        }
+        self._update_loading_bar(
+            0, len(matches), "Downloading boxscores and saving..."
+        )
+        self.run_worker(self._save_boxscores_worker, exclusive=True, thread=True)
+
+    def _save_boxscores_worker(self) -> dict:
+        context = self._boxscore_save_context or {}
+        matches = context.get("matches", [])
+        filename = context.get("filename", "matches.json")
+        season_name = context.get("season_name")
+        category_id = context.get("category_id")
+
+        season_year = _extract_season_start_year(season_name)
+        is_historical = season_year is not None and season_year < 2022
+
+        results = []
+        total = len(matches)
+        for idx, match in enumerate(matches, start=1):
+            match_id = match.get("Match ID")
+            external_id = match.get("Match External ID")
+            boxscore = None
+            source = None
+
+            try:
+                if is_historical:
+                    league_id = _get_baskethotel_league_id(str(category_id))
+                    resolved_season_id = (
+                        _resolve_baskethotel_season_id(season_name, league_id)
+                        or season_name
+                    )
+                    session = _get_baskethotel_session()
+                    boxscore_raw = BasketHotelAPI().fetch_boxscore_data(
+                        str(match_id),
+                        season_id=str(resolved_season_id),
+                        league_id=str(league_id),
+                        session=session,
+                    )
+                    boxscore = normalize_boxscore(boxscore_raw, source="baskethotel")
+                    source = "baskethotel"
+                else:
+                    if not external_id:
+                        match_detail = BasketFiAPI.get_match(str(match_id))
+                        external_id = (
+                            match_detail.get("match", {}).get("match_external_id")
+                        )
+                    if external_id:
+                        boxscore_raw = GeniusSportsAPI.get_match_boxscore(
+                            str(external_id)
+                        )
+                        boxscore = normalize_boxscore(boxscore_raw, source="genius")
+                        source = "genius"
+            except Exception:
+                boxscore = None
+
+            enriched = dict(match)
+            if boxscore:
+                enriched["boxscore_source"] = source
+                enriched["boxscore"] = boxscore
+            results.append(enriched)
+
+            self.call_from_thread(self._update_loading_bar, idx, total)
+
+        Path(filename).write_text(
+            json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        return {"filename": filename, "count": len(results)}
+
+    def on_worker_state_changed(self, event) -> None:
+        if event.worker.name == "_fetch_historical_matches_worker":
+            if event.state.name == "SUCCESS":
+                result = event.worker.result or {}
+                matches = result.get("matches", [])
+                season_name = result.get("season_name") or self.current_season_name
+                fetch_id = result.get("fetch_id")
+                if fetch_id != self._active_fetch_id:
+                    return
+                if self._historical_fetch_start:
+                    import time
+
+                    self.last_fetch_time = int(
+                        (time.time() - self._historical_fetch_start) * 1000
+                    )
+                    self._historical_fetch_start = None
+                self._clear_loading_bar()
+                cache_key = f"{self.current_category}:{season_name}"
+                self._historical_matches_cache[cache_key] = matches
+                self.current_data = {"matches": matches}
+                self._update_status_counts(str(season_name))
+            elif event.state.name == "ERROR":
+                status = self.query_one("#status", Static)
+                self._clear_loading_bar()
+                status.update("Error loading historical season")
+                status.add_class("error")
+        elif event.worker.name == "_save_boxscores_worker":
+            status = self.query_one("#status", Static)
+            if event.state.name == "SUCCESS":
+                result = event.worker.result or {}
+                self._clear_loading_bar()
+                status.update(
+                    f"Saved {result.get('count', 0)} matches to {result.get('filename')}"
+                )
+                status.remove_class("error")
+                status.add_class("info")
+            elif event.state.name == "ERROR":
+                self._clear_loading_bar()
+                status.update("Error saving boxscores")
+                status.add_class("error")
 
 
 def run():

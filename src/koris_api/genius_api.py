@@ -1,7 +1,7 @@
 """Genius Sports HTML scraping client for advanced box scores and player data."""
 
 import requests
-from typing import Dict, Any, Optional, List, cast
+from typing import Dict, Any, Optional, List, cast, Callable
 import time
 import json
 from pathlib import Path
@@ -13,22 +13,92 @@ from .genius_parser import GeniusSportsParser
 class GeniusSportsAPI:
     """Client for scraping basketball data from Genius Sports hosted pages."""
 
+    _DEFAULT_HEADERS = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,fi;q=0.8",
+    }
+
     @classmethod
-    def get_match_boxscore(cls, match_id: str) -> Dict[str, Any]:
+    def get_match_boxscore(
+        cls,
+        match_id: str,
+        session: Optional[requests.Session] = None,
+        retries: int = 3,
+        backoff_seconds: float = 0.6,
+        timeout_seconds: float = 15.0,
+        not_found_retries: int = 2,
+        not_found_backoff_seconds: float = 2.0,
+        log_fn: Optional[Callable[[str], None]] = None,
+    ) -> Dict[str, Any]:
         """
         Fetch and parse box score data from the Genius Sports hosted page.
 
         Args:
             match_id: The match identifier from Genius Sports
+            not_found_retries: Extra retries when the boxscore returns 404
+            not_found_backoff_seconds: Delay before retrying 404 responses
+            log_fn: Optional callback for retry logging
 
         Returns:
             Dictionary containing parsed box score data with team stats and player stats
         """
-        url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{match_id}/boxscore"
-        response = requests.get(url)
-        response.raise_for_status()
+        url_templates = [
+            "https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{match_id}/boxscore",
+            "https://hosted.dcd.shared.geniussports.com/FBAA/fi/match/{match_id}/boxscore",
+        ]
+        client = session or requests
+        not_found_attempts = 0
+        last_error: Optional[Exception] = None
+        while True:
+            last_error = None
+            for url in [template.format(match_id=match_id) for template in url_templates]:
+                attempt = 0
+                while True:
+                    attempt += 1
+                    try:
+                        response = client.get(
+                            url,
+                            timeout=timeout_seconds,
+                            headers=None if session is not None else cls._DEFAULT_HEADERS,
+                        )
+                        if response.status_code >= 500 and attempt <= retries:
+                            time.sleep(backoff_seconds * attempt)
+                            continue
+                        response.raise_for_status()
+                        return GeniusSportsParser.parse_boxscore_html(response.text)
+                    except requests.exceptions.ReadTimeout as exc:
+                        last_error = exc
+                        if attempt <= retries:
+                            time.sleep(backoff_seconds * attempt)
+                            continue
+                        break
+                    except requests.exceptions.HTTPError as exc:
+                        last_error = exc
+                        if attempt <= retries:
+                            time.sleep(backoff_seconds * attempt)
+                            continue
+                        break
 
-        return GeniusSportsParser.parse_boxscore_html(response.text)
+            if (
+                isinstance(last_error, requests.exceptions.HTTPError)
+                and last_error.response is not None
+                and last_error.response.status_code == 404
+                and not_found_attempts < not_found_retries
+            ):
+                not_found_attempts += 1
+                if log_fn:
+                    log_fn(
+                        f"  Retrying 404 for match {match_id} "
+                        f"({not_found_attempts}/{not_found_retries})..."
+                    )
+                time.sleep(not_found_backoff_seconds * not_found_attempts)
+                continue
+            break
+
+        if last_error:
+            raise last_error
+        raise requests.exceptions.HTTPError("Failed to fetch boxscore from Genius Sports")
 
     @classmethod
     def get_match_playbyplay(cls, match_id: str) -> Dict[str, Any]:

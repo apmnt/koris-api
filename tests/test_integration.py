@@ -12,6 +12,7 @@ import pytest
 
 from koris_api.basketfi_api import BasketFiAPI
 from koris_api.basketfi_parser import BasketFiParser
+from koris_api.baskethotel_api import BasketHotelAPI
 from koris_api.genius_api import GeniusSportsAPI
 
 
@@ -75,6 +76,16 @@ def live_genius_boxscore(live_basketfi_matches):
         return GeniusSportsAPI.get_match_boxscore(external_id)
     except Exception as e:
         pytest.skip(f"Could not fetch box score: {str(e)[:100]}")
+
+
+@pytest.fixture(scope="session")
+def live_baskethotel_game():
+    """Fetch a historical game from BasketHotel API once per session."""
+    client = BasketHotelAPI()
+    try:
+        return client.fetch_game_data("5513579", season_id="121333", league_id="2")
+    except Exception as e:
+        pytest.skip(f"Could not fetch BasketHotel game: {str(e)[:100]}")
 
 
 # =============================================================================
@@ -161,6 +172,19 @@ def test_basketfi_match_detail_parsing_live(live_basketfi_match_detail):
     # Verify lineups exist
     assert "lineups" in match
     assert len(match["lineups"]) > 0
+
+
+def test_baskethotel_game_parsing_live(live_baskethotel_game):
+    """Test parsing historical game data from live BasketHotel API."""
+    assert "teams" in live_baskethotel_game
+    assert live_baskethotel_game["teams"]["home"]["name"]
+    assert live_baskethotel_game["teams"]["away"]["name"]
+    assert "score" in live_baskethotel_game
+    assert live_baskethotel_game["score"]["home"] is not None
+    assert live_baskethotel_game["score"]["away"] is not None
+    game_info = live_baskethotel_game.get("game_info", {})
+    assert game_info.get("date")
+    assert game_info.get("time")
 
 
 def test_basketfi_team_parsing_live(live_basketfi_team):

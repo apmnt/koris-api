@@ -1,6 +1,7 @@
 """BasketHotel API client for fetching older basketball game data."""
 
 import requests
+import httpx
 from typing import Dict, Any
 import re
 from urllib.parse import urlencode
@@ -15,7 +16,11 @@ class BasketHotelAPI:
         self.api_key = "b9680714b4026e011e13a43ccb7dfa201932958c"  # basket.fi API key
 
     def fetch_game_data(
-        self, game_id: str, season_id: str = "121333", league_id: str = "2"
+        self,
+        game_id: str,
+        season_id: str = "121333",
+        league_id: str = "2",
+        session: requests.Session | None = None,
     ) -> Dict[str, Any]:
         """
         Fetch complete game data from BasketHotel API
@@ -37,7 +42,8 @@ class BasketHotelAPI:
             "Referer": "https://www.basket.fi/",
         }
 
-        response = requests.get(url, headers=headers)
+        client = session or requests
+        response = client.get(url, headers=headers)
         response.raise_for_status()
 
         # Extract the state token from the response (needed for subsequent requests)
@@ -58,7 +64,7 @@ class BasketHotelAPI:
         # Now fetch the actual game data using the "home" part
         game_data_url = self._build_game_part_url(game_id, state)
 
-        response2 = requests.get(game_data_url, headers=headers)
+        response2 = client.get(game_data_url, headers=headers)
         response2.raise_for_status()
 
         # Extract HTML from JavaScript response
@@ -106,7 +112,7 @@ class BasketHotelAPI:
 
         return f"{self.base_url}?{urlencode(params)}"
 
-    def _build_game_part_url(self, game_id: str, state: str) -> str:
+    def _build_game_part_url(self, game_id: str, state: str, part: str = "home") -> str:
         """Build URL to fetch specific game data part"""
         params = {
             "api": self.api_key,
@@ -117,9 +123,111 @@ class BasketHotelAPI:
             "flash": "0",
             "request[0][container]": "2-400-tab-container",
             "request[0][widget]": "400",
-            "request[0][part]": "home",  # This loads the actual game data
+            "request[0][part]": part,
             "request[0][state]": state,
             "request[0][param][game_id]": game_id,
         }
 
         return f"{self.base_url}?{urlencode(params)}"
+
+    def fetch_boxscore_data(
+        self,
+        game_id: str,
+        season_id: str = "121333",
+        league_id: str = "2",
+        session: requests.Session | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Fetch boxscore data for a single game from BasketHotel API.
+
+        Args:
+            game_id: Unique game identifier
+            season_id: Season identifier
+            league_id: League identifier
+
+        Returns:
+            Dictionary containing parsed team totals for the game.
+        """
+        url = self._build_game_url(game_id, season_id, league_id)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Accept": "*/*",
+            "Referer": "https://www.basket.fi/",
+        }
+
+        client = session or requests
+        response = client.get(url, headers=headers)
+        response.raise_for_status()
+        initial_html = BasketHotelParser.extract_html_from_response(response.text)
+        initial_data = BasketHotelParser.parse_game_html(initial_html)
+
+        state_match = re.search(r"state:\s*\\'([^\\]+)\\'", response.text)
+        if not state_match:
+            boxscore = BasketHotelParser.parse_boxscore_html(initial_html)
+            boxscore["game_info"] = initial_data.get("game_info", {})
+            boxscore["game_teams"] = initial_data.get("teams", {})
+            return boxscore
+
+        state = state_match.group(1)
+        game_data_url = self._build_game_part_url(game_id, state, part="boxscore")
+        response2 = client.get(game_data_url, headers=headers)
+        response2.raise_for_status()
+        html_content = BasketHotelParser.extract_html_from_response(response2.text)
+        boxscore = BasketHotelParser.parse_boxscore_html(html_content)
+        boxscore["game_info"] = initial_data.get("game_info", {})
+        boxscore["game_teams"] = initial_data.get("teams", {})
+        return boxscore
+
+    async def fetch_boxscore_data_async(
+        self,
+        game_id: str,
+        season_id: str = "121333",
+        league_id: str = "2",
+        client: httpx.AsyncClient | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Fetch boxscore data for a single game from BasketHotel API asynchronously.
+
+        Args:
+            game_id: Unique game identifier
+            season_id: Season identifier
+            league_id: League identifier
+            client: Optional shared async client
+
+        Returns:
+            Dictionary containing parsed team totals for the game.
+        """
+        url = self._build_game_url(game_id, season_id, league_id)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Accept": "*/*",
+            "Referer": "https://www.basket.fi/",
+        }
+
+        if client is None:
+            async with httpx.AsyncClient(headers=headers) as session:
+                return await self.fetch_boxscore_data_async(
+                    game_id, season_id, league_id, client=session
+                )
+
+        response = await client.get(url, headers=headers)
+        response.raise_for_status()
+        initial_html = BasketHotelParser.extract_html_from_response(response.text)
+        initial_data = BasketHotelParser.parse_game_html(initial_html)
+
+        state_match = re.search(r"state:\s*\\'([^\\]+)\\'", response.text)
+        if not state_match:
+            boxscore = BasketHotelParser.parse_boxscore_html(initial_html)
+            boxscore["game_info"] = initial_data.get("game_info", {})
+            boxscore["game_teams"] = initial_data.get("teams", {})
+            return boxscore
+
+        state = state_match.group(1)
+        game_data_url = self._build_game_part_url(game_id, state, part="boxscore")
+        response2 = await client.get(game_data_url, headers=headers)
+        response2.raise_for_status()
+        html_content = BasketHotelParser.extract_html_from_response(response2.text)
+        boxscore = BasketHotelParser.parse_boxscore_html(html_content)
+        boxscore["game_info"] = initial_data.get("game_info", {})
+        boxscore["game_teams"] = initial_data.get("teams", {})
+        return boxscore

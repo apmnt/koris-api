@@ -23,12 +23,44 @@ class BasketHotelParser:
         # We need to extract all update calls
         html_parts = []
 
-        # Find all MBT.API.update calls
-        pattern = r"MBT\.API\.update\('[\w-]+',\s*'(.+?)'\);"
-        matches = re.finditer(pattern, js_response, re.DOTALL)
+        idx = 0
+        token = "MBT.API.update("
+        while True:
+            start = js_response.find(token, idx)
+            if start == -1:
+                break
+            first_quote = js_response.find("'", start)
+            if first_quote == -1:
+                break
+            second_quote = js_response.find("'", first_quote + 1)
+            if second_quote == -1:
+                break
+            comma = js_response.find(",", second_quote)
+            if comma == -1:
+                break
+            html_start = js_response.find("'", comma)
+            if html_start == -1:
+                break
 
-        for match in matches:
-            html = match.group(1)
+            i = html_start + 1
+            escaped = False
+            html_end = None
+            while i < len(js_response):
+                ch = js_response[i]
+                if escaped:
+                    escaped = False
+                else:
+                    if ch == "\\":
+                        escaped = True
+                    elif ch == "'":
+                        html_end = i
+                        break
+                i += 1
+
+            if html_end is None:
+                break
+
+            html = js_response[html_start + 1 : html_end]
             # Unescape the HTML string
             html = html.replace("\\n", "\n")
             html = html.replace("\\r", "\r")
@@ -37,6 +69,7 @@ class BasketHotelParser:
             html = html.replace('\\"', '"')
             html = html.replace("\\/", "/")
             html_parts.append(html)
+            idx = html_end + 1
 
         return "\n".join(html_parts) if html_parts else js_response
 
@@ -131,6 +164,13 @@ class BasketHotelParser:
             if attendance_match:
                 game_data["game_info"]["attendance"] = int(attendance_match.group())
 
+        # Venue
+        venue_icon = soup.find("i", class_="fa-globe")
+        if venue_icon and venue_icon.parent:
+            venue_text = venue_icon.parent.get_text().strip()
+            if venue_text:
+                game_data["game_info"]["venue"] = venue_text
+
         # Game ID
         game_id_match = re.search(r"Ottelunumero:.*?(\d+)", html)
         if game_id_match:
@@ -177,13 +217,21 @@ class BasketHotelParser:
                         if len(value_divs) >= 2:
                             home_value = value_divs[0].get_text().strip()
                             away_value = value_divs[1].get_text().strip()
-
-                            leader_data = {
-                                "category": stat_type,
-                                "home": {"player": home_name, "value": int(home_value)},
-                                "away": {"player": away_name, "value": int(away_value)},
-                            }
-                            game_data["leaders"].append(leader_data)
+                            try:
+                                leader_data = {
+                                    "category": stat_type,
+                                    "home": {
+                                        "player": home_name,
+                                        "value": int(home_value),
+                                    },
+                                    "away": {
+                                        "player": away_name,
+                                        "value": int(away_value),
+                                    },
+                                }
+                                game_data["leaders"].append(leader_data)
+                            except ValueError:
+                                continue
 
         # Extract team stats
         stats_table = soup.find("table", class_="mbt-v2-game-scoring-table")
@@ -206,3 +254,132 @@ class BasketHotelParser:
                         game_data["team_stats"][stat_name] = {"value": home_value}
 
         return game_data
+
+    @staticmethod
+    def parse_boxscore_html(html: str) -> Dict[str, Any]:
+        """
+        Parse BasketHotel boxscore HTML to extract team totals.
+
+        Returns:
+            Dictionary containing team totals and player rows.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        table = soup.find("table")
+        if not table or not isinstance(table, Tag):
+            return {"teams": []}
+
+        teams: list[Dict[str, Any]] = []
+        current_team: str | None = None
+        current_team_players: list[Dict[str, Any]] = []
+        current_team_has_totals = False
+        headers: list[str] | None = None
+        header_indexes: dict[str, int] = {}
+
+        def _header_index(name: str) -> int | None:
+            indices = [i for i, h in enumerate(headers or []) if h.upper() == name]
+            return indices[-1] if indices else None
+
+        for row in table.find_all("tr"):
+            cells = row.find_all(["th", "td"])
+            if not cells:
+                continue
+
+            values = [cell.get_text(strip=True) for cell in cells]
+            if not any(values):
+                continue
+
+            if values[0] and "MIN" not in values and headers is None:
+                current_team = values[0]
+                continue
+
+            if "MIN" in values:
+                if current_team and current_team_players and not current_team_has_totals:
+                    teams.append(
+                        {
+                            "team_name": current_team,
+                            "players": current_team_players,
+                        }
+                    )
+                current_team_players = []
+                current_team_has_totals = False
+                if values[0] != "MIN":
+                    current_team = values[0]
+                    headers = ["Player"] + values[1:]
+                else:
+                    headers = ["Player"] + values
+                header_indexes = {
+                    "LEV": _header_index("LEV"),
+                    "S": _header_index("S"),
+                    "R": _header_index("R"),
+                }
+                continue
+
+            non_empty = [val for val in values if val]
+            if len(non_empty) == 1:
+                candidate = non_empty[0]
+                lowered = candidate.lower()
+                if lowered in ("joukkue", "yhteensä", "yhteensa"):
+                    continue
+                if lowered.startswith("valmentaja"):
+                    continue
+                current_team = candidate
+                continue
+
+            if values[0].lower() in ("yhteensä", "yhteensa"):
+                if not headers:
+                    continue
+                if len(values) == len(headers) - 1:
+                    values = [""] + values
+                totals: Dict[str, Any] = {"team_name": current_team}
+                for key, header_name in (
+                    ("rebounds", "LEV"),
+                    ("assists", "S"),
+                    ("steals", "R"),
+                ):
+                    idx = header_indexes.get(header_name)
+                    if idx is None or idx >= len(values):
+                        totals[key] = 0
+                        continue
+                    try:
+                        totals[key] = int(values[idx]) if values[idx] else 0
+                    except ValueError:
+                        totals[key] = 0
+                totals_entry = {
+                    "team_name": current_team,
+                    "players": current_team_players,
+                    "totals": totals,
+                    "rebounds": totals.get("rebounds", 0),
+                    "assists": totals.get("assists", 0),
+                    "steals": totals.get("steals", 0),
+                }
+                teams.append(totals_entry)
+                current_team_players = []
+                current_team_has_totals = True
+                continue
+
+            if values[0].startswith("Valmentaja"):
+                continue
+
+            if values[0].lower() == "joukkue":
+                continue
+
+            if headers:
+                row_values = list(values)
+                if len(row_values) < len(headers):
+                    row_values += [""] * (len(headers) - len(row_values))
+                if len(row_values) > len(headers):
+                    row_values = row_values[: len(headers)]
+                player = {headers[idx]: row_values[idx] for idx in range(len(headers))}
+                player["team_name"] = current_team
+                current_team_players.append(player)
+                continue
+
+        if current_team and current_team_players and not current_team_has_totals:
+            teams.append(
+                {
+                    "team_name": current_team,
+                    "players": current_team_players,
+                }
+            )
+
+        return {"teams": teams}
