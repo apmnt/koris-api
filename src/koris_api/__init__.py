@@ -5,6 +5,8 @@ import time
 import re
 import asyncio
 import httpx
+import curses
+import sys
 from datetime import datetime
 from urllib.parse import urlencode
 from pathlib import Path
@@ -113,6 +115,13 @@ def _get_genius_session(pool_size: int = 64) -> requests.Session:
     session = getattr(_GENIUS_SESSION_LOCAL, "session", None)
     if session is None:
         session = requests.Session()
+        session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,fi;q=0.8",
+            }
+        )
         adapter = requests.adapters.HTTPAdapter(
             pool_connections=pool_size, pool_maxsize=pool_size
         )
@@ -629,7 +638,9 @@ def download_season_advanced_averages(
                         raise RuntimeError("Historical matches use async fetching.")
                     session = _get_genius_session(max_workers)
                     boxscore = GeniusSportsAPI.get_match_boxscore(
-                        match_id, session=session
+                        match_id,
+                        session=session,
+                        log_fn=tqdm.write if verbose else None,
                     )
                     return match_id, _summarize_boxscore(boxscore), None
                 except Exception as exc:
@@ -932,6 +943,7 @@ __all__ = [
     "download_old_game",
     "download_old_games_bulk",
     "download_old_games_from_file",
+    "retry_advanced_boxscores_404s",
     "main",
 ]
 
@@ -1002,7 +1014,9 @@ def download_matches_with_boxscores(
             try:
                 session = _get_genius_session(max_workers)
                 boxscore = GeniusSportsAPI.get_match_boxscore(
-                    str(match_info["external_id"]), session=session
+                    str(match_info["external_id"]),
+                    session=session,
+                    log_fn=tqdm.write if verbose else None,
                 )
                 return (match_info["index"], boxscore, None, None)
             except requests.exceptions.HTTPError as e:
@@ -1148,10 +1162,165 @@ def download_matches_with_boxscores(
         print(f"{'=' * 60}")
 
 
+def _is_retryable_404_error(error: Dict[str, Any]) -> bool:
+    error_type = str(error.get("error_type", ""))
+    error_message = str(error.get("error_message", ""))
+    return "404" in error_type or "404" in error_message
+
+
+def retry_advanced_boxscores_404s(
+    input_file: str,
+    output_file: Optional[str] = None,
+    max_workers: int = 5,
+    verbose: bool = True,
+) -> None:
+    """Retry advanced boxscores that previously failed with HTTP 404."""
+    input_path = Path(input_file)
+    if not input_path.exists():
+        print(f"Error: input file not found: {input_path}")
+        return
+
+    data = json.loads(input_path.read_text(encoding="utf-8"))
+    matches = data.get("matches") or []
+    if not isinstance(matches, list) or not matches:
+        print("No matches found in input file.")
+        return
+
+    matches_to_retry = []
+    for idx, match in enumerate(matches):
+        if match.get("boxscore"):
+            continue
+        error = match.get("advanced_boxscore_error")
+        external_id = match.get("match_external_id")
+        if not error or not external_id:
+            continue
+        if _is_retryable_404_error(error):
+            matches_to_retry.append(
+                {
+                    "index": idx,
+                    "external_id": external_id,
+                    "home_team": match.get("home_team"),
+                    "away_team": match.get("away_team"),
+                }
+            )
+
+    if not matches_to_retry:
+        print("No 404 advanced boxscore failures to retry.")
+        return
+
+    if output_file:
+        output_path = Path(output_file)
+    else:
+        output_path = input_path.with_name(f"{input_path.stem}_retry{input_path.suffix}")
+
+    if verbose:
+        print(
+            f"Retrying {len(matches_to_retry)} advanced boxscores from {input_path}..."
+        )
+
+    retried_success = 0
+    retried_failed = 0
+
+    def fetch_boxscore(
+        match_info: Dict[str, Any],
+    ) -> tuple[int, Optional[Dict[str, Any]], Optional[str], Optional[str]]:
+        try:
+            session = _get_genius_session(max_workers)
+            boxscore = GeniusSportsAPI.get_match_boxscore(
+                str(match_info["external_id"]),
+                session=session,
+                log_fn=tqdm.write if verbose else None,
+            )
+            return (match_info["index"], boxscore, None, None)
+        except requests.exceptions.HTTPError as e:
+            error_type = f"HTTP {e.response.status_code}" if e.response else "HTTP Error"
+            return (match_info["index"], None, str(e), error_type)
+        except ValueError as e:
+            return (match_info["index"], None, str(e), "Parse Error")
+        except Exception as e:
+            return (match_info["index"], None, str(e), type(e).__name__)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(fetch_boxscore, match_info): match_info
+            for match_info in matches_to_retry
+        }
+
+        with tqdm(
+            total=len(matches_to_retry),
+            desc="Retrying advanced stats",
+            disable=not verbose,
+        ) as pbar:
+            for future in as_completed(futures):
+                match_info = futures[future]
+                index, boxscore, error, error_type = future.result()
+                if boxscore:
+                    matches[index]["boxscore"] = normalize_boxscore(
+                        boxscore, source="genius"
+                    )
+                    matches[index].pop("advanced_boxscore_error", None)
+                    retried_success += 1
+                else:
+                    retried_failed += 1
+                    if error:
+                        matches[index]["advanced_boxscore_error"] = {
+                            "error_type": error_type or "Unknown",
+                            "error_message": error,
+                        }
+                    if verbose and error:
+                        if error_type == "Parse Error":
+                            error_display = "Data parsing failed (check match data quality)"
+                        elif error_type and error_type.startswith("HTTP"):
+                            error_display = error_type
+                        else:
+                            error_display = (
+                                f"{error_type}: {error[:40]}"
+                                if error_type
+                                else error[:50]
+                            )
+                        tqdm.write(
+                            f"  ✗ {match_info.get('home_team')} vs "
+                            f"{match_info.get('away_team')}: {error_display}"
+                        )
+                pbar.update(1)
+
+    matches_with_advanced = sum(1 for match in matches if "boxscore" in match)
+    matches_failed = sum(1 for match in matches if "advanced_boxscore_error" in match)
+
+    metadata = data.get("metadata", {})
+    metadata["matches_with_boxscore"] = matches_with_advanced
+    metadata["matches_failed"] = matches_failed
+    metadata["retry_advanced_boxscores"] = {
+        "retry_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "retry_total": len(matches_to_retry),
+        "retry_success": retried_success,
+        "retry_failed": retried_failed,
+    }
+    data["metadata"] = metadata
+    data["matches"] = matches
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+    if verbose:
+        print(f"\n{'=' * 60}")
+        print(f"Saved retried data to {output_path}")
+        print(f"  - Retried: {len(matches_to_retry)}")
+        print(f"  - Retried success: {retried_success}")
+        print(f"  - Retried failed: {retried_failed}")
+        print(f"  - Matches with boxscore: {matches_with_advanced}")
+        print(f"  - Matches failed: {matches_failed}")
+        print(f"{'=' * 60}")
+
+
 def download_league_boxscores_all_seasons(
     category_id: str,
     output_dir: str,
     start_year: int = 2010,
+    limit_seasons: Optional[int] = None,
+    combine_output: bool = False,
+    combined_file: Optional[str] = None,
     max_workers: int = 5,
     verbose: bool = True,
 ) -> None:
@@ -1204,8 +1373,22 @@ def download_league_boxscores_all_seasons(
         print("No seasons found for the requested year range.")
         return
 
+    if limit_seasons is not None:
+        filtered = filtered[:limit_seasons]
+
     if verbose:
         print(f"Found {len(filtered)} seasons to download.")
+
+    combined_payload = {
+        "metadata": {
+            "category_id": category_id,
+            "category_name": category_name,
+            "start_year": start_year,
+            "limit_seasons": limit_seasons,
+            "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
+        "seasons": [],
+    }
 
     for idx, season in enumerate(filtered, 1):
         season_name = season.get("season_name") or season.get("competition_id")
@@ -1217,24 +1400,57 @@ def download_league_boxscores_all_seasons(
 
         if is_historical:
             output_file = output_path / f"{safe_category}_{season_name}_baskethotel.json"
+            target_file = (
+                output_path / f".tmp_{safe_category}_{season_name}_baskethotel.json"
+                if combine_output
+                else output_file
+            )
             download_baskethotel_season_boxscores(
                 category_id=category_id,
                 season_id=season_name or str(competition_id),
-                output_file=str(output_file),
+                output_file=str(target_file),
                 max_workers=max_workers,
                 verbose=verbose,
             )
         else:
             output_file = output_path / f"{safe_category}_{season_name}_genius.json"
+            target_file = (
+                output_path / f".tmp_{safe_category}_{season_name}_genius.json"
+                if combine_output
+                else output_file
+            )
             download_season_comprehensive(
                 category_id=category_id,
                 competition_id=str(competition_id or season_name),
-                output_file=str(output_file),
+                output_file=str(target_file),
                 season_name=season_name,
                 include_advanced=True,
                 max_workers=max_workers,
                 verbose=verbose,
             )
+
+        if combine_output:
+            try:
+                season_payload = json.loads(target_file.read_text(encoding="utf-8"))
+                season_payload["season_name"] = season_name
+                season_payload["source"] = (
+                    "baskethotel" if is_historical else "genius"
+                )
+                combined_payload["seasons"].append(season_payload)
+            finally:
+                if target_file.exists():
+                    target_file.unlink()
+
+    if combine_output:
+        combined_path = (
+            Path(combined_file)
+            if combined_file
+            else output_path / f"{safe_category}_combined.json"
+        )
+        with open(combined_path, "w", encoding="utf-8") as f:
+            json.dump(combined_payload, f, indent=2, ensure_ascii=False)
+        if verbose:
+            print(f"\nSaved combined output to {combined_path}")
 
 
 def download_league_all_seasons(
@@ -1362,7 +1578,9 @@ def download_league_all_seasons(
                     try:
                         session = _get_genius_session(max_workers)
                         boxscore = GeniusSportsAPI.get_match_boxscore(
-                            str(match_info["external_id"]), session=session
+                            str(match_info["external_id"]),
+                            session=session,
+                            log_fn=tqdm.write if verbose else None,
                         )
                         return (match_info["index"], boxscore, None, None)
                     except requests.exceptions.HTTPError as e:
@@ -2236,7 +2454,10 @@ def download_season_comprehensive(
                             "external_id": external_id,
                             "home_team": match_data["home_team"],
                             "away_team": match_data["away_team"],
-                            "match_date": match_data.get("match_date", "Unknown date"),
+                            "match_date": match_data.get("date")
+                            or match_data.get("match_date")
+                            or "Unknown date",
+                            "url": f"https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{external_id}/boxscore",
                         }
                     )
 
@@ -2257,7 +2478,9 @@ def download_season_comprehensive(
                 try:
                     session = _get_genius_session(max_workers)
                     boxscore = GeniusSportsAPI.get_match_boxscore(
-                        str(match_info["external_id"]), session=session
+                        str(match_info["external_id"]),
+                        session=session,
+                        log_fn=tqdm.write if verbose else None,
                     )
                     return (match_info["index"], boxscore, None, None)
                 except requests.exceptions.HTTPError as e:
@@ -2310,7 +2533,7 @@ def download_season_comprehensive(
                                         "Data parsing failed (check match data quality)"
                                     )
                                 elif error_type and error_type.startswith("HTTP"):
-                                    error_display = error_type
+                                    error_display = f"{error_type} {match_info.get('url', '')}".strip()
                                 else:
                                     # For other errors, show type and short message
                                     error_display = (
@@ -2318,6 +2541,8 @@ def download_season_comprehensive(
                                         if error_type
                                         else error[:50]
                                     )
+                                    if match_info.get("url"):
+                                        error_display = f"{error_display} {match_info['url']}"
 
                                 tqdm.write(
                                     f"  ✗ {match_info['match_date']} - {match_info['home_team']} vs {match_info['away_team']}: {error_display}"
@@ -2575,7 +2800,10 @@ def download_team_season(
                             "external_id": external_id,
                             "home_team": match_data["home_team"],
                             "away_team": match_data["away_team"],
-                            "match_date": match_data.get("match_date", "Unknown date"),
+                            "match_date": match_data.get("date")
+                            or match_data.get("match_date")
+                            or "Unknown date",
+                            "url": f"https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{external_id}/boxscore",
                         }
                     )
 
@@ -2596,7 +2824,9 @@ def download_team_season(
                 try:
                     session = _get_genius_session(max_workers)
                     boxscore = GeniusSportsAPI.get_match_boxscore(
-                        str(match_info["external_id"]), session=session
+                        str(match_info["external_id"]),
+                        session=session,
+                        log_fn=tqdm.write if verbose else None,
                     )
                     return (match_info["index"], boxscore, None, None)
                 except requests.exceptions.HTTPError as e:
@@ -2903,9 +3133,10 @@ def download_league_comprehensive(
                                 "external_id": external_id,
                                 "home_team": match_data["home_team"],
                                 "away_team": match_data["away_team"],
-                                "match_date": match_data.get(
-                                    "match_date", "Unknown date"
-                                ),
+                                "match_date": match_data.get("date")
+                                or match_data.get("match_date")
+                                or "Unknown date",
+                                "url": f"https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{external_id}/boxscore",
                             }
                         )
 
@@ -2933,7 +3164,9 @@ def download_league_comprehensive(
                     try:
                         session = _get_genius_session(max_workers)
                         boxscore = GeniusSportsAPI.get_match_boxscore(
-                            str(match_info["external_id"]), session=session
+                            str(match_info["external_id"]),
+                            session=session,
+                            log_fn=tqdm.write if verbose else None,
                         )
                         return (match_info["index"], boxscore, None, None)
                     except requests.exceptions.HTTPError as e:
@@ -2987,7 +3220,7 @@ def download_league_comprehensive(
                                     if error_type == "Parse Error":
                                         error_display = "Data parsing failed"
                                     elif error_type and error_type.startswith("HTTP"):
-                                        error_display = error_type
+                                        error_display = f"{error_type} {match_info.get('url', '')}".strip()
                                     else:
                                         # For other errors, show type and short message
                                         error_display = (
@@ -2995,6 +3228,8 @@ def download_league_comprehensive(
                                             if error_type
                                             else error[:45]
                                         )
+                                        if match_info.get("url"):
+                                            error_display = f"{error_display} {match_info['url']}"
 
                                     tqdm.write(
                                         f"      ✗ {match_info['match_date']} - {match_info['home_team']} vs {match_info['away_team']}: {error_display}"
@@ -3129,6 +3364,9 @@ examples:
   # Option 5: Historical season game leaders (BasketHotel boxscores)
   uv run koris-api season-game-leaders --category-id 4 --season-id 2015-2016 --output season_leaders.json
 
+  # Option 7: Retry advanced boxscores that failed with 404
+  uv run koris-api retry-advanced-404s --input season_boxscores_2023-2024.json --output season_boxscores_2023-2024_retry.json
+
   # Add --adv-players to include per-match player stats from advanced boxscores
   # Add --adv-teams to include team season statistics (averages, shooting, totals)
   # Add --cache-file to reuse boxscore summaries across runs
@@ -3152,6 +3390,7 @@ notes:
     )
     parser.add_argument(
         "action",
+        nargs="?",
         choices=[
             "season-comprehensive",
             "season-boxscores",
@@ -3161,8 +3400,14 @@ notes:
             "league-boxscores-all-seasons",
             "season-advanced-averages",
             "season-game-leaders",
+            "retry-advanced-404s",
         ],
         help="Action to perform",
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt for options interactively",
     )
     parser.add_argument(
         "--season-id",
@@ -3170,10 +3415,28 @@ notes:
         help="Season ID (default: huki2526 for current season)",
     )
     parser.add_argument(
+        "--season-ids",
+        help="Comma-separated season IDs to process (overrides --season-id)",
+    )
+    parser.add_argument(
         "--start-year",
         type=int,
         default=2010,
         help="Start year for all-seasons downloads (default: 2010)",
+    )
+    parser.add_argument(
+        "--limit-seasons",
+        type=int,
+        help="Limit the number of most recent seasons to download (all-seasons actions)",
+    )
+    parser.add_argument(
+        "--combine-output",
+        action="store_true",
+        help="Combine season outputs into a single JSON file (all-seasons actions)",
+    )
+    parser.add_argument(
+        "--combined-file",
+        help="Path for combined output JSON when --combine-output is set",
     )
     parser.add_argument(
         "--category-id",
@@ -3208,6 +3471,10 @@ notes:
     parser.add_argument(
         "--output",
         help="Output file path (auto-generated if not specified)",
+    )
+    parser.add_argument(
+        "--input",
+        help="Input JSON file (retry-advanced-404s)",
     )
     parser.add_argument(
         "--limit-games",
@@ -3251,6 +3518,230 @@ notes:
 
     args = parser.parse_args()
 
+    def _select_single_curses(
+        title: str, options: list[tuple[str, str]], default: Optional[str]
+    ) -> Optional[str]:
+        def _run(stdscr):
+            curses.curs_set(0)
+            current = 0
+            if default:
+                for idx, (_, value) in enumerate(options):
+                    if value == default:
+                        current = idx
+                        break
+            while True:
+                stdscr.erase()
+                stdscr.addstr(0, 0, title)
+                stdscr.addstr(1, 0, "Use arrows to move, Enter to select.")
+                for idx, (label, _) in enumerate(options):
+                    marker = "➤ " if idx == current else "  "
+                    if idx == current:
+                        stdscr.attron(curses.A_REVERSE)
+                    stdscr.addstr(3 + idx, 0, f"{marker}{label}")
+                    if idx == current:
+                        stdscr.attroff(curses.A_REVERSE)
+                key = stdscr.getch()
+                if key in (curses.KEY_UP, ord("k")):
+                    current = (current - 1) % len(options)
+                elif key in (curses.KEY_DOWN, ord("j")):
+                    current = (current + 1) % len(options)
+                elif key in (curses.KEY_ENTER, 10, 13):
+                    return options[current][1]
+                elif key in (27, ord("q")):
+                    return None
+
+        try:
+            return curses.wrapper(_run)
+        except curses.error:
+            return None
+
+    def _select_multi_curses(
+        title: str, options: list[tuple[str, str]], defaults: list[str]
+    ) -> Optional[list[str]]:
+        def _run(stdscr):
+            curses.curs_set(0)
+            current = 0
+            selected = {value for value in defaults}
+            while True:
+                stdscr.erase()
+                stdscr.addstr(0, 0, title)
+                stdscr.addstr(1, 0, "Use arrows to move, Space to toggle, Enter to confirm.")
+                for idx, (label, value) in enumerate(options):
+                    checked = "[x]" if value in selected else "[ ]"
+                    marker = "➤ " if idx == current else "  "
+                    line = f"{marker}{checked} {label}"
+                    if idx == current:
+                        stdscr.attron(curses.A_REVERSE)
+                    stdscr.addstr(3 + idx, 0, line)
+                    if idx == current:
+                        stdscr.attroff(curses.A_REVERSE)
+                key = stdscr.getch()
+                if key in (curses.KEY_UP, ord("k")):
+                    current = (current - 1) % len(options)
+                elif key in (curses.KEY_DOWN, ord("j")):
+                    current = (current + 1) % len(options)
+                elif key == ord(" "):
+                    value = options[current][1]
+                    if value in selected:
+                        selected.remove(value)
+                    else:
+                        selected.add(value)
+                elif key in (curses.KEY_ENTER, 10, 13):
+                    return list(selected)
+                elif key in (27, ord("q")):
+                    return None
+
+        try:
+            return curses.wrapper(_run)
+        except curses.error:
+            return None
+
+    def _prompt_single(
+        title: str, options: list[tuple[str, str]], default: Optional[str]
+    ) -> str:
+        if sys.stdin.isatty() and options:
+            selected = _select_single_curses(title, options, default)
+            if selected is not None:
+                return selected
+        print(title)
+        default_index = 1
+        for idx, (label, value) in enumerate(options, start=1):
+            print(f"  {idx}) {label}")
+            if value == default:
+                default_index = idx
+        while True:
+            choice = input(f"Select [default {default_index}]: ").strip()
+            if not choice:
+                return options[default_index - 1][1]
+            if choice.isdigit() and 1 <= int(choice) <= len(options):
+                return options[int(choice) - 1][1]
+            print("Enter a valid number.")
+
+    def _prompt_multi(
+        title: str, options: list[tuple[str, str]], defaults: list[str]
+    ) -> list[str]:
+        if sys.stdin.isatty() and options:
+            selected = _select_multi_curses(title, options, defaults)
+            if selected is not None:
+                return selected
+        print(title)
+        default_indices = []
+        for idx, (label, value) in enumerate(options, start=1):
+            print(f"  {idx}) {label}")
+            if value in defaults:
+                default_indices.append(str(idx))
+        prompt = (
+            f"Select (space-separated) [default {' '.join(default_indices) or 'none'}]: "
+        )
+        while True:
+            choice = input(prompt).strip()
+            if not choice:
+                return defaults
+            tokens = choice.split()
+            if all(t.isdigit() and 1 <= int(t) <= len(options) for t in tokens):
+                return [options[int(t) - 1][1] for t in tokens]
+            print("Enter space-separated numbers.")
+
+    def _prompt_text(label: str, default: Optional[str], required: bool = False) -> str:
+        prompt = f"{label} [{default}]: " if default else f"{label}: "
+        while True:
+            value = input(prompt).strip()
+            if value:
+                return value
+            if default is not None:
+                return default
+            if not required:
+                return ""
+            print("Value required.")
+
+    def _load_categories() -> list[tuple[str, str]]:
+        categories_path = Path(__file__).parent.parent.parent / "categories.json"
+        if categories_path.exists():
+            data = json.loads(categories_path.read_text(encoding="utf-8"))
+            return [
+                (f"{cid}: {cdata.get('category_name', cid)}", str(cid))
+                for cid, cdata in data.items()
+            ]
+        return [
+            ("4: Korisliiga (Men's top division)", "4"),
+            ("2: Miesten I divisioona A", "2"),
+            ("13: Naisten Korisliiga", "13"),
+        ]
+
+    def _load_seasons(category_id: str) -> list[tuple[str, str]]:
+        try:
+            category_data = BasketFiAPI.get_category("huki2526", category_id)
+            seasons = category_data.get("category", {}).get("seasons", [])
+            seasons = _augment_seasons_with_baskethotel(seasons, category_id)
+            return [
+                (f"{s.get('season_name', s.get('competition_id'))} ({s.get('competition_id')})",
+                 str(s.get("competition_id") or s.get("season_id")))
+                for s in seasons
+            ]
+        except Exception:
+            return []
+
+    def _interactive(args: argparse.Namespace) -> argparse.Namespace:
+        mode = _prompt_single(
+            "Select download scope:",
+            [("Season", "season"), ("League", "league")],
+            "season",
+        )
+
+        categories = _load_categories()
+        category_default = args.category_id or "4"
+        args.category_id = _prompt_single(
+            "Select league:", categories, category_default
+        )
+
+        season_default = args.season_id or "huki2526"
+        args.season_ids = None
+        if mode == "season":
+            args.action = "season-boxscores"
+            seasons = _load_seasons(args.category_id) if args.category_id else []
+            if seasons:
+                season_values = _prompt_multi(
+                    "Select season(s):",
+                    seasons,
+                    [season_default],
+                )
+                if season_values:
+                    args.season_ids = ",".join(season_values)
+                    args.season_id = season_values[0]
+            else:
+                args.season_id = _prompt_text("Season ID", season_default, required=True)
+        else:
+            args.action = "league-comprehensive"
+            args.season_id = season_default
+
+        advanced = _prompt_single(
+            "Download advanced boxscore?",
+            [("Yes", "yes"), ("No", "no")],
+            "no",
+        )
+        args.adv_players = advanced == "yes"
+        args.adv_teams = False
+        args.all_seasons = False
+        args.combine_output = False
+
+        return args
+
+    if args.action is None or args.interactive:
+        args = _interactive(args)
+
+    season_ids = []
+    if args.season_ids:
+        season_ids = [s.strip() for s in args.season_ids.split(",") if s.strip()]
+
+    def _output_for_season(base: Optional[str], season_id: str, prefix: str) -> str:
+        if not base:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            return f"{prefix}_{season_id}_{timestamp}.json"
+        path = Path(base)
+        if path.suffix:
+            return str(path.with_name(f"{path.stem}_{season_id}{path.suffix}"))
+        return f"{base}_{season_id}.json"
+
     try:
         # Provide default category_id if not specified (except for team-season which auto-detects)
         if args.action != "team-season" and not args.category_id:
@@ -3265,40 +3756,36 @@ notes:
                     "Example: uv run koris-api season-comprehensive --category-id 4 --season-id huki2526 --output season.json"
                 )
                 return
+            season_targets = season_ids or [args.season_id]
+            for season_id in season_targets:
+                output_file = _output_for_season(args.output, season_id, "season")
 
-            # Generate output filename if not provided
-            if not args.output:
-                from datetime import datetime
+                # Get season name from category data if possible
+                season_name = None
+                try:
+                    category_data = BasketFiAPI.get_category(
+                        season_id, args.category_id
+                    )
+                    if (
+                        "category" in category_data
+                        and "seasons" in category_data["category"]
+                    ):
+                        for season in category_data["category"]["seasons"]:
+                            if season.get("competition_id") == season_id:
+                                season_name = season.get("season_name")
+                                break
+                except Exception:
+                    pass  # Use competition_id as season_name if we can't get it
 
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                args.output = f"season_{args.season_id}_{timestamp}.json"
-
-            # Get season name from category data if possible
-            season_name = None
-            try:
-                category_data = BasketFiAPI.get_category(
-                    args.season_id, args.category_id
+                download_season_comprehensive(
+                    category_id=args.category_id,
+                    competition_id=season_id,
+                    output_file=output_file,
+                    season_name=season_name,
+                    include_advanced=args.adv_players,
+                    max_workers=args.concurrency,
+                    verbose=not args.quiet,
                 )
-                if (
-                    "category" in category_data
-                    and "seasons" in category_data["category"]
-                ):
-                    for season in category_data["category"]["seasons"]:
-                        if season.get("competition_id") == args.season_id:
-                            season_name = season.get("season_name")
-                            break
-            except Exception:
-                pass  # Use competition_id as season_name if we can't get it
-
-            download_season_comprehensive(
-                category_id=args.category_id,
-                competition_id=args.season_id,
-                output_file=args.output,
-                season_name=season_name,
-                include_advanced=args.adv_players,
-                max_workers=args.concurrency,
-                verbose=not args.quiet,
-            )
 
         # Option 1b: Match list with boxscores (optional limit)
         elif args.action == "season-boxscores":
@@ -3308,22 +3795,20 @@ notes:
                     "Example: uv run koris-api season-boxscores --category-id 4 --season-id 2024-2025 --adv-players --limit-games 1 --output season_boxscores.json"
                 )
                 return
-
-            if not args.output:
-                from datetime import datetime
-
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                args.output = f"season_boxscores_{args.season_id}_{timestamp}.json"
-
-            download_matches_with_boxscores(
-                season_id=args.season_id,
-                category_id=args.category_id,
-                output_file=args.output,
-                include_advanced=args.adv_players,
-                limit_games=args.limit_games,
-                max_workers=args.concurrency,
-                verbose=not args.quiet,
-            )
+            season_targets = season_ids or [args.season_id]
+            for season_id in season_targets:
+                output_file = _output_for_season(
+                    args.output, season_id, "season_boxscores"
+                )
+                download_matches_with_boxscores(
+                    season_id=season_id,
+                    category_id=args.category_id,
+                    output_file=output_file,
+                    include_advanced=args.adv_players,
+                    limit_games=args.limit_games,
+                    max_workers=args.concurrency,
+                    verbose=not args.quiet,
+                )
 
         # Option 2: All matches of one team from one season
         elif args.action == "team-season":
@@ -3341,44 +3826,43 @@ notes:
                 )
                 return
 
-            # Generate output filename if not provided
-            if not args.output:
-                from datetime import datetime
+            season_targets = season_ids or [args.season_id]
+            for season_id in season_targets:
+                output_file = _output_for_season(
+                    args.output, f"{args.team_id}_{season_id}", "team"
+                )
 
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                args.output = f"team_{args.team_id}_{args.season_id}_{timestamp}.json"
+                # Get season name from category data if possible (and if category_id is provided)
+                season_name = None
+                if args.category_id:
+                    try:
+                        category_data = BasketFiAPI.get_category(
+                            season_id, args.category_id
+                        )
+                        if (
+                            "category" in category_data
+                            and "seasons" in category_data["category"]
+                        ):
+                            for season in category_data["category"]["seasons"]:
+                                if season.get("competition_id") == season_id:
+                                    season_name = season.get("season_name")
+                                    break
+                    except Exception:
+                        pass
 
-            # Get season name from category data if possible (and if category_id is provided)
-            season_name = None
-            if args.category_id:
-                try:
-                    category_data = BasketFiAPI.get_category(
-                        args.season_id, args.category_id
-                    )
-                    if (
-                        "category" in category_data
-                        and "seasons" in category_data["category"]
-                    ):
-                        for season in category_data["category"]["seasons"]:
-                            if season.get("competition_id") == args.season_id:
-                                season_name = season.get("season_name")
-                                break
-                except Exception:
-                    pass
-
-            download_team_season(
-                team_id=args.team_id,
-                category_id=args.category_id,
-                competition_id=args.season_id,
-                output_file=args.output,
-                season_name=season_name,
-                include_advanced=args.adv_players,
-                include_team_stats=args.adv_teams,
-                genius_competition_id=args.genius_competition_id,
-                genius_team_id=args.genius_team_id,
-                max_workers=args.concurrency,
-                verbose=not args.quiet,
-            )
+                download_team_season(
+                    team_id=args.team_id,
+                    category_id=args.category_id,
+                    competition_id=season_id,
+                    output_file=output_file,
+                    season_name=season_name,
+                    include_advanced=args.adv_players,
+                    include_team_stats=args.adv_teams,
+                    genius_competition_id=args.genius_competition_id,
+                    genius_team_id=args.genius_team_id,
+                    max_workers=args.concurrency,
+                    verbose=not args.quiet,
+                )
 
         # Option 2b: BasketHotel boxscores for a historical season
         elif args.action == "season-baskethotel-boxscores":
@@ -3393,27 +3877,24 @@ notes:
                 print("Error: --season-id is required for season-baskethotel-boxscores")
                 return
 
-            if not args.output:
-                from datetime import datetime
-
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                args.output = f"season_baskethotel_boxscores_{timestamp}.json"
-
-            download_baskethotel_season_boxscores(
-                category_id=args.category_id,
-                season_id=args.season_id,
-                output_file=args.output,
-                limit_games=args.limit_games,
-                max_workers=args.concurrency,
-                verbose=not args.quiet,
-            )
+            season_targets = season_ids or [args.season_id]
+            for season_id in season_targets:
+                output_file = _output_for_season(
+                    args.output, season_id, "season_baskethotel_boxscores"
+                )
+                download_baskethotel_season_boxscores(
+                    category_id=args.category_id,
+                    season_id=season_id,
+                    output_file=output_file,
+                    limit_games=args.limit_games,
+                    max_workers=args.concurrency,
+                    verbose=not args.quiet,
+                )
 
         # Option 3: All seasons with all teams and their matches
         elif args.action == "league-comprehensive":
             # Validate output directory
             if not args.output_dir:
-                from datetime import datetime
-
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 args.output_dir = f"league_{args.category_id}_{timestamp}"
 
@@ -3429,8 +3910,6 @@ notes:
         # Option 3b: All seasons from start year with player boxscores
         elif args.action == "league-boxscores-all-seasons":
             if not args.output_dir:
-                from datetime import datetime
-
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 args.output_dir = f"league_boxscores_{args.category_id}_{timestamp}"
 
@@ -3438,6 +3917,9 @@ notes:
                 category_id=args.category_id,
                 output_dir=args.output_dir,
                 start_year=args.start_year,
+                limit_seasons=args.limit_seasons,
+                combine_output=args.combine_output,
+                combined_file=args.combined_file,
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
             )
@@ -3451,19 +3933,20 @@ notes:
                 )
                 return
 
-            if not args.output:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                args.output = f"season_advanced_averages_{timestamp}.json"
-
-            download_season_advanced_averages(
-                category_id=args.category_id,
-                season_id=args.season_id,
-                output_file=args.output,
-                all_seasons=args.all_seasons,
-                cache_file=args.cache_file,
-                max_workers=args.concurrency,
-                verbose=not args.quiet,
-            )
+            season_targets = season_ids or [args.season_id]
+            for season_id in season_targets:
+                output_file = _output_for_season(
+                    args.output, season_id, "season_advanced_averages"
+                )
+                download_season_advanced_averages(
+                    category_id=args.category_id,
+                    season_id=season_id,
+                    output_file=output_file,
+                    all_seasons=args.all_seasons,
+                    cache_file=args.cache_file,
+                    max_workers=args.concurrency,
+                    verbose=not args.quiet,
+                )
 
         # Option 5: Historical season game leaders from BasketHotel boxscores
         elif args.action == "season-game-leaders":
@@ -3478,13 +3961,28 @@ notes:
                 print("Error: --season-id is required for season-game-leaders")
                 return
 
-            if not args.output:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                args.output = f"season_game_leaders_{timestamp}.json"
+            season_targets = season_ids or [args.season_id]
+            for season_id in season_targets:
+                output_file = _output_for_season(
+                    args.output, season_id, "season_game_leaders"
+                )
+                download_season_game_leaders(
+                    category_id=args.category_id,
+                    season_id=season_id,
+                    output_file=output_file,
+                    max_workers=args.concurrency,
+                    verbose=not args.quiet,
+                )
+        elif args.action == "retry-advanced-404s":
+            if not args.input:
+                print("Error: --input is required for retry-advanced-404s")
+                print(
+                    "Example: uv run koris-api retry-advanced-404s --input season_boxscores_2023-2024.json"
+                )
+                return
 
-            download_season_game_leaders(
-                category_id=args.category_id,
-                season_id=args.season_id,
+            retry_advanced_boxscores_404s(
+                input_file=args.input,
                 output_file=args.output,
                 max_workers=args.concurrency,
                 verbose=not args.quiet,
