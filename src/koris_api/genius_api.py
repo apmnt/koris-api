@@ -10,6 +10,25 @@ import re
 from .genius_parser import GeniusSportsParser
 
 
+class GeniusSportsBoxscoreError(Exception):
+    def __init__(
+        self,
+        match_id: str,
+        url: Optional[str] = None,
+        status_code: Optional[int] = None,
+        error_type: Optional[str] = None,
+        message: Optional[str] = None,
+    ) -> None:
+        self.match_id = match_id
+        self.url = url
+        self.status_code = status_code
+        self.error_type = error_type
+        super().__init__(
+            message
+            or f"Failed to fetch Genius Sports boxscore for match {match_id}"
+        )
+
+
 class GeniusSportsAPI:
     """Client for scraping basketball data from Genius Sports hosted pages."""
 
@@ -27,7 +46,7 @@ class GeniusSportsAPI:
         retries: int = 3,
         backoff_seconds: float = 0.6,
         timeout_seconds: float = 15.0,
-        not_found_retries: int = 2,
+        not_found_retries: int = 0,
         not_found_backoff_seconds: float = 2.0,
         log_fn: Optional[Callable[[str], None]] = None,
     ) -> Dict[str, Any]:
@@ -36,23 +55,48 @@ class GeniusSportsAPI:
 
         Args:
             match_id: The match identifier from Genius Sports
-            not_found_retries: Extra retries when the boxscore returns 404
-            not_found_backoff_seconds: Delay before retrying 404 responses
+            not_found_retries: Unused (404s are not retried)
+            not_found_backoff_seconds: Unused (404s are not retried)
             log_fn: Optional callback for retry logging
 
         Returns:
             Dictionary containing parsed box score data with team stats and player stats
         """
+        html, _ = cls.fetch_match_boxscore_html(
+            match_id=match_id,
+            session=session,
+            retries=retries,
+            backoff_seconds=backoff_seconds,
+            timeout_seconds=timeout_seconds,
+            not_found_retries=not_found_retries,
+            not_found_backoff_seconds=not_found_backoff_seconds,
+            log_fn=log_fn,
+        )
+        return GeniusSportsParser.parse_boxscore_html(html)
+
+    @classmethod
+    def fetch_match_boxscore_html(
+        cls,
+        match_id: str,
+        session: Optional[requests.Session] = None,
+        retries: int = 3,
+        backoff_seconds: float = 0.6,
+        timeout_seconds: float = 15.0,
+        not_found_retries: int = 0,
+        not_found_backoff_seconds: float = 2.0,
+        log_fn: Optional[Callable[[str], None]] = None,
+    ) -> tuple[str, str]:
         url_templates = [
             "https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{match_id}/boxscore",
             "https://hosted.dcd.shared.geniussports.com/FBAA/fi/match/{match_id}/boxscore",
         ]
         client = session or requests
-        not_found_attempts = 0
         last_error: Optional[Exception] = None
+        last_url: Optional[str] = None
         while True:
             last_error = None
             for url in [template.format(match_id=match_id) for template in url_templates]:
+                last_url = url
                 attempt = 0
                 while True:
                     attempt += 1
@@ -62,11 +106,19 @@ class GeniusSportsAPI:
                             timeout=timeout_seconds,
                             headers=None if session is not None else cls._DEFAULT_HEADERS,
                         )
+                        if response.status_code == 404:
+                            raise GeniusSportsBoxscoreError(
+                                match_id=match_id,
+                                url=url,
+                                status_code=404,
+                                error_type="HTTPError",
+                                message="HTTP 404 Not Found",
+                            )
                         if response.status_code >= 500 and attempt <= retries:
                             time.sleep(backoff_seconds * attempt)
                             continue
                         response.raise_for_status()
-                        return GeniusSportsParser.parse_boxscore_html(response.text)
+                        return response.text, url
                     except requests.exceptions.ReadTimeout as exc:
                         last_error = exc
                         if attempt <= retries:
@@ -75,30 +127,49 @@ class GeniusSportsAPI:
                         break
                     except requests.exceptions.HTTPError as exc:
                         last_error = exc
+                        if exc.response is not None and exc.response.status_code == 404:
+                            raise GeniusSportsBoxscoreError(
+                                match_id=match_id,
+                                url=url,
+                                status_code=404,
+                                error_type="HTTPError",
+                                message=str(exc),
+                            )
                         if attempt <= retries:
                             time.sleep(backoff_seconds * attempt)
                             continue
                         break
 
-            if (
-                isinstance(last_error, requests.exceptions.HTTPError)
-                and last_error.response is not None
-                and last_error.response.status_code == 404
-                and not_found_attempts < not_found_retries
-            ):
-                not_found_attempts += 1
-                if log_fn:
-                    log_fn(
-                        f"  Retrying 404 for match {match_id} "
-                        f"({not_found_attempts}/{not_found_retries})..."
-                    )
-                time.sleep(not_found_backoff_seconds * not_found_attempts)
-                continue
             break
 
+        if isinstance(last_error, requests.exceptions.HTTPError):
+            status_code = (
+                last_error.response.status_code if last_error.response else None
+            )
+            raise GeniusSportsBoxscoreError(
+                match_id=match_id,
+                url=last_url,
+                status_code=status_code,
+                error_type="HTTPError",
+                message=str(last_error),
+            )
+        if isinstance(last_error, requests.exceptions.ReadTimeout):
+            raise GeniusSportsBoxscoreError(
+                match_id=match_id,
+                url=last_url,
+                status_code=None,
+                error_type="ReadTimeout",
+                message=str(last_error),
+            )
         if last_error:
-            raise last_error
-        raise requests.exceptions.HTTPError("Failed to fetch boxscore from Genius Sports")
+            raise GeniusSportsBoxscoreError(
+                match_id=match_id,
+                url=last_url,
+                status_code=None,
+                error_type=type(last_error).__name__,
+                message=str(last_error),
+            )
+        raise GeniusSportsBoxscoreError(match_id=match_id, url=last_url)
 
     @classmethod
     def get_match_playbyplay(cls, match_id: str) -> Dict[str, Any]:

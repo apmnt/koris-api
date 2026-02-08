@@ -12,7 +12,7 @@ from koris_api.baskethotel_parser import BasketHotelParser
 from koris_api.baskethotel_api import BasketHotelAPI
 from koris_api.genius_api import GeniusSportsAPI
 from koris_api.genius_parser import GeniusSportsParser
-from koris_api import (
+from koris_api.services.common import (
     _extract_baskethotel_game_ids,
     _extract_baskethotel_schedule_page_count,
     _fetch_baskethotel_seasons,
@@ -470,6 +470,7 @@ def test_genius_boxscore_mocked(genius_boxscore_html):
     with patch("requests.get") as mock_get:
         mock_response = MagicMock()
         mock_response.text = genius_boxscore_html
+        mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
