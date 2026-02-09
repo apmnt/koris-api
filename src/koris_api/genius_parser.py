@@ -1,12 +1,24 @@
 """Parser for Genius Sports HTML responses."""
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from bs4 import BeautifulSoup, NavigableString, Tag
 import re
 
 
 class GeniusSportsParser:
     """Parser for Genius Sports HTML content."""
+
+    @staticmethod
+    def _safe_int(value: Optional[str]) -> Optional[int]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            return int(text)
+        except ValueError:
+            return None
 
     @staticmethod
     def parse_boxscore_html(html_content: str) -> Dict[str, Any]:
@@ -41,7 +53,9 @@ class GeniusSportsParser:
                 home_name_elem.get_text(strip=True) if home_name_elem else None
             )
             result["match_info"]["home_score"] = (
-                int(home_score_elem.get_text(strip=True)) if home_score_elem else None
+                GeniusSportsParser._safe_int(
+                    home_score_elem.get_text(strip=True) if home_score_elem else None
+                )
             )
 
         if away_wrapper and isinstance(away_wrapper, Tag):
@@ -51,7 +65,9 @@ class GeniusSportsParser:
                 away_name_elem.get_text(strip=True) if away_name_elem else None
             )
             result["match_info"]["away_score"] = (
-                int(away_score_elem.get_text(strip=True)) if away_score_elem else None
+                GeniusSportsParser._safe_int(
+                    away_score_elem.get_text(strip=True) if away_score_elem else None
+                )
             )
 
         # Get match status
@@ -203,7 +219,12 @@ class GeniusSportsParser:
         """
         soup = BeautifulSoup(html_content, "html.parser")
 
-        result: Dict[str, Any] = {"match_info": {}, "events": []}
+        result: Dict[str, Any] = {
+            "match_info": {},
+            "events": [],
+            "players": [],
+        }
+        player_index: Dict[tuple, int] = {}
 
         # Extract match info from header
         match_header = soup.find("div", class_="match-header")
@@ -219,9 +240,9 @@ class GeniusSportsParser:
                     home_name_elem.get_text(strip=True) if home_name_elem else None
                 )
                 result["match_info"]["home_score"] = (
-                    int(home_score_elem.get_text(strip=True))
-                    if home_score_elem
-                    else None
+                    GeniusSportsParser._safe_int(
+                        home_score_elem.get_text(strip=True) if home_score_elem else None
+                    )
                 )
 
             if away_wrapper and isinstance(away_wrapper, Tag):
@@ -231,9 +252,9 @@ class GeniusSportsParser:
                     away_name_elem.get_text(strip=True) if away_name_elem else None
                 )
                 result["match_info"]["away_score"] = (
-                    int(away_score_elem.get_text(strip=True))
-                    if away_score_elem
-                    else None
+                    GeniusSportsParser._safe_int(
+                        away_score_elem.get_text(strip=True) if away_score_elem else None
+                    )
                 )
 
             # Get match status
@@ -328,7 +349,7 @@ class GeniusSportsParser:
                 player_name = None
                 player_number = None
                 if action:
-                    # Look for player in strong tag
+                    # Look for player in strong tag first
                     strong = (
                         action_elem.find("strong")
                         if action_elem and isinstance(action_elem, Tag)
@@ -341,6 +362,42 @@ class GeniusSportsParser:
                             parts = player_text.split(",", 1)
                             player_number = parts[0].strip()
                             player_name = parts[1].strip()
+                        else:
+                            player_name = player_text.strip()
+
+                    # Fallback: parse from action text
+                    if not player_name and "," in action:
+                        number_match = re.match(
+                            r"^\s*(\d+)\s*,\s*([^,]+)\s*,", action
+                        )
+                        if number_match:
+                            player_number = number_match.group(1).strip()
+                            player_name = number_match.group(2).strip()
+                        else:
+                            name_match = re.match(r"^\s*([^,]+?)\s*,", action)
+                            if name_match:
+                                player_name = name_match.group(1).strip()
+
+                # Assign synthetic per-game player id
+                player_id = None
+                if player_name or player_number:
+                    key = (team or "", player_number or "", player_name or "")
+                    player_id = player_index.get(key)
+                    if player_id is None:
+                        player_id = len(result["players"]) + 1
+                        player_index[key] = player_id
+                        result["players"].append(
+                            {
+                                "player_id": player_id,
+                                "name": player_name,
+                                "number": player_number,
+                                "team": team,
+                            }
+                        )
+
+                clean_action = GeniusSportsParser._clean_action_text(
+                    action, player_name, player_number, event_type
+                )
 
                 # Create event object
                 event = {
@@ -349,9 +406,10 @@ class GeniusSportsParser:
                     "team": team,
                     "time": time_str,
                     "score": score,
-                    "action": action,
+                    "action": clean_action,
                     "player_number": player_number,
                     "player_name": player_name,
+                    "player_id": player_id,
                 }
 
                 result["events"].append(event)
@@ -365,6 +423,75 @@ class GeniusSportsParser:
         )
 
         return result
+
+    @staticmethod
+    def _clean_action_text(
+        action: Optional[str],
+        player_name: Optional[str],
+        player_number: Optional[str],
+        event_type: Optional[str],
+    ) -> Optional[str]:
+        if not action:
+            return None
+
+        text = " ".join(action.split())
+
+        if player_name:
+            name_pattern = re.escape(player_name)
+            text = re.sub(
+                rf"^\s*(\d+\s*,\s*)?{name_pattern}\s*,\s*",
+                "",
+                text,
+            )
+        elif player_number:
+            num_pattern = re.escape(str(player_number))
+            text = re.sub(rf"^\s*{num_pattern}\s*,\s*", "", text)
+
+        normalized = text.lower()
+        detail = text
+
+        if event_type == "rebound":
+            if "defensive" in normalized:
+                detail = "def_rebound"
+            elif "offensive" in normalized:
+                detail = "off_rebound"
+            else:
+                detail = "rebound"
+        elif event_type in {"2pt", "3pt", "freethrow"}:
+            if "made" in normalized:
+                detail = "shot_made"
+            elif "miss" in normalized:
+                detail = "shot_missed"
+            else:
+                detail = "shot_taken"
+        elif event_type == "turnover":
+            detail = "turnover"
+        elif event_type == "steal":
+            detail = "steal"
+        elif event_type == "assist":
+            detail = "assist"
+        elif event_type == "block":
+            detail = "block"
+        elif event_type == "foul":
+            detail = "foul"
+        elif event_type == "foulon":
+            detail = "fouled"
+        elif event_type == "substitution":
+            detail = "substitution"
+        elif event_type == "timeout":
+            detail = "timeout"
+        elif event_type == "jumpball":
+            detail = "jump_ball"
+        elif event_type == "period":
+            detail = "period"
+        elif event_type == "game":
+            detail = "game"
+
+        display_name = player_name or (f"#{player_number}" if player_number else None)
+        if display_name:
+            return f"{display_name}: {detail}"
+
+        return detail
 
     @staticmethod
     def _populate_running_score(events: List[Dict[str, Any]]) -> None:
@@ -413,6 +540,8 @@ class GeniusSportsParser:
             time_str = event.get("time", "")
             period = event.get("period", "")
             action = event.get("action", "")
+            player_id = event.get("player_id")
+            score = event.get("score")
 
             # Skip neutral events
             if team in ["0", None, ""]:
@@ -466,6 +595,8 @@ class GeniusSportsParser:
                     current_possession["ending_event"] = {
                         "event_type": event_type,
                         "action": action,
+                        "player_id": player_id,
+                        "score": score,
                     }
 
                     # Calculate duration (clock counts down, so start time > end time)
@@ -498,6 +629,8 @@ class GeniusSportsParser:
                     "starting_event": {
                         "event_type": event_type,
                         "action": action,
+                        "player_id": player_id,
+                        "score": score,
                     },
                     "end_time": None,
                     "end_time_seconds": None,
@@ -515,6 +648,8 @@ class GeniusSportsParser:
                         "time": time_str,
                         "action": action,
                         "team": team,
+                        "player_id": player_id,
+                        "score": score,
                     }
                 )
 

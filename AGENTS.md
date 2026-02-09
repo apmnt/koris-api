@@ -35,3 +35,15 @@ Result: Success (quiet). Output written to `/tmp/season_leaders_test_2015-2016.j
 
 11. `uv run koris-api retry-advanced-404s --input /tmp/does_not_exist.json`  
 Result: Expected error: input file not found.
+
+12. `uv run koris-api season-boxscores --category-id 4 --season-id huki2526 --adv-players --output iterative_data.json`  
+Result: Success. Output written to `iterative_data_huki2526.json`. 50 advanced boxscore 404s recorded.
+
+13. `uv run koris-api season-boxscores --category-id 4 --season-id huki2526 --adv-players --output iterative_data.json`  
+Result: Resume behavior confirmed. No fetches attempted (0 pending). Output preserved with 50 failures.
+
+14. `uv run pytest -q`  
+Result: Failed during collection. `ModuleNotFoundError: No module named 'koris_api'` in `tests/test_golden.py`, `tests/test_integration.py`, `tests/test_performance_cli.py`.
+
+15. `uv run pytest -q`  
+Result: 35 passed, 2 skipped (performance tests skipped: set `RUN_PERFORMANCE_TESTS=1` to run).

@@ -16,6 +16,7 @@ from .services.common import _augment_seasons_with_baskethotel
 from .services.league_boxscores import (
     download_league_all_seasons,
     download_league_boxscores_all_seasons,
+    download_league_boxscores_playbyplay_all_seasons,
 )
 from .services.league_comprehensive import download_league_comprehensive
 from .services.season_advanced_averages import download_season_advanced_averages
@@ -38,6 +39,9 @@ examples:
   # Option 1b: Match list with boxscores (optionally limit games)
   uv run koris-api season-boxscores --category-id 4 --season-id 2024-2025 --adv-players --limit-games 1 --output season_boxscores.json
 
+  # Option 1c: Match list with boxscores + play-by-play
+  uv run koris-api season-boxscores --category-id 4 --season-id 2024-2025 --adv-players --playbyplay --output season_boxscores_with_pbp.json
+
   # Option 2: All matches of one team from one season
   uv run koris-api team-season --team-id 19281 --season-id 2024-2025 --output team.json
 
@@ -46,6 +50,9 @@ examples:
 
   # Option 3: All seasons with all teams and their matches
   uv run koris-api league-comprehensive --category-id 4 --output-dir korisliiga_data
+
+  # Option 3c: All seasons boxscores + play-by-play (resume safe)
+  uv run koris-api league 2 --box-score --playbyplay --output-dir iterative
 
   # Option 6: All seasons from 2010 with player boxscores
   uv run koris-api league-boxscores-all-seasons --category-id 4 --output-dir korisliiga_boxscores
@@ -61,6 +68,9 @@ examples:
 
   # Genius Sports: fetch a single match boxscore
   uv run koris-api genius match 2514938 --output genius_match_2514938.json
+
+  # Genius Sports: fetch a single match play-by-play
+  uv run koris-api genius playbyplay 2514938 --output genius_playbyplay_2514938.json
 
   # Add --adv-players to include per-match player stats from advanced boxscores
   # Add --adv-teams to include team season statistics (averages, shooting, totals)
@@ -87,6 +97,7 @@ notes:
         "action",
         nargs="?",
         choices=[
+            "league",
             "season-comprehensive",
             "season-boxscores",
             "season-baskethotel-boxscores",
@@ -103,7 +114,7 @@ notes:
     parser.add_argument(
         "subaction",
         nargs="?",
-        help="Sub-action for action=genius (e.g., match)",
+        help="Sub-action for action=genius (e.g., match, playbyplay)",
     )
     parser.add_argument(
         "target",
@@ -204,6 +215,16 @@ notes:
         "--adv-teams",
         action="store_true",
         help="Include team season statistics (averages, shooting, totals) from Genius Sports",
+    )
+    parser.add_argument(
+        "--playbyplay",
+        action="store_true",
+        help="Include play-by-play data from Genius Sports (season-boxscores)",
+    )
+    parser.add_argument(
+        "--box-score",
+        action="store_true",
+        help="Include per-season boxscores (league action)",
     )
     parser.add_argument(
         "--all-seasons",
@@ -443,6 +464,12 @@ notes:
     if args.action is None or args.interactive:
         args = _interactive(args)
 
+    if args.action == "league" and not args.category_id:
+        if args.subaction and args.subaction.isdigit():
+            args.category_id = args.subaction
+        elif args.target and args.target.isdigit():
+            args.category_id = args.target
+
     season_ids = []
     if args.season_ids:
         season_ids = [s.strip() for s in args.season_ids.split(",") if s.strip()]
@@ -509,20 +536,47 @@ notes:
                     "Example: uv run koris-api season-boxscores --category-id 4 --season-id 2024-2025 --adv-players --limit-games 1 --output season_boxscores.json"
                 )
                 return
+
+            def _parse_season_start_year(season_id: str) -> Optional[int]:
+                season_id = season_id.strip()
+                if "-" in season_id:
+                    parts = season_id.split("-", 1)
+                    if len(parts[0]) == 4 and parts[0].isdigit():
+                        return int(parts[0])
+                if season_id.startswith("huki") and len(season_id) >= 8:
+                    yy = season_id[4:6]
+                    if yy.isdigit():
+                        return 2000 + int(yy)
+                return None
+
             season_targets = season_ids or [args.season_id]
             for season_id in season_targets:
+                start_year = _parse_season_start_year(season_id)
+                is_historical = start_year is not None and start_year <= 2023
                 output_file = _output_for_season(
                     args.output, season_id, "season_boxscores"
                 )
-                download_matches_with_boxscores(
-                    season_id=season_id,
-                    category_id=args.category_id,
-                    output_file=output_file,
-                    include_advanced=args.adv_players,
-                    limit_games=args.limit_games,
-                    max_workers=args.concurrency,
-                    verbose=not args.quiet,
-                )
+                if is_historical:
+                    download_baskethotel_season_boxscores(
+                        category_id=args.category_id,
+                        season_id=season_id,
+                        output_file=output_file,
+                        limit_games=args.limit_games,
+                        max_workers=args.concurrency,
+                        include_playbyplay=args.playbyplay,
+                        verbose=not args.quiet,
+                    )
+                else:
+                    download_matches_with_boxscores(
+                        season_id=season_id,
+                        category_id=args.category_id,
+                        output_file=output_file,
+                        include_advanced=args.adv_players,
+                        include_playbyplay=args.playbyplay,
+                        limit_games=args.limit_games,
+                        max_workers=args.concurrency,
+                        verbose=not args.quiet,
+                    )
 
         # Option 2: All matches of one team from one season
         elif args.action == "team-season":
@@ -603,6 +657,38 @@ notes:
                     season_id=season_id,
                     output_file=output_file,
                     limit_games=args.limit_games,
+                    max_workers=args.concurrency,
+                    verbose=not args.quiet,
+                )
+
+        # Option 3c: League boxscores + play-by-play (resume safe)
+        elif args.action == "league":
+            if not args.category_id:
+                print("Error: league requires a category ID.")
+                print("Example: uv run koris-api league 2 --box-score --playbyplay --output-dir iterative")
+                return
+
+            if not args.output_dir:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                args.output_dir = f"league_{args.category_id}_{timestamp}"
+
+            if args.box_score or args.playbyplay or args.adv_players:
+                download_league_boxscores_playbyplay_all_seasons(
+                    category_id=args.category_id,
+                    output_dir=args.output_dir,
+                    start_year=args.start_year,
+                    limit_seasons=args.limit_seasons,
+                    include_playbyplay=args.playbyplay,
+                    include_advanced=args.adv_players,
+                    max_workers=args.concurrency,
+                    verbose=not args.quiet,
+                )
+            else:
+                download_league_comprehensive(
+                    category_id=args.category_id,
+                    output_dir=args.output_dir,
+                    season_id=args.season_id,
+                    include_advanced=args.adv_players,
                     max_workers=args.concurrency,
                     verbose=not args.quiet,
                 )
@@ -704,31 +790,48 @@ notes:
                 verbose=not args.quiet,
             )
         elif args.action == "genius":
-            if args.subaction != "match":
-                print("Error: genius requires sub-action 'match'")
+            if args.subaction not in {"match", "playbyplay"}:
+                print("Error: genius requires sub-action 'match' or 'playbyplay'")
                 print("Example: uv run koris-api genius match 2514938")
+                print("Example: uv run koris-api genius playbyplay 2514938")
                 return
 
             match_id = args.target or args.match_id
             if not match_id:
                 print("Error: match ID is required")
                 print("Example: uv run koris-api genius match 2514938")
+                print("Example: uv run koris-api genius playbyplay 2514938")
                 return
 
-            output_file = args.output or f"genius_match_{match_id}.json"
-            boxscore = GeniusSportsAPI.get_match_boxscore(
-                str(match_id),
-                not_found_retries=0,
-            )
-            normalized = normalize_boxscore(boxscore, source="genius")
+            if args.subaction == "match":
+                output_file = args.output or f"genius_match_{match_id}.json"
+                boxscore = GeniusSportsAPI.get_match_boxscore(
+                    str(match_id),
+                    competition_id=args.competition_id or "12345",
+                    not_found_retries=0,
+                )
+                normalized = normalize_boxscore(boxscore, source="genius")
 
-            output_path = Path(output_file)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with output_path.open("w", encoding="utf-8") as f:
-                json.dump(normalized, f, indent=2, ensure_ascii=False)
+                output_path = Path(output_file)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                with output_path.open("w", encoding="utf-8") as f:
+                    json.dump(normalized, f, indent=2, ensure_ascii=False)
 
-            if not args.quiet:
-                print(f"Saved Genius Sports boxscore to {output_path.absolute()}")
+                if not args.quiet:
+                    print(f"Saved Genius Sports boxscore to {output_path.absolute()}")
+            else:
+                output_file = args.output or f"genius_playbyplay_{match_id}.json"
+                playbyplay = GeniusSportsAPI.get_match_playbyplay(str(match_id))
+
+                output_path = Path(output_file)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                with output_path.open("w", encoding="utf-8") as f:
+                    json.dump(playbyplay, f, indent=2, ensure_ascii=False)
+
+                if not args.quiet:
+                    print(
+                        f"Saved Genius Sports play-by-play to {output_path.absolute()}"
+                    )
 
     except Exception as e:
         if isinstance(e, GeniusSportsBoxscoreError):

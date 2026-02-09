@@ -88,6 +88,7 @@ class MatchViewScreen(Screen):
         self.match_data: Optional[dict] = None
         self.boxscore_data: Optional[dict] = None
         self.boxscore_match_id: Optional[str] = None  # Genius Sports match ID
+        self.boxscore_competition_id: Optional[str] = "12345"
         self.is_historical = False
 
     def compose(self) -> ComposeResult:
@@ -159,6 +160,12 @@ class MatchViewScreen(Screen):
                     # Extract Genius Sports match ID if available
                     if self.match_data and "match_external_id" in self.match_data:
                         self.boxscore_match_id = self.match_data["match_external_id"]
+                    if self.match_data and "category_external_id" in self.match_data:
+                        self.boxscore_competition_id = self.match_data[
+                            "category_external_id"
+                        ]
+                    if not self.boxscore_competition_id:
+                        self.boxscore_competition_id = "12345"
                     self.render_match_info()
                 else:
                     display.update(f"No data found for match {self.match_id}")
@@ -267,7 +274,8 @@ class MatchViewScreen(Screen):
 
             # Fetch the box score data
             boxscore_data = GeniusSportsAPI.get_match_boxscore(
-                str(self.boxscore_match_id)
+                str(self.boxscore_match_id),
+                competition_id=self.boxscore_competition_id or "12345",
             )
             normalized = normalize_boxscore(boxscore_data, source="genius")
             return {"data": normalized}
@@ -1943,6 +1951,11 @@ class KorisApp(App):
         for idx, match in enumerate(matches, start=1):
             match_id = match.get("Match ID")
             external_id = match.get("Match External ID")
+            category_external_id = match.get("Category External ID") or match.get(
+                "category_external_id"
+            )
+            if not category_external_id:
+                category_external_id = "12345"
             boxscore = None
             source = None
 
@@ -1968,9 +1981,14 @@ class KorisApp(App):
                         external_id = (
                             match_detail.get("match", {}).get("match_external_id")
                         )
+                        if not category_external_id:
+                            category_external_id = (
+                                match_detail.get("match", {}).get("category_external_id")
+                            ) or "12345"
                     if external_id:
                         boxscore_raw = GeniusSportsAPI.get_match_boxscore(
-                            str(external_id)
+                            str(external_id),
+                            competition_id=category_external_id,
                         )
                         boxscore = normalize_boxscore(boxscore_raw, source="genius")
                         source = "genius"

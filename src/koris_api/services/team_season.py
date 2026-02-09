@@ -11,7 +11,7 @@ from ..basketfi_api import BasketFiAPI
 from ..basketfi_parser import BasketFiParser
 from ..boxscore_normalizer import normalize_boxscore
 from ..genius_api import GeniusSportsAPI
-from .common import _get_genius_session
+from .common import _get_genius_session, resolve_genius_competition_id
 
 
 def download_team_season(
@@ -182,16 +182,27 @@ def download_team_season(
             for idx, match_data in enumerate(processed_matches):
                 external_id = match_data.get("match_external_id")
                 if external_id:
+                    competition_id_resolved = resolve_genius_competition_id(
+                        category_id=category_id,
+                        season_id=competition_id,
+                        match_category_external_id=match_data.get(
+                            "category_external_id"
+                        ),
+                    )
                     matches_to_fetch_advanced.append(
                         {
                             "index": idx,
                             "external_id": external_id,
+                            "competition_id": competition_id_resolved,
                             "home_team": match_data["home_team"],
                             "away_team": match_data["away_team"],
                             "match_date": match_data.get("date")
                             or match_data.get("match_date")
                             or "Unknown date",
-                            "url": f"https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{external_id}/boxscore",
+                            "url": GeniusSportsAPI.build_match_boxscore_url(
+                                str(external_id),
+                                competition_id=competition_id_resolved,
+                            ),
                         }
                     )
 
@@ -213,6 +224,7 @@ def download_team_season(
                     session = _get_genius_session(max_workers)
                     boxscore = GeniusSportsAPI.get_match_boxscore(
                         str(match_info["external_id"]),
+                        competition_id=match_info.get("competition_id"),
                         session=session,
                         log_fn=tqdm.write if verbose else None,
                     )

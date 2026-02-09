@@ -16,6 +16,7 @@ from .common import (
     _fetch_historical_matches,
     _get_genius_session,
     _is_historical_season,
+    resolve_genius_competition_id,
 )
 
 
@@ -26,6 +27,7 @@ def download_season_comprehensive(
     season_name: Optional[str] = None,
     include_advanced: bool = False,
     max_workers: int = 5,
+    show_header: bool = True,
     verbose: bool = True,
 ) -> None:
     """
@@ -53,7 +55,7 @@ def download_season_comprehensive(
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if verbose:
+    if verbose and show_header:
         print(f"\n{'=' * 80}")
         print("COMPREHENSIVE SEASON DATA DOWNLOAD")
         print(f"{'=' * 80}")
@@ -241,25 +243,79 @@ def download_season_comprehensive(
             processed_matches = BasketFiParser.parse_matches(
                 matches, season_name=season_name or competition_id, only_played=True
             )
-        matches_to_fetch_advanced = []
+    matches_to_fetch_advanced = []
+    existing_matches_by_id: Dict[str, Dict[str, Any]] = {}
+    existing_teams: list[Dict[str, Any]] = []
+    if include_advanced and output_path.exists():
+        try:
+            existing_payload = json.loads(output_path.read_text(encoding="utf-8"))
+            existing_matches = existing_payload.get("matches") or []
+            if isinstance(existing_matches, list):
+                for match in existing_matches:
+                    external_id = match.get("match_external_id")
+                    match_id = match.get("match_id")
+                    key = str(external_id) if external_id else str(match_id)
+                    if key:
+                        existing_matches_by_id[key] = match
+            existing_teams = existing_payload.get("teams") or []
+        except Exception:
+            existing_matches_by_id = {}
+            existing_teams = []
 
         # Check if we should fetch advanced stats for matches
         if include_advanced:
+            if existing_matches_by_id:
+                existing_with_boxscore = 0
+                existing_with_error = 0
+                for match in existing_matches_by_id.values():
+                    if match.get("boxscore"):
+                        existing_with_boxscore += 1
+                    elif match.get("advanced_boxscore_error"):
+                        existing_with_error += 1
+                if verbose:
+                    print(
+                        f"Resume: {existing_with_boxscore} with boxscore, "
+                        f"{existing_with_error} with error from existing file."
+                    )
             for idx, match_data in enumerate(processed_matches):
                 external_id = match_data.get("match_external_id")
+                match_id = match_data.get("match_id")
+                key = str(external_id) if external_id else str(match_id)
+                existing = existing_matches_by_id.get(key) if key else None
+                if existing:
+                    if existing.get("boxscore"):
+                        match_data["boxscore"] = existing.get("boxscore")
+                        continue
+                    # If previous run had an error, try again.
+                external_id = match_data.get("match_external_id")
                 if external_id:
+                    competition_id_resolved = resolve_genius_competition_id(
+                        category_id=category_id,
+                        season_id=competition_id,
+                        match_category_external_id=match_data.get(
+                            "category_external_id"
+                        ),
+                    )
                     matches_to_fetch_advanced.append(
                         {
                             "index": idx,
                             "external_id": external_id,
+                            "competition_id": competition_id_resolved,
                             "home_team": match_data["home_team"],
                             "away_team": match_data["away_team"],
                             "match_date": match_data.get("date")
                             or match_data.get("match_date")
                             or "Unknown date",
-                            "url": f"https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{external_id}/boxscore",
+                            "url": GeniusSportsAPI.build_match_boxscore_url(
+                                str(external_id),
+                                competition_id=competition_id_resolved,
+                            ),
                         }
                     )
+            if verbose:
+                print(
+                    f"Resume: {len(matches_to_fetch_advanced)} matches missing advanced boxscores."
+                )
 
         # Fetch advanced stats concurrently if requested
         matches_with_advanced = 0
@@ -279,6 +335,7 @@ def download_season_comprehensive(
                     session = _get_genius_session(max_workers)
                     boxscore = GeniusSportsAPI.get_match_boxscore(
                         str(match_info["external_id"]),
+                        competition_id=match_info.get("competition_id"),
                         session=session,
                         log_fn=tqdm.write if verbose else None,
                     )
@@ -376,41 +433,53 @@ def download_season_comprehensive(
         print(f"✓ Found {len(teams_list)} unique teams\n")
 
     # Step 3: Fetch detailed team data for each team
-    if verbose:
-        print("Step 3: Fetching detailed team data (rosters, officials, etc.)...")
+    if existing_teams:
+        comprehensive_data["teams"] = existing_teams
+        comprehensive_data["metadata"]["total_teams"] = len(existing_teams)
+        if verbose:
+            print("Step 3: Fetching detailed team data (rosters, officials, etc.)...")
+            print(f"✓ Reused {len(existing_teams)} teams from existing file\n")
+    else:
+        if verbose:
+            print("Step 3: Fetching detailed team data (rosters, officials, etc.)...")
 
-    teams_with_details = []
+        teams_with_details = []
 
-    for idx, team_info in enumerate(teams_list, 1):
-        team_id = team_info["team_id"]
-        team_name = team_info["team_name"]
+        for idx, team_info in enumerate(teams_list, 1):
+            team_id = team_info["team_id"]
+            team_name = team_info["team_name"]
+
+            if verbose:
+                print(
+                    f"\r\033[2K  [{idx}/{len(teams_list)}] Fetching {team_name}...",
+                    end="",
+                    flush=True,
+                )
+
+            try:
+                team_data = BasketFiAPI.get_team(str(team_id))
+                if "team" in team_data:
+                    teams_with_details.append(team_data["team"])
+                else:
+                    teams_with_details.append(team_info)
+            except Exception as e:
+                if verbose:
+                    print(f"    ✗ Error: {e}")
+                teams_with_details.append({**team_info, "error": str(e)})
+
+        comprehensive_data["teams"] = teams_with_details
+        comprehensive_data["metadata"]["total_teams"] = len(teams_with_details)
 
         if verbose:
-            print(f"  [{idx}/{len(teams_list)}] Fetching {team_name}...")
-
-        try:
-            team_data = BasketFiAPI.get_team(str(team_id))
-            if "team" in team_data:
-                teams_with_details.append(team_data["team"])
-            else:
-                teams_with_details.append(team_info)
-        except Exception as e:
-            if verbose:
-                print(f"    ✗ Error: {e}")
-            teams_with_details.append({**team_info, "error": str(e)})
-
-    comprehensive_data["teams"] = teams_with_details
-    comprehensive_data["metadata"]["total_teams"] = len(teams_with_details)
-
-    if verbose:
-        print(f"✓ Fetched {len(teams_with_details)} teams\n")
+            print()
+            print(f"✓ Fetched {len(teams_with_details)} teams\n")
 
     # Save everything to a single comprehensive file
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(comprehensive_data, f, indent=2, ensure_ascii=False)
 
     # Final summary
-    if verbose:
+    if verbose and show_header:
         print(f"\n{'=' * 80}")
         print("COMPREHENSIVE SEASON DOWNLOAD COMPLETE!")
         print(f"{'=' * 80}")

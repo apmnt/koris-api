@@ -47,7 +47,20 @@ class BasketFiParser:
         Returns:
             List of match dictionaries, empty list if not found
         """
-        return matches_data.get("matches", [])
+        matches = matches_data.get("matches", [])
+        if not isinstance(matches, list):
+            return []
+        for match in matches:
+            status = match.get("status")
+            if status not in {"Played", "Fixture"}:
+                home_score = match.get("fs_A")
+                status = (
+                    "Played"
+                    if home_score not in (None, "")
+                    else "Fixture"
+                )
+                match["status"] = status
+        return matches
 
     @staticmethod
     def is_match_played(match: Dict[str, Any]) -> bool:
@@ -84,9 +97,14 @@ class BasketFiParser:
         home_score = match.get("fs_A")
         away_score = match.get("fs_B")
 
+        status = match.get("status")
+        if status not in {"Played", "Fixture"}:
+            status = "Played" if home_score not in (None, "") else "Fixture"
+
         match_data = {
             "match_id": match.get("match_id"),
             "match_external_id": match.get("match_external_id"),
+            "category_external_id": match.get("category_external_id"),
             "date": match.get("date"),
             "time": match.get("time"),
             "home_team": match.get("club_A_name"),
@@ -95,7 +113,7 @@ class BasketFiParser:
             "away_team_id": match.get("team_B_id"),
             "home_score": home_score,
             "away_score": away_score,
-            "status": match.get("status"),
+            "status": status,
             "venue": match.get("venue_name"),
             "competition": match.get("competition_name"),
             "category": match.get("category_name"),

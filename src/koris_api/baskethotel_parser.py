@@ -383,3 +383,432 @@ class BasketHotelParser:
             )
 
         return {"teams": teams}
+
+    @staticmethod
+    def parse_playbyplay_html(html: str) -> Dict[str, Any]:
+        """
+        Parse BasketHotel play-by-play HTML to extract game events.
+
+        Returns:
+            Dictionary containing parsed play-by-play data.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result: Dict[str, Any] = {"events": [], "teams": {}}
+        current_period: str | None = "P1"
+        inferred_elapsed_clock = False
+        max_minutes_seen = 0
+
+        header = soup.find("div", class_="mbt-v2-header")
+        if header and isinstance(header, Tag):
+            text = header.get_text(separator="\n", strip=True)
+            lines = [line for line in text.split("\n") if line]
+            if len(lines) >= 2:
+                result["teams"]["home"] = lines[0]
+                result["teams"]["away"] = lines[1]
+
+        table = soup.find("table", class_=re.compile(r"play-by-play", re.I))
+        if not table or not isinstance(table, Tag):
+            return result
+
+        tbody = table.find("tbody")
+        rows = tbody.find_all("tr") if tbody and isinstance(tbody, Tag) else []
+
+        for row in rows:
+            if not isinstance(row, Tag):
+                continue
+
+            cells = row.find_all("td")
+            if not cells:
+                continue
+
+            if (
+                len(cells) == 1
+                and cells[0].get("colspan")
+                and "game-action" in (cells[0].get("class") or [])
+            ):
+                action_text = cells[0].get_text(" ", strip=True)
+                event_type = "game_action"
+                period = None
+                if "jakso" in action_text.lower():
+                    period_match = re.search(r"Jakso\s+(\d+)", action_text, re.I)
+                    if period_match:
+                        period = period_match.group(1)
+                        event_type = "period_end"
+                        current_period = f"P{period}"
+                if "ottelu päättyi" in action_text.lower():
+                    event_type = "game_end"
+                result["events"].append(
+                    {
+                        "event_type": event_type,
+                        "period": current_period if event_type == "period_end" else None,
+                        "action": action_text,
+                        "time": None,
+                        "score": None,
+                        "team": None,
+                        "players": [],
+                    }
+                )
+                continue
+
+            while len(cells) < 4:
+                cells.append(None)
+
+            time_text = cells[0].get_text(strip=True) if cells[0] else None
+            if time_text and ":" in time_text:
+                try:
+                    minute_part = int(time_text.split(":", 1)[0])
+                    max_minutes_seen = max(max_minutes_seen, minute_part)
+                    if minute_part >= 12:
+                        inferred_elapsed_clock = True
+                except ValueError:
+                    pass
+            score_text = cells[1].get_text(strip=True) if cells[1] else None
+            if score_text and ":" in score_text:
+                score_text = score_text.replace(":", "-")
+
+            team_name = None
+            if cells[2]:
+                team_span = cells[2].find("span", class_="mbt-v2-text-light")
+                if team_span:
+                    team_name = team_span.get_text(strip=True)
+                if not team_name:
+                    img = cells[2].find("img")
+                    if img and isinstance(img, Tag):
+                        team_name = img.get("alt") or None
+                if not team_name:
+                    team_name = cells[2].get_text(strip=True) or None
+
+            action_cell = cells[3]
+            if not action_cell or not isinstance(action_cell, Tag):
+                continue
+
+            raw_action = action_cell.get_text(" ", strip=True)
+            players: list[Dict[str, Any]] = []
+            seen: set[tuple] = set()
+
+            for link in action_cell.find_all("a"):
+                if not isinstance(link, Tag):
+                    continue
+                player_name = link.get_text(strip=True) or None
+                if not player_name:
+                    continue
+                player_id = link.get("player_id") or None
+                season_id = link.get("season_id") or None
+                href = link.get("href") or ""
+                league_id_match = re.search(r"league_id=(\d+)", href)
+                league_id = league_id_match.group(1) if league_id_match else None
+
+                number = None
+                parent_text = (
+                    " ".join(link.parent.stripped_strings)
+                    if link.parent and isinstance(link.parent, Tag)
+                    else ""
+                )
+                if parent_text:
+                    number_match = re.search(
+                        rf"\((\d+)\)\s*{re.escape(player_name)}", parent_text
+                    )
+                    if number_match:
+                        number = number_match.group(1)
+                if number is None:
+                    number_match = re.search(
+                        rf"\((\d+)\)\s*{re.escape(player_name)}", raw_action
+                    )
+                    if number_match:
+                        number = number_match.group(1)
+
+                key = (player_id or "", player_name or "", number or "")
+                if key in seen:
+                    continue
+                seen.add(key)
+                players.append(
+                    {
+                        "player_id": player_id,
+                        "season_id": season_id,
+                        "league_id": league_id,
+                        "name": player_name,
+                        "number": number,
+                    }
+                )
+
+            if not players:
+                # Fallback for widget responses without player links.
+                for number, name in re.findall(
+                    r"\((\d+)\)\s*([A-Za-zÀ-ÖØ-öø-ÿ'’.\\. \\-]+)",
+                    raw_action,
+                ):
+                    cleaned_name = " ".join(name.split()).strip()
+                    if cleaned_name:
+                        cleaned_name = re.split(
+                            r"\b(tuli|meni|onnistui|epäonnistui|otti|antoi|teki|riisti|torjui|hyökkäyslevypallo|puolustuslevypallo)\b",
+                            cleaned_name,
+                            1,
+                            flags=re.IGNORECASE,
+                        )[0].strip()
+                    if not cleaned_name:
+                        continue
+                    key = ("", cleaned_name, number)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    players.append(
+                        {
+                            "player_id": None,
+                            "season_id": None,
+                            "league_id": None,
+                            "name": cleaned_name,
+                            "number": number,
+                        }
+                    )
+
+            action = raw_action
+            for player in players:
+                if player.get("name"):
+                    name = re.escape(player["name"])
+                    action = re.sub(rf"\(\d+\)\s*{name}", "", action)
+                    action = re.sub(rf"{name}", "", action)
+            action = " ".join(action.split()).strip() or raw_action
+
+            lowered = action.lower()
+            event_type = None
+            if "tuli" in lowered and "kentälle" in lowered:
+                event_type = "sub_in"
+            elif "meni" in lowered and "vaihtoon" in lowered:
+                event_type = "sub_out"
+            elif "onnistui" in lowered and "pisteen" in lowered:
+                event_type = "shot_made"
+            elif "epäonnistui" in lowered and "pisteen" in lowered:
+                event_type = "shot_missed"
+            elif "syötön" in lowered:
+                event_type = "assist"
+            elif "puolustuslevypallon" in lowered:
+                event_type = "def_rebound"
+            elif "hyökkäyslevypallon" in lowered:
+                event_type = "off_rebound"
+
+            period_value = current_period
+            if inferred_elapsed_clock and time_text and ":" in time_text:
+                try:
+                    minutes = int(time_text.split(":", 1)[0])
+                    period_value = f"P{minutes // 10 + 1}"
+                except ValueError:
+                    period_value = current_period
+
+            result["events"].append(
+                {
+                    "event_type": event_type,
+                    "period": period_value,
+                    "time": time_text or None,
+                    "score": score_text or None,
+                    "team": team_name,
+                    "action": action,
+                    "action_raw": raw_action,
+                    "players": players,
+                }
+            )
+
+        return result
+
+    @staticmethod
+    def normalize_playbyplay_to_genius_format(
+        playbyplay: Dict[str, Any],
+        team_map: Dict[str, str] | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Normalize BasketHotel play-by-play to match Genius Sports format.
+
+        Returns:
+            Dictionary containing match_info, events, players, possessions.
+        """
+        team_map = team_map or {}
+        from .genius_parser import GeniusSportsParser
+
+        players: list[Dict[str, Any]] = []
+        player_index: Dict[tuple, int] = {}
+
+        def _team_id(team_name: str | None) -> str | None:
+            if not team_name:
+                return None
+            if team_name in team_map:
+                return team_map[team_name]
+            return None
+
+        def _register_player(
+            team_id: str | None, number: str | None, name: str | None
+        ) -> int | None:
+            if not name and not number:
+                return None
+            key = (team_id or "", number or "", name or "")
+            existing = player_index.get(key)
+            if existing is not None:
+                return existing
+            player_id = len(players) + 1
+            player_index[key] = player_id
+            players.append(
+                {
+                    "player_id": player_id,
+                    "name": name,
+                    "number": number,
+                    "team": team_id,
+                }
+            )
+            return player_id
+
+        def _infer_event_type(action_raw: str, base_type: str | None) -> str | None:
+            lowered = action_raw.lower()
+            if base_type in {"sub_in", "sub_out"}:
+                return "substitution"
+            if "hyökkääjän virhe" in lowered:
+                return "turnover"
+            if "huonon syötön" in lowered:
+                return "turnover"
+            if "vapaaheitto" in lowered:
+                return "freethrow"
+            if "3 pisteen" in lowered:
+                return "3pt"
+            if "2 pisteen" in lowered:
+                return "2pt"
+            if base_type in {"shot_made", "shot_missed"}:
+                return "shot"
+            if base_type in {"def_rebound", "off_rebound"}:
+                return "rebound"
+            if base_type == "assist":
+                return "assist"
+            if "riisti" in lowered:
+                return "steal"
+            if "torjui" in lowered:
+                return "block"
+            if "virhe" in lowered:
+                return "foul"
+            if "syötön" in lowered:
+                return "assist"
+            if "levypallon" in lowered:
+                return "rebound"
+            return base_type
+
+        def _format_action(player_name: str | None, detail: str | None) -> str | None:
+            if not detail:
+                return None
+            if player_name:
+                return f"{player_name}: {detail}"
+            return detail
+
+        events: list[Dict[str, Any]] = []
+        current_score = "0-0"
+        for event in playbyplay.get("events", []):
+            if not isinstance(event, dict):
+                continue
+            base_type = event.get("event_type")
+            action_raw = event.get("action_raw") or event.get("action") or ""
+            event_type = _infer_event_type(action_raw, base_type)
+            team_name = event.get("team")
+            team_id = _team_id(team_name)
+            time_str = event.get("time")
+            score = event.get("score")
+            if score:
+                current_score = score
+            else:
+                score = current_score
+
+            players_in_event = event.get("players") or []
+            primary_player = players_in_event[0] if players_in_event else None
+            player_name = primary_player.get("name") if primary_player else None
+            player_number = primary_player.get("number") if primary_player else None
+            player_id = _register_player(team_id, player_number, player_name)
+
+            detail = None
+            lowered = action_raw.lower()
+            if event_type in {"2pt", "3pt", "freethrow"}:
+                if "onnistui" in lowered:
+                    detail = "shot_made"
+                elif "epäonnistui" in lowered:
+                    detail = "shot_missed"
+                else:
+                    detail = "shot_taken"
+            elif event_type == "rebound":
+                if "puolustus" in lowered:
+                    detail = "def_rebound"
+                elif "hyökkäys" in lowered:
+                    detail = "off_rebound"
+                else:
+                    detail = "rebound"
+            elif event_type == "turnover":
+                detail = "turnover"
+            elif event_type == "steal":
+                detail = "steal"
+            elif event_type == "block":
+                detail = "block"
+            elif event_type == "assist":
+                detail = "assist"
+            elif event_type == "foul":
+                detail = "foul"
+            elif event_type == "substitution":
+                detail = "substitution"
+
+            events.append(
+                {
+                    "event_type": event_type,
+                    "period": event.get("period"),
+                    "team": team_id,
+                    "time": time_str,
+                    "score": score,
+                    "action": _format_action(player_name, detail) or action_raw,
+                    "player_number": player_number,
+                    "player_name": player_name,
+                    "player_id": player_id,
+                }
+            )
+
+        match_info = {
+            "home_team": playbyplay.get("game_teams", {})
+            .get("home", {})
+            .get("name"),
+            "away_team": playbyplay.get("game_teams", {})
+            .get("away", {})
+            .get("name"),
+            "home_score": playbyplay.get("score", {}).get("home"),
+            "away_score": playbyplay.get("score", {}).get("away"),
+            "status": None,
+            "datetime": playbyplay.get("game_info", {}).get("date"),
+            "venue": playbyplay.get("game_info", {}).get("venue"),
+        }
+
+        if not events or events[0].get("event_type") != "game":
+            events.insert(
+                0,
+                {
+                    "event_type": "game",
+                    "period": "reg",
+                    "team": "0",
+                    "time": "",
+                    "score": "0-0",
+                    "action": "game",
+                    "player_number": None,
+                    "player_name": None,
+                    "player_id": None,
+                },
+            )
+            events.insert(
+                1,
+                {
+                    "event_type": "period",
+                    "period": "reg",
+                    "team": "0",
+                    "time": "",
+                    "score": "0-0",
+                    "action": "period",
+                    "player_number": None,
+                    "player_name": None,
+                    "player_id": None,
+                },
+            )
+
+        GeniusSportsParser._populate_running_score(events)
+        possessions = GeniusSportsParser._calculate_possessions(events)
+
+        return {
+            "match_info": match_info,
+            "events": events,
+            "players": players,
+            "possessions": possessions,
+        }

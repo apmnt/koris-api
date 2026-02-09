@@ -42,6 +42,7 @@ class GeniusSportsAPI:
     def get_match_boxscore(
         cls,
         match_id: str,
+        competition_id: Optional[str] = None,
         session: Optional[requests.Session] = None,
         retries: int = 3,
         backoff_seconds: float = 0.6,
@@ -55,6 +56,7 @@ class GeniusSportsAPI:
 
         Args:
             match_id: The match identifier from Genius Sports
+            competition_id: Optional Genius Sports competition identifier
             not_found_retries: Unused (404s are not retried)
             not_found_backoff_seconds: Unused (404s are not retried)
             log_fn: Optional callback for retry logging
@@ -64,6 +66,7 @@ class GeniusSportsAPI:
         """
         html, _ = cls.fetch_match_boxscore_html(
             match_id=match_id,
+            competition_id=competition_id or "12345",
             session=session,
             retries=retries,
             backoff_seconds=backoff_seconds,
@@ -78,6 +81,7 @@ class GeniusSportsAPI:
     def fetch_match_boxscore_html(
         cls,
         match_id: str,
+        competition_id: Optional[str] = None,
         session: Optional[requests.Session] = None,
         retries: int = 3,
         backoff_seconds: float = 0.6,
@@ -86,10 +90,9 @@ class GeniusSportsAPI:
         not_found_backoff_seconds: float = 2.0,
         log_fn: Optional[Callable[[str], None]] = None,
     ) -> tuple[str, str]:
-        url_templates = [
-            "https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{match_id}/boxscore",
-            "https://hosted.dcd.shared.geniussports.com/FBAA/fi/match/{match_id}/boxscore",
-        ]
+        url_templates = cls._get_match_boxscore_url_templates(
+            match_id=match_id, competition_id=competition_id or "12345"
+        )
         client = session or requests
         last_error: Optional[Exception] = None
         last_url: Optional[str] = None
@@ -107,13 +110,14 @@ class GeniusSportsAPI:
                             headers=None if session is not None else cls._DEFAULT_HEADERS,
                         )
                         if response.status_code == 404:
-                            raise GeniusSportsBoxscoreError(
+                            last_error = GeniusSportsBoxscoreError(
                                 match_id=match_id,
                                 url=url,
                                 status_code=404,
                                 error_type="HTTPError",
                                 message="HTTP 404 Not Found",
                             )
+                            break
                         if response.status_code >= 500 and attempt <= retries:
                             time.sleep(backoff_seconds * attempt)
                             continue
@@ -128,13 +132,14 @@ class GeniusSportsAPI:
                     except requests.exceptions.HTTPError as exc:
                         last_error = exc
                         if exc.response is not None and exc.response.status_code == 404:
-                            raise GeniusSportsBoxscoreError(
+                            last_error = GeniusSportsBoxscoreError(
                                 match_id=match_id,
                                 url=url,
                                 status_code=404,
                                 error_type="HTTPError",
                                 message=str(exc),
                             )
+                            break
                         if attempt <= retries:
                             time.sleep(backoff_seconds * attempt)
                             continue
@@ -142,6 +147,8 @@ class GeniusSportsAPI:
 
             break
 
+        if isinstance(last_error, GeniusSportsBoxscoreError):
+            raise last_error
         if isinstance(last_error, requests.exceptions.HTTPError):
             status_code = (
                 last_error.response.status_code if last_error.response else None
@@ -170,6 +177,26 @@ class GeniusSportsAPI:
                 message=str(last_error),
             )
         raise GeniusSportsBoxscoreError(match_id=match_id, url=last_url)
+
+    @classmethod
+    def _get_match_boxscore_url_templates(
+        cls, match_id: str, competition_id: Optional[str] = None
+    ) -> List[str]:
+        competition_id = competition_id or "12345"
+        return [
+            f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/match/{match_id}/boxscore",
+            f"https://hosted.dcd.shared.geniussports.com/FBAA/fi/competition/{competition_id}/match/{match_id}/boxscore",
+        ]
+
+    @classmethod
+    def build_match_boxscore_url(
+        cls, match_id: str, competition_id: Optional[str] = None, language: str = "en"
+    ) -> str:
+        competition_id = competition_id or "12345"
+        return (
+            "https://hosted.dcd.shared.geniussports.com/FBAA/"
+            f"{language}/competition/{competition_id}/match/{match_id}/boxscore"
+        )
 
     @classmethod
     def get_match_playbyplay(cls, match_id: str) -> Dict[str, Any]:

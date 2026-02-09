@@ -101,4 +101,11 @@ The old `test_api.py` file has been replaced with:
 2. **`test_integration.py`** - Minimal integration tests  
 3. **`fixtures/`** - Pre-generated test data
 
+### Performance CLI Tests (`test_performance_cli.py`)
+- **Runtime**: Long (full-season downloads with advanced stats)
+- **Purpose**: Measure CLI performance for historical and modern seasons
+- **Opt-in**: Set `RUN_PERFORMANCE_TESTS=1`
+- **Run with**: `RUN_PERFORMANCE_TESTS=1 uv run pytest tests/test_performance_cli.py -v`
+- **Optional limits**: `KORIS_PERF_MAX_SECONDS_2010`, `KORIS_PERF_MAX_SECONDS_2024`
+
 The original tests are preserved in `test_api.py.old` if needed for reference.

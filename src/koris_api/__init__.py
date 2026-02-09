@@ -1,10 +1,17 @@
+import requests
+
 from .basketfi_api import BasketFiAPI
 from .baskethotel_api import BasketHotelAPI
 from .genius_api import GeniusSportsAPI
 from .services.baskethotel_season_boxscores import (
     download_baskethotel_season_boxscores,
 )
-from .services.common import load_genius_ids
+from .services.common import (
+    _fetch_baskethotel_schedule_game_ids,
+    _fetch_baskethotel_team_map,
+    _resolve_baskethotel_season_id,
+    load_genius_ids,
+)
 from .services.league_boxscores import (
     download_league_all_seasons,
     download_league_boxscores_all_seasons,
@@ -35,6 +42,10 @@ __all__ = [
     "KorisAPI",  # Backward compatibility
     "BasketHotelAPI",
     "GeniusSportsAPI",
+    "requests",
+    "_fetch_baskethotel_schedule_game_ids",
+    "_fetch_baskethotel_team_map",
+    "_resolve_baskethotel_season_id",
     "load_genius_ids",
     "download_season_comprehensive",
     "download_baskethotel_season_boxscores",

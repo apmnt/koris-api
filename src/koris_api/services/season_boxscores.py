@@ -11,7 +11,7 @@ from ..basketfi_api import BasketFiAPI
 from ..basketfi_parser import BasketFiParser
 from ..boxscore_normalizer import normalize_boxscore
 from ..genius_api import GeniusSportsAPI, GeniusSportsBoxscoreError
-from .common import _get_genius_session
+from .common import _get_genius_session, resolve_genius_competition_id
 
 
 def download_matches_with_boxscores(
@@ -19,6 +19,7 @@ def download_matches_with_boxscores(
     category_id: str,
     output_file: str,
     include_advanced: bool = False,
+    include_playbyplay: bool = False,
     limit_games: Optional[int] = None,
     max_workers: int = 5,
     verbose: bool = True,
@@ -48,13 +49,94 @@ def download_matches_with_boxscores(
     elif limit_games is not None:
         processed_matches = processed_matches[:limit_games]
     matches_to_fetch_advanced = []
+    existing_matches_by_id: Dict[str, Dict[str, Any]] = {}
+
+    # If output file already exists, reuse any previously fetched boxscores/playbyplay/errors.
+    if include_advanced or include_playbyplay:
+        output_path = Path(output_file)
+        if output_path.exists():
+            try:
+                existing_payload = json.loads(output_path.read_text(encoding="utf-8"))
+                existing_matches = existing_payload.get("matches") or []
+                if isinstance(existing_matches, list):
+                    for match in existing_matches:
+                        external_id = match.get("match_external_id")
+                        match_id = match.get("match_id")
+                        key = str(external_id) if external_id else str(match_id)
+                        if key:
+                            existing_matches_by_id[key] = match
+            except Exception:
+                existing_matches_by_id = {}
 
     # Check if we should fetch advanced stats for matches
     if include_advanced:
+        if existing_matches_by_id and verbose:
+            existing_with_boxscore = 0
+            existing_with_error = 0
+            for match in existing_matches_by_id.values():
+                if match.get("boxscore"):
+                    existing_with_boxscore += 1
+                elif match.get("advanced_boxscore_error"):
+                    existing_with_error += 1
+            print(
+                f"Resume: {existing_with_boxscore} with boxscore, "
+                f"{existing_with_error} with error from existing file."
+            )
         for idx, match_data in enumerate(processed_matches):
+            external_id = match_data.get("match_external_id")
+            match_id = match_data.get("match_id")
+            key = str(external_id) if external_id else str(match_id)
+            existing = existing_matches_by_id.get(key) if key else None
+            if existing:
+                if existing.get("boxscore"):
+                    match_data["boxscore"] = existing.get("boxscore")
+                    continue
             external_id = match_data.get("match_external_id")
             if external_id:
                 matches_to_fetch_advanced.append(
+                    {
+                        "index": idx,
+                        "external_id": external_id,
+                        "competition_id": resolve_genius_competition_id(
+                            category_id=category_id,
+                            season_id=season_id,
+                            match_category_external_id=match_data.get(
+                                "category_external_id"
+                            ),
+                        ),
+                        "home_team": match_data["home_team"],
+                        "away_team": match_data["away_team"],
+                    }
+                )
+        if verbose:
+            print(
+                f"Resume: {len(matches_to_fetch_advanced)} matches missing advanced boxscores."
+            )
+
+    matches_to_fetch_playbyplay = []
+    if include_playbyplay:
+        if existing_matches_by_id and verbose:
+            existing_with_pbp = 0
+            existing_with_pbp_error = 0
+            for match in existing_matches_by_id.values():
+                if match.get("playbyplay"):
+                    existing_with_pbp += 1
+                elif match.get("playbyplay_error"):
+                    existing_with_pbp_error += 1
+            print(
+                f"Resume: {existing_with_pbp} with playbyplay, "
+                f"{existing_with_pbp_error} with error from existing file."
+            )
+        for idx, match_data in enumerate(processed_matches):
+            external_id = match_data.get("match_external_id")
+            match_id = match_data.get("match_id")
+            key = str(external_id) if external_id else str(match_id)
+            existing = existing_matches_by_id.get(key) if key else None
+            if existing and existing.get("playbyplay"):
+                match_data["playbyplay"] = existing.get("playbyplay")
+                continue
+            if external_id:
+                matches_to_fetch_playbyplay.append(
                     {
                         "index": idx,
                         "external_id": external_id,
@@ -62,10 +144,16 @@ def download_matches_with_boxscores(
                         "away_team": match_data["away_team"],
                     }
                 )
+        if verbose:
+            print(
+                f"Resume: {len(matches_to_fetch_playbyplay)} matches missing playbyplay."
+            )
 
     # Fetch advanced stats concurrently if requested
     matches_with_advanced = 0
     matches_failed = 0
+    matches_with_playbyplay = 0
+    matches_playbyplay_failed = 0
 
     if include_advanced and matches_to_fetch_advanced:
         if verbose:
@@ -91,6 +179,7 @@ def download_matches_with_boxscores(
                 session = _get_genius_session(max_workers)
                 boxscore = GeniusSportsAPI.get_match_boxscore(
                     str(match_info["external_id"]),
+                    competition_id=match_info.get("competition_id"),
                     session=session,
                     log_fn=tqdm.write if verbose else None,
                 )
@@ -186,6 +275,54 @@ def download_matches_with_boxscores(
 
                     pbar.update(1)
 
+    if include_playbyplay and matches_to_fetch_playbyplay:
+        if verbose:
+            print(
+                f"\nFetching play-by-play for {len(matches_to_fetch_playbyplay)} played matches..."
+            )
+
+        def fetch_playbyplay(
+            match_info: Dict[str, Any],
+        ) -> tuple[int, Optional[Dict[str, Any]], Optional[str]]:
+            try:
+                playbyplay = GeniusSportsAPI.get_match_playbyplay(
+                    str(match_info["external_id"])
+                )
+                return (match_info["index"], playbyplay, None)
+            except Exception as e:
+                return (match_info["index"], None, str(e))
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(fetch_playbyplay, match_info): match_info
+                for match_info in matches_to_fetch_playbyplay
+            }
+
+            with tqdm(
+                total=len(matches_to_fetch_playbyplay),
+                desc="Fetching play-by-play",
+                disable=not verbose,
+            ) as pbar:
+                for future in as_completed(futures):
+                    match_info = futures[future]
+                    index, playbyplay, error = future.result()
+                    if playbyplay:
+                        processed_matches[index]["playbyplay"] = playbyplay
+                        matches_with_playbyplay += 1
+                    else:
+                        matches_playbyplay_failed += 1
+                        if error:
+                            processed_matches[index]["playbyplay_error"] = {
+                                "error_message": error,
+                                "match_external_id": match_info.get("external_id"),
+                            }
+                        if verbose and error:
+                            tqdm.write(
+                                f"  ✗ {match_info['home_team']} vs {match_info['away_team']}: "
+                                f"{error[:80]}"
+                            )
+                    pbar.update(1)
+
     if limit_games is not None and include_advanced:
 
         def has_player_stats(match: Dict[str, Any]) -> bool:
@@ -207,6 +344,12 @@ def download_matches_with_boxscores(
     matches_failed = sum(
         1 for match in processed_matches if "advanced_boxscore_error" in match
     )
+    matches_with_playbyplay = sum(
+        1 for match in processed_matches if "playbyplay" in match
+    )
+    matches_playbyplay_failed = sum(
+        1 for match in processed_matches if "playbyplay_error" in match
+    )
 
     # Save to file
     output_path = Path(output_file)
@@ -225,6 +368,9 @@ def download_matches_with_boxscores(
             "matches_with_boxscore": matches_with_advanced,
             "matches_failed": matches_failed,
             "include_advanced_stats": include_advanced,
+            "matches_with_playbyplay": matches_with_playbyplay,
+            "matches_playbyplay_failed": matches_playbyplay_failed,
+            "include_playbyplay": include_playbyplay,
             "limit_games": limit_games,
             "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
         },
@@ -262,6 +408,12 @@ def download_matches_with_boxscores(
                         error_types.items(), key=lambda x: -x[1]
                     ):
                         print(f"    • {err_type}: {count}")
+        if include_playbyplay:
+            print(
+                f"  - Play-by-play: {matches_with_playbyplay}/{len(matches_to_fetch_playbyplay)} matches"
+            )
+            if matches_playbyplay_failed > 0:
+                print(f"  - Play-by-play failed: {matches_playbyplay_failed}")
         print(f"{'=' * 60}")
 
 
@@ -302,6 +454,13 @@ def retry_advanced_boxscores_404s(
                 {
                     "index": idx,
                     "external_id": external_id,
+                    "competition_id": resolve_genius_competition_id(
+                        category_id=match.get("category_id")
+                        or data.get("metadata", {}).get("category_id"),
+                        season_id=match.get("season")
+                        or data.get("metadata", {}).get("season_id"),
+                        match_category_external_id=match.get("category_external_id"),
+                    ),
                     "home_team": match.get("home_team"),
                     "away_team": match.get("away_team"),
                 }
@@ -333,6 +492,7 @@ def retry_advanced_boxscores_404s(
             session = _get_genius_session(max_workers)
             boxscore = GeniusSportsAPI.get_match_boxscore(
                 str(match_info["external_id"]),
+                competition_id=match_info.get("competition_id"),
                 session=session,
                 log_fn=tqdm.write if verbose else None,
             )

@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any, List
 from urllib.parse import urlencode
 
 import requests
+import sys
 from tqdm import tqdm
 
 from ..basketfi_api import BasketFiAPI
@@ -73,6 +74,25 @@ def load_genius_ids(
     return list(dict.fromkeys([id for id in genius_ids if id]))
 
 
+def resolve_genius_competition_id(
+    category_id: Optional[str],
+    season_id: Optional[str] = None,
+    match_category_external_id: Optional[str] = None,
+    fallback_id: str = "12345",
+) -> str:
+    if match_category_external_id and str(match_category_external_id).strip():
+        return str(match_category_external_id).strip()
+    if category_id and season_id:
+        ids = load_genius_ids(str(category_id), str(season_id))
+        if ids:
+            return str(ids[0])
+    if category_id:
+        ids = load_genius_ids(str(category_id), None)
+        if ids:
+            return str(ids[0])
+    return fallback_id
+
+
 _BASKETHOTEL_DEFAULT_SEASON_ID = "121333"
 _BASKETHOTEL_DEFAULT_LEAGUE_ID = "2"
 _BASKETHOTEL_LEAGUE_ID_BY_CATEGORY = {
@@ -136,11 +156,11 @@ def _extract_season_start_year(season_name: Optional[str]) -> Optional[int]:
 def _is_historical_season(season: Dict[str, Any]) -> bool:
     season_year = _extract_season_start_year(season.get("season_name"))
     if season_year is not None:
-        return season_year < 2022
+        return season_year <= 2023
     season_start_date = season.get("season_start_date")
     if season_start_date:
         try:
-            return datetime.strptime(season_start_date, "%Y-%m-%d").year < 2022
+            return datetime.strptime(season_start_date, "%Y-%m-%d").year <= 2023
         except ValueError:
             return False
     return False
@@ -170,6 +190,11 @@ def _fetch_baskethotel_seasons(league_id: str) -> Dict[str, str]:
     if league_id in _BASKETHOTEL_SEASON_CACHE:
         return _BASKETHOTEL_SEASON_CACHE[league_id]
 
+    requests_client = requests
+    maybe_public = sys.modules.get("koris_api")
+    if maybe_public and hasattr(maybe_public, "requests"):
+        requests_client = getattr(maybe_public, "requests")
+
     params = {
         "api": "b9680714b4026e011e13a43ccb7dfa201932958c",
         "lang": "fi",
@@ -183,7 +208,7 @@ def _fetch_baskethotel_seasons(league_id: str) -> Dict[str, str]:
         "request[0][param][template]": "v1",
     }
     url = f"https://widgets.baskethotel.com/widget-service/show?{urlencode(params)}"
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response = requests_client.get(url, headers={"User-Agent": "Mozilla/5.0"})
     response.raise_for_status()
     html = BasketHotelParser.extract_html_from_response(response.text)
 
@@ -370,14 +395,31 @@ def _fetch_historical_matches(
 ) -> List[Dict[str, Any]]:
     client = BasketHotelAPI()
     league_id = _get_baskethotel_league_id(category_id)
+    maybe_public = sys.modules.get("koris_api")
+    resolve_season_id = (
+        getattr(maybe_public, "_resolve_baskethotel_season_id", None)
+        if maybe_public
+        else None
+    ) or _resolve_baskethotel_season_id
+    fetch_team_map = (
+        getattr(maybe_public, "_fetch_baskethotel_team_map", None)
+        if maybe_public
+        else None
+    ) or _fetch_baskethotel_team_map
+    fetch_schedule_ids = (
+        getattr(maybe_public, "_fetch_baskethotel_schedule_game_ids", None)
+        if maybe_public
+        else None
+    ) or _fetch_baskethotel_schedule_game_ids
+
     resolved_season_id = (
-        _resolve_baskethotel_season_id(season_name, league_id)
+        resolve_season_id(season_name, league_id)
         or season_id
         or _BASKETHOTEL_DEFAULT_SEASON_ID
     )
-    team_map = _fetch_baskethotel_team_map(resolved_season_id, league_id)
+    team_map = fetch_team_map(resolved_season_id, league_id)
 
-    game_ids = _fetch_baskethotel_schedule_game_ids(
+    game_ids = fetch_schedule_ids(
         resolved_season_id, league_id, verbose
     )
     if not game_ids:

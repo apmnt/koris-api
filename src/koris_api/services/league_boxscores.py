@@ -18,8 +18,10 @@ from .common import (
     _fetch_historical_matches,
     _get_genius_session,
     _is_historical_season,
+    resolve_genius_competition_id,
 )
 from .season_comprehensive import download_season_comprehensive
+from .season_boxscores import download_matches_with_boxscores
 
 
 def download_league_boxscores_all_seasons(
@@ -98,10 +100,20 @@ def download_league_boxscores_all_seasons(
         "seasons": [],
     }
 
+    total_new_games = 0
+    total_boxscores_fixed = 0
+
     for idx, season in enumerate(filtered, 1):
         season_name = season.get("season_name") or season.get("competition_id")
         competition_id = season.get("competition_id") or season.get("season_id")
         is_historical = _is_historical_season(season)
+
+        existing_match_count = 0
+        existing_boxscore_count = 0
+        existing_payload = None
+
+        if verbose and idx > 1:
+            print(f"\n{'=' * 60}\n")
 
         if verbose:
             print(f"\n[{idx}/{len(filtered)}] Processing season {season_name}")
@@ -115,11 +127,19 @@ def download_league_boxscores_all_seasons(
                 if combine_output
                 else output_file
             )
+            if output_file.exists():
+                try:
+                    existing_payload = json.loads(
+                        output_file.read_text(encoding="utf-8")
+                    )
+                except Exception:
+                    existing_payload = None
             download_baskethotel_season_boxscores(
                 category_id=category_id,
                 season_id=season_name or str(competition_id),
                 output_file=str(target_file),
                 max_workers=max_workers,
+                show_header=False,
                 verbose=verbose,
             )
         else:
@@ -129,6 +149,13 @@ def download_league_boxscores_all_seasons(
                 if combine_output
                 else output_file
             )
+            if output_file.exists():
+                try:
+                    existing_payload = json.loads(
+                        output_file.read_text(encoding="utf-8")
+                    )
+                except Exception:
+                    existing_payload = None
             download_season_comprehensive(
                 category_id=category_id,
                 competition_id=str(competition_id or season_name),
@@ -136,8 +163,35 @@ def download_league_boxscores_all_seasons(
                 season_name=season_name,
                 include_advanced=True,
                 max_workers=max_workers,
+                show_header=False,
                 verbose=verbose,
             )
+
+        if existing_payload:
+            existing_matches = existing_payload.get("matches") or []
+            if isinstance(existing_matches, list):
+                existing_match_count = len(existing_matches)
+                existing_boxscore_count = sum(
+                    1 for m in existing_matches if m.get("boxscore")
+                )
+
+        try:
+            current_payload = json.loads(target_file.read_text(encoding="utf-8"))
+            current_matches = current_payload.get("matches") or []
+            current_match_count = (
+                len(current_matches) if isinstance(current_matches, list) else 0
+            )
+            current_boxscore_count = (
+                sum(1 for m in current_matches if m.get("boxscore"))
+                if isinstance(current_matches, list)
+                else 0
+            )
+            total_new_games += max(0, current_match_count - existing_match_count)
+            total_boxscores_fixed += max(
+                0, current_boxscore_count - existing_boxscore_count
+            )
+        except Exception:
+            pass
 
         if combine_output:
             try:
@@ -159,6 +213,114 @@ def download_league_boxscores_all_seasons(
             json.dump(combined_payload, f, indent=2, ensure_ascii=False)
         if verbose:
             print(f"\nSaved combined output to {combined_path}")
+
+    if verbose:
+        print(f"\n{'=' * 60}")
+        print("LEAGUE DOWNLOAD SUMMARY")
+        print(f"{'=' * 60}")
+        print(f"  - New games fetched: {total_new_games}")
+        print(f"  - Boxscores fixed: {total_boxscores_fixed}")
+        print(f"{'=' * 60}")
+
+
+def download_league_boxscores_playbyplay_all_seasons(
+    category_id: str,
+    output_dir: str,
+    start_year: int = 2010,
+    limit_seasons: Optional[int] = None,
+    include_playbyplay: bool = False,
+    include_advanced: bool = False,
+    max_workers: int = 5,
+    verbose: bool = True,
+) -> None:
+    """
+    Download season boxscores (and optional play-by-play) for all seasons.
+
+    Historical seasons (pre-2022) are fetched from BasketHotel.
+    Modern seasons (2022+) use season-boxscores (Genius Sports).
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    if verbose:
+        print(f"\n{'=' * 80}")
+        print("LEAGUE BOXSCORES + PLAY-BY-PLAY (ALL SEASONS)")
+        print(f"{'=' * 80}")
+        print(f"Category ID: {category_id}")
+        print(f"Start year: {start_year}")
+        print(f"Output directory: {output_path.absolute()}")
+        print(f"{'=' * 80}\n")
+
+    try:
+        category_data = BasketFiAPI.get_category("huki2526", category_id)
+    except Exception as e:
+        print(f"Error: Failed to fetch category info: {e}")
+        return
+
+    if "category" not in category_data or "seasons" not in category_data["category"]:
+        print(f"Error: Could not retrieve seasons for category-id ({category_id}).")
+        return
+
+    category = category_data["category"]
+    category_name = category.get("category_name", str(category_id))
+    safe_category = (
+        category_name.lower().replace(" ", "_").replace("/", "_").replace("__", "_")
+    )
+
+    seasons = category["seasons"]
+    seasons = _augment_seasons_with_baskethotel(seasons, category_id)
+
+    filtered = []
+    for season in seasons:
+        season_name = season.get("season_name")
+        season_year = _extract_season_start_year(season_name)
+        if season_year is None or season_year < start_year:
+            continue
+        filtered.append(season)
+
+    if not filtered:
+        print("No seasons found for the requested year range.")
+        return
+
+    if limit_seasons is not None:
+        filtered = filtered[:limit_seasons]
+
+    if verbose:
+        print(f"Found {len(filtered)} seasons to download.")
+
+    for idx, season in enumerate(filtered, 1):
+        season_name = season.get("season_name") or season.get("competition_id")
+        competition_id = season.get("competition_id") or season.get("season_id")
+        is_historical = _is_historical_season(season)
+
+        if verbose and idx > 1:
+            print(f"\n{'=' * 60}\n")
+
+        if verbose:
+            print(f"\n[{idx}/{len(filtered)}] Processing season {season_name}")
+
+        if is_historical:
+            output_file = output_path / f"{safe_category}_{season_name}_baskethotel.json"
+            download_baskethotel_season_boxscores(
+                category_id=category_id,
+                season_id=season_name or str(competition_id),
+                output_file=str(output_file),
+                max_workers=max_workers,
+                include_playbyplay=include_playbyplay,
+                show_header=False,
+                verbose=verbose,
+            )
+        else:
+            output_file = output_path / f"{safe_category}_{season_name}_genius.json"
+            download_matches_with_boxscores(
+                season_id=str(competition_id or season_name),
+                category_id=category_id,
+                output_file=str(output_file),
+                include_advanced=include_advanced,
+                include_playbyplay=include_playbyplay,
+                max_workers=max_workers,
+                verbose=verbose,
+            )
 
 
 def download_league_all_seasons(
@@ -256,6 +418,13 @@ def download_league_all_seasons(
                             {
                                 "index": len(all_matches) + idx,
                                 "external_id": external_id,
+                                "competition_id": resolve_genius_competition_id(
+                                    category_id=category_id,
+                                    season_id=season_name,
+                                    match_category_external_id=match_data.get(
+                                        "category_external_id"
+                                    ),
+                                ),
                                 "home_team": match_data["home_team"],
                                 "away_team": match_data["away_team"],
                             }
@@ -285,6 +454,7 @@ def download_league_all_seasons(
                         session = _get_genius_session(max_workers)
                         boxscore = GeniusSportsAPI.get_match_boxscore(
                             str(match_info["external_id"]),
+                            competition_id=match_info.get("competition_id"),
                             session=session,
                             log_fn=tqdm.write if verbose else None,
                         )

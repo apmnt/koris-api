@@ -23,6 +23,8 @@ def download_baskethotel_season_boxscores(
     output_file: str,
     limit_games: Optional[int] = None,
     max_workers: int = 5,
+    include_playbyplay: bool = False,
+    show_header: bool = True,
     verbose: bool = True,
 ) -> None:
     """
@@ -43,7 +45,7 @@ def download_baskethotel_season_boxscores(
         _resolve_baskethotel_season_id(season_id, league_id) or season_id
     )
 
-    if verbose:
+    if verbose and show_header:
         print(f"Fetching BasketHotel boxscores for {season_id}...")
         print(f"  League ID: {league_id}")
         print(f"  Season ID: {resolved_season_id}")
@@ -64,6 +66,28 @@ def download_baskethotel_season_boxscores(
     client = BasketHotelAPI()
     matches_data: list[Dict[str, Any]] = []
     errors: list[Dict[str, Any]] = []
+    existing_matches_by_id: Dict[str, Dict[str, Any]] = {}
+    existing_errors_by_id: Dict[str, Dict[str, Any]] = {}
+    matches_index_by_id: Dict[str, int] = {}
+
+    if output_path.exists():
+        try:
+            existing_payload = json.loads(output_path.read_text(encoding="utf-8"))
+            existing_matches = existing_payload.get("matches") or []
+            if isinstance(existing_matches, list):
+                for match in existing_matches:
+                    match_id = match.get("match_id")
+                    if match_id:
+                        existing_matches_by_id[str(match_id)] = match
+            existing_errors = existing_payload.get("errors") or []
+            if isinstance(existing_errors, list):
+                for err in existing_errors:
+                    err_id = err.get("game_id")
+                    if err_id:
+                        existing_errors_by_id[str(err_id)] = err
+        except Exception:
+            existing_matches_by_id = {}
+            existing_errors_by_id = {}
 
     def fetch_game(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
         try:
@@ -74,23 +98,67 @@ def download_baskethotel_season_boxscores(
                 league_id=str(league_id),
                 session=session,
             )
-            return (boxscore, None)
+            playbyplay = None
+            playbyplay_error = None
+            if include_playbyplay:
+                try:
+                    playbyplay = client.fetch_playbyplay_data(
+                        game_id=str(game_id),
+                        season_id=str(resolved_season_id),
+                        league_id=str(league_id),
+                        session=session,
+                    )
+                except Exception as exc:
+                    playbyplay_error = str(exc)
+            return ({"boxscore": boxscore, "playbyplay": playbyplay, "playbyplay_error": playbyplay_error}, None)
         except Exception as exc:
             return (None, str(exc))
 
+    # Reuse existing matches/errors to avoid refetching.
+    game_ids_to_fetch = []
+    game_ids_to_fetch_playbyplay = []
+    for game_id in game_ids:
+        if str(game_id) in existing_matches_by_id:
+            existing = existing_matches_by_id[str(game_id)]
+            matches_index_by_id[str(game_id)] = len(matches_data)
+            matches_data.append(existing)
+            if include_playbyplay and not existing.get("playbyplay") and not existing.get(
+                "playbyplay_error"
+            ):
+                game_ids_to_fetch_playbyplay.append(game_id)
+        elif str(game_id) in existing_errors_by_id:
+            errors.append(existing_errors_by_id[str(game_id)])
+        else:
+            game_ids_to_fetch.append(game_id)
+
+    if verbose:
+        print(
+            f"Resume: {len(existing_matches_by_id)} with boxscore, "
+            f"{len(existing_errors_by_id)} with error from existing file."
+        )
+        print(f"Resume: {len(game_ids_to_fetch)} games missing boxscores.")
+        if include_playbyplay:
+            print(
+                f"Resume: {len(game_ids_to_fetch_playbyplay)} games missing play-by-play."
+            )
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(fetch_game, game_id): game_id for game_id in game_ids
+            executor.submit(fetch_game, game_id): game_id
+            for game_id in game_ids_to_fetch
         }
         with tqdm(
-            total=len(game_ids),
+            total=len(game_ids_to_fetch),
             desc="Fetching BasketHotel boxscores",
             disable=not verbose,
         ) as pbar:
             for future in as_completed(futures):
                 game_id = futures[future]
-                boxscore, error = future.result()
-                if boxscore:
+                payload, error = future.result()
+                if payload:
+                    boxscore = payload.get("boxscore", {})
+                    playbyplay = payload.get("playbyplay")
+                    playbyplay_error = payload.get("playbyplay_error")
                     game_info = boxscore.get("game_info", {})
                     teams_info = boxscore.get("game_teams", {})
                     home_team = teams_info.get("home", {}).get("name")
@@ -175,13 +243,53 @@ def download_baskethotel_season_boxscores(
                             "category": None,
                             "season": season_id,
                             "boxscore": normalized_boxscore,
+                            "playbyplay": playbyplay,
+                            "playbyplay_error": playbyplay_error,
                         }
                     )
+                    matches_index_by_id[str(game_id)] = len(matches_data) - 1
                 else:
                     errors.append({"game_id": str(game_id), "error": error})
                     if verbose and error:
                         tqdm.write(f"  ✗ Game {game_id}: {error}")
                 pbar.update(1)
+
+    if include_playbyplay and game_ids_to_fetch_playbyplay:
+        def fetch_playbyplay(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+            try:
+                session = _get_baskethotel_session()
+                playbyplay = client.fetch_playbyplay_data(
+                    game_id=str(game_id),
+                    season_id=str(resolved_season_id),
+                    league_id=str(league_id),
+                    session=session,
+                )
+                return (playbyplay, None)
+            except Exception as exc:
+                return (None, str(exc))
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(fetch_playbyplay, game_id): game_id
+                for game_id in game_ids_to_fetch_playbyplay
+            }
+            with tqdm(
+                total=len(game_ids_to_fetch_playbyplay),
+                desc="Fetching BasketHotel play-by-play",
+                disable=not verbose,
+            ) as pbar:
+                for future in as_completed(futures):
+                    game_id = futures[future]
+                    playbyplay, error = future.result()
+                    match_index = matches_index_by_id.get(str(game_id))
+                    if match_index is not None:
+                        if playbyplay:
+                            matches_data[match_index]["playbyplay"] = playbyplay
+                        else:
+                            matches_data[match_index]["playbyplay_error"] = error
+                            if verbose and error:
+                                tqdm.write(f"  ✗ Game {game_id}: {error}")
+                    pbar.update(1)
 
     result = {
         "metadata": {
@@ -196,6 +304,7 @@ def download_baskethotel_season_boxscores(
             "matches_with_boxscore": len(matches_data),
             "matches_failed": len(errors),
             "include_advanced_stats": True,
+            "include_playbyplay": include_playbyplay,
             "limit_games": limit_games,
             "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
         },
@@ -206,7 +315,7 @@ def download_baskethotel_season_boxscores(
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
 
-    if verbose:
+    if verbose and show_header:
         print(f"\n{'=' * 60}")
         print(f"✓ Successfully fetched {len(matches_data)}/{len(game_ids)} games")
         if errors:

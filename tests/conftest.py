@@ -7,3 +7,7 @@ def pytest_configure(config):
         "markers",
         "integration: mark test as an integration test (makes real API calls)",
     )
+    config.addinivalue_line(
+        "markers",
+        "performance: mark test as a performance test (full-season downloads)",
+    )

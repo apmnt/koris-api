@@ -19,6 +19,7 @@ from .common import (
     _fetch_baskethotel_schedule_game_ids,
     _is_historical_season,
     _resolve_baskethotel_season_id,
+    resolve_genius_competition_id,
     _stat_value,
     _summarize_baskethotel_boxscore,
     _summarize_boxscore,
@@ -112,26 +113,46 @@ def download_season_advanced_averages(
                 matches, season_name=current_season_name, only_played=True
             )
 
-            match_ids = [
-                str(match.get("match_external_id"))
+            match_entries = [
+                {
+                    "match_id": str(match.get("match_external_id")),
+                    "competition_id": resolve_genius_competition_id(
+                        category_id=category_id,
+                        season_id=current_season_name,
+                        match_category_external_id=match.get("category_external_id"),
+                    ),
+                }
                 for match in processed_matches
                 if match.get("match_external_id")
             ]
 
         totals = {"rebounds": 0.0, "assists": 0.0, "steals": 0.0}
         games_with_stats = 0
-        matches_to_fetch: List[str] = []
+        matches_to_fetch: List[Any] = []
 
-        for match_id in match_ids:
-            cache_key = f"baskethotel:{match_id}" if is_historical else match_id
-            if cache_key in cache:
-                stats = cache[cache_key]
-                totals["rebounds"] += _stat_value(stats.get("rebounds", 0))
-                totals["assists"] += _stat_value(stats.get("assists", 0))
-                totals["steals"] += _stat_value(stats.get("steals", 0))
-                games_with_stats += 1
-            else:
-                matches_to_fetch.append(match_id)
+        if is_historical:
+            for match_id in match_ids:
+                cache_key = f"baskethotel:{match_id}"
+                if cache_key in cache:
+                    stats = cache[cache_key]
+                    totals["rebounds"] += _stat_value(stats.get("rebounds", 0))
+                    totals["assists"] += _stat_value(stats.get("assists", 0))
+                    totals["steals"] += _stat_value(stats.get("steals", 0))
+                    games_with_stats += 1
+                else:
+                    matches_to_fetch.append(match_id)
+        else:
+            for match_entry in match_entries:
+                match_id = match_entry["match_id"]
+                cache_key = match_id
+                if cache_key in cache:
+                    stats = cache[cache_key]
+                    totals["rebounds"] += _stat_value(stats.get("rebounds", 0))
+                    totals["assists"] += _stat_value(stats.get("assists", 0))
+                    totals["steals"] += _stat_value(stats.get("steals", 0))
+                    games_with_stats += 1
+                else:
+                    matches_to_fetch.append(match_entry)
 
         if matches_to_fetch:
             if verbose:
@@ -140,20 +161,21 @@ def download_season_advanced_averages(
                 )
 
             def fetch_boxscore_totals(
-                match_id: str,
+                match_entry: Dict[str, Any],
             ) -> tuple[str, Optional[Dict[str, float]], Optional[str]]:
                 try:
                     if is_historical:
                         raise RuntimeError("Historical matches use async fetching.")
                     session = _get_genius_session(max_workers)
                     boxscore = GeniusSportsAPI.get_match_boxscore(
-                        match_id,
+                        match_entry["match_id"],
+                        competition_id=match_entry.get("competition_id"),
                         session=session,
                         log_fn=tqdm.write if verbose else None,
                     )
-                    return match_id, _summarize_boxscore(boxscore), None
+                    return match_entry["match_id"], _summarize_boxscore(boxscore), None
                 except Exception as exc:
-                    return match_id, None, str(exc)
+                    return match_entry["match_id"], None, str(exc)
 
             if is_historical:
 
@@ -216,8 +238,8 @@ def download_season_advanced_averages(
             else:
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     futures = [
-                        executor.submit(fetch_boxscore_totals, match_id)
-                        for match_id in matches_to_fetch
+                        executor.submit(fetch_boxscore_totals, match_entry)
+                        for match_entry in matches_to_fetch
                     ]
 
                     iterator = as_completed(futures)

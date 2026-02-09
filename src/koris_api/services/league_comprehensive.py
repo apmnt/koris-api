@@ -16,6 +16,7 @@ from .common import (
     _fetch_historical_matches,
     _get_genius_session,
     _is_historical_season,
+    resolve_genius_competition_id,
 )
 
 
@@ -196,16 +197,27 @@ def download_league_comprehensive(
                 for match_idx, match_data in enumerate(processed_matches):
                     external_id = match_data.get("match_external_id")
                     if external_id:
+                        competition_id_resolved = resolve_genius_competition_id(
+                            category_id=category_id,
+                            season_id=season_name,
+                            match_category_external_id=match_data.get(
+                                "category_external_id"
+                            ),
+                        )
                         matches_to_fetch_advanced.append(
                             {
                                 "index": match_idx,
                                 "external_id": external_id,
+                                "competition_id": competition_id_resolved,
                                 "home_team": match_data["home_team"],
                                 "away_team": match_data["away_team"],
                                 "match_date": match_data.get("date")
                                 or match_data.get("match_date")
                                 or "Unknown date",
-                                "url": f"https://hosted.dcd.shared.geniussports.com/FBAA/en/match/{external_id}/boxscore",
+                                "url": GeniusSportsAPI.build_match_boxscore_url(
+                                    str(external_id),
+                                    competition_id=competition_id_resolved,
+                                ),
                             }
                         )
 
@@ -232,6 +244,7 @@ def download_league_comprehensive(
                         session = _get_genius_session(max_workers)
                         boxscore = GeniusSportsAPI.get_match_boxscore(
                             str(match_info["external_id"]),
+                            competition_id=match_info.get("competition_id"),
                             session=session,
                             log_fn=tqdm.write if verbose else None,
                         )
@@ -331,7 +344,9 @@ def download_league_comprehensive(
 
                 if verbose:
                     print(
-                        f"      [{team_idx}/{len(teams_list)}] Fetching {team_name}..."
+                        f"\r\033[2K      [{team_idx}/{len(teams_list)}] Fetching {team_name}...",
+                        end="",
+                        flush=True,
                     )
 
                 try:
@@ -357,6 +372,7 @@ def download_league_comprehensive(
             total_teams_fetched += len(teams_with_details)
 
             if verbose:
+                print()
                 print(
                     f"    ✓ Fetched {len(teams_with_details)} teams for season {season_name}\n"
                 )
