@@ -17,6 +17,23 @@ from .common import (
 )
 
 
+def _attach_playbyplay_possession_counts(match_data: Dict[str, Any]) -> None:
+    playbyplay = match_data.get("playbyplay")
+    if not isinstance(playbyplay, dict):
+        match_data["home_number_of_possessions"] = None
+        match_data["away_number_of_possessions"] = None
+        return
+
+    possessions = playbyplay.get("possessions")
+    if not isinstance(possessions, dict):
+        match_data["home_number_of_possessions"] = None
+        match_data["away_number_of_possessions"] = None
+        return
+
+    match_data["home_number_of_possessions"] = possessions.get("team1_possessions")
+    match_data["away_number_of_possessions"] = possessions.get("team2_possessions")
+
+
 def download_baskethotel_season_boxscores(
     category_id: str,
     season_id: str,
@@ -247,6 +264,7 @@ def download_baskethotel_season_boxscores(
                             "playbyplay_error": playbyplay_error,
                         }
                     )
+                    _attach_playbyplay_possession_counts(matches_data[-1])
                     matches_index_by_id[str(game_id)] = len(matches_data) - 1
                 else:
                     errors.append({"game_id": str(game_id), "error": error})
@@ -285,11 +303,15 @@ def download_baskethotel_season_boxscores(
                     if match_index is not None:
                         if playbyplay:
                             matches_data[match_index]["playbyplay"] = playbyplay
+                            _attach_playbyplay_possession_counts(matches_data[match_index])
                         else:
                             matches_data[match_index]["playbyplay_error"] = error
                             if verbose and error:
                                 tqdm.write(f"  ✗ Game {game_id}: {error}")
                     pbar.update(1)
+
+    for match in matches_data:
+        _attach_playbyplay_possession_counts(match)
 
     result = {
         "metadata": {

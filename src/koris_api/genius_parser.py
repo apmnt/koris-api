@@ -465,7 +465,7 @@ class GeniusSportsParser:
             else:
                 detail = "shot_taken"
         elif event_type == "turnover":
-            detail = "turnover"
+            detail = text
         elif event_type == "steal":
             detail = "steal"
         elif event_type == "assist":
@@ -481,7 +481,12 @@ class GeniusSportsParser:
         elif event_type == "timeout":
             detail = "timeout"
         elif event_type == "jumpball":
-            detail = "jump_ball"
+            if "won" in normalized:
+                detail = "jump_ball_won"
+            elif "lost" in normalized:
+                detail = "jump_ball_lost"
+            else:
+                detail = "jump_ball"
         elif event_type == "period":
             detail = "period"
         elif event_type == "game":
@@ -519,11 +524,9 @@ class GeniusSportsParser:
         Calculate possessions from play-by-play events.
 
         A possession is when one team has control of the ball. It ends when:
-        - Defensive rebound (other team gets possession)
-        - Turnover/Steal (other team gets possession)
-        - Made basket (other team gets possession)
-
-        Offensive rebounds do not start a new possession - they extend the current possession.
+        - The other team gains control
+        - The ball becomes dead after a made field goal or last free throw
+        - The period ends
 
         Args:
             events: List of play-by-play events
@@ -534,7 +537,144 @@ class GeniusSportsParser:
         possessions: List[Dict[str, Any]] = []
         current_possession: Dict[str, Any] | None = None
 
-        for event in events:
+        def parse_time(time_str: str | None) -> Optional[int]:
+            if time_str and ":" in time_str:
+                try:
+                    parts = time_str.split(":")
+                    if len(parts) >= 2:
+                        return int(parts[0]) * 60 + int(parts[1])
+                except (ValueError, IndexError):
+                    return None
+            return None
+
+        def period_start_clock(period_label: str | None) -> Optional[str]:
+            if not period_label:
+                return None
+            upper = period_label.upper()
+            if re.fullmatch(r"[PQ]\d+", upper):
+                return "10:00:00"
+            if upper.startswith("OT"):
+                return "05:00:00"
+            return None
+
+        periods_with_possessions: set[str] = set()
+
+        def start_possession(
+            team_id: str,
+            time_str: str | None,
+            time_seconds: Optional[int],
+            period: str | None,
+            event: Dict[str, Any],
+        ) -> Dict[str, Any]:
+            normalized_start_time = time_str
+            normalized_start_seconds = time_seconds
+
+            default_clock = period_start_clock(period)
+            if period and period not in periods_with_possessions and default_clock:
+                normalized_start_time = default_clock
+                normalized_start_seconds = parse_time(default_clock)
+                periods_with_possessions.add(period)
+
+            return {
+                "possession_number": len(possessions) + 1,
+                "team": team_id,
+                "start_time": normalized_start_time,
+                "start_time_seconds": normalized_start_seconds,
+                "start_period": period,
+                "end_time": None,
+                "end_time_seconds": None,
+                "end_period": None,
+                "duration_seconds": None,
+                "events": [],
+            }
+
+        def end_possession(
+            possession: Dict[str, Any],
+            time_str: str | None,
+            time_seconds: Optional[int],
+            period: str | None,
+            event_payload: Dict[str, Any],
+        ) -> None:
+            possession["end_time"] = time_str
+            possession["end_time_seconds"] = time_seconds
+            possession["end_period"] = period
+            if not possession.get("events"):
+                payload = dict(event_payload)
+                payload["possession_event_role"] = "start_end"
+                possession["events"].append(payload)
+            else:
+                last = possession["events"][-1]
+                prev_role = last.get("possession_event_role")
+                if prev_role == "start":
+                    last["possession_event_role"] = "start_end"
+                elif prev_role is None:
+                    last["possession_event_role"] = "end"
+
+            if (
+                possession["start_time_seconds"] is not None
+                and time_seconds is not None
+                and possession["start_period"] == period
+            ):
+                duration = possession["start_time_seconds"] - time_seconds
+                possession["duration_seconds"] = max(0, duration)
+            elif (
+                possession["start_time_seconds"] is not None
+                and time_seconds is not None
+            ):
+                possession["duration_seconds"] = None
+
+        def find_next_event_with_same_time(
+            start_idx: int, time_str: str | None, period: str | None
+        ) -> Optional[Dict[str, Any]]:
+            if time_str is None:
+                return None
+            for future in events[start_idx + 1 :]:
+                future_time = future.get("time")
+                future_period = future.get("period")
+                if future_time != time_str or future_period != period:
+                    return None
+                return future
+            return None
+
+        def has_free_throw_ahead(
+            start_idx: int, team_id: str, time_str: str | None, period: str | None
+        ) -> bool:
+            if time_str is None:
+                return False
+            for future in events[start_idx + 1 :]:
+                future_time = future.get("time")
+                future_period = future.get("period")
+                if future_time != time_str or future_period != period:
+                    return False
+                if (
+                    future.get("event_type") == "freethrow"
+                    and future.get("team") == team_id
+                ):
+                    return True
+            return False
+
+        def add_event_to_possession(
+            possession: Dict[str, Any],
+            payload: Dict[str, Any],
+            role: Optional[str] = None,
+        ) -> None:
+            event_copy = dict(payload)
+            if role is None and not possession["events"]:
+                role = "start"
+            event_copy["possession_event_role"] = role
+            possession["events"].append(event_copy)
+
+        expected_next_team: Optional[str] = None
+        non_possession_start_events = {
+            "substitution",
+            "timeout",
+            "assist",
+            "block",
+            "foul",
+            "foulon",
+        }
+
+        for idx, event in enumerate(events):
             event_type = event.get("event_type", "")
             team = event.get("team", "")
             time_str = event.get("time", "")
@@ -542,116 +682,180 @@ class GeniusSportsParser:
             action = event.get("action", "")
             player_id = event.get("player_id")
             score = event.get("score")
+            action_lower = (action or "").lower()
+            event_payload = {
+                "event_type": event_type,
+                "time": time_str,
+                "action": action,
+                "team": team,
+                "player_id": player_id,
+                "player_name": event.get("player_name"),
+                "player_number": event.get("player_number"),
+                "score": score,
+            }
+
+            # Period/game marker closes any active possession.
+            # Some feeds emit non-standard end-of-period clocks (for example
+            # "00:00:60"), so we do not require an exact "00:00" match here.
+            if event_type in ["period", "game"]:
+                if current_possession:
+                    marker_time = "00:00:00"
+                    marker_period = current_possession.get("start_period") or period
+                    end_possession(
+                        current_possession,
+                        marker_time,
+                        parse_time(marker_time),
+                        marker_period,
+                        event_payload,
+                    )
+                    possessions.append(current_possession)
+                    current_possession = None
+                expected_next_team = None
+                continue
 
             # Skip neutral events
             if team in ["0", None, ""]:
                 continue
 
-            # Parse time to seconds for duration calculation
-            # Basketball clocks count DOWN from 10:00 to 0:00
-            # Format is MM:SS or MM:SS:SS (subseconds)
-            time_seconds = None
-            if time_str and ":" in time_str:
-                try:
-                    parts = time_str.split(":")
-                    if len(parts) >= 2:  # MM:SS or MM:SS:subseconds
-                        # Always treat as MM:SS (minutes:seconds)
-                        time_seconds = int(parts[0]) * 60 + int(parts[1])
-                except (ValueError, IndexError):
-                    pass
+            time_seconds = parse_time(time_str)
+
+            if current_possession is None:
+                # Dead-ball/non-possession events should not create a possession.
+                if event_type in non_possession_start_events:
+                    continue
+
+                # If we ended a possession, start the next one only when the
+                # expected team appears in the play-by-play.
+                if expected_next_team and team != expected_next_team:
+                    continue
+
+                if event_type == "jumpball":
+                    if "won" in action_lower:
+                        current_possession = start_possession(
+                            team, time_str, time_seconds, period, event
+                        )
+                        event["possession_number"] = current_possession[
+                            "possession_number"
+                        ]
+                        event["possession_team"] = current_possession["team"]
+                        add_event_to_possession(
+                            current_possession, event_payload, role="start"
+                        )
+                        expected_next_team = None
+                    continue
+                current_possession = start_possession(
+                    expected_next_team or team, time_str, time_seconds, period, event
+                )
+                expected_next_team = None
+            elif event_type == "jumpball":
+                # Ignore non-winning jump ball entries during a possession.
+                if "won" not in action_lower:
+                    continue
+
+            current_team = current_possession["team"] if current_possession else None
 
             # Determine if possession changes
             possession_change = False
             new_team = None
+            event_belongs_to_new_possession = False
 
-            # Made basket - other team gets possession
-            if event_type in ["2pt", "3pt", "freethrow"] and "made" in action.lower():
-                possession_change = True
-                new_team = "1" if team == "2" else "2"
+            # Made field goal - other team gets possession unless an and-1 follows
+            if event_type in ["2pt", "3pt"] and "made" in action_lower:
+                if current_team == team and not has_free_throw_ahead(
+                    idx, team, time_str, period
+                ):
+                    possession_change = True
+                    new_team = "1" if team == "2" else "2"
 
-            # Defensive rebound only - other team gets possession
-            # Offensive rebounds continue the same possession!
-            elif event_type == "rebound" and "defensive" in action.lower():
-                possession_change = True
-                new_team = team
+            # Free throws: only last made FT ends possession
+            elif event_type == "freethrow" and "made" in action_lower:
+                if current_team == team and not has_free_throw_ahead(
+                    idx, team, time_str, period
+                ):
+                    next_event = find_next_event_with_same_time(
+                        idx, time_str, period
+                    )
+                    retained_events = {
+                        "2pt",
+                        "3pt",
+                        "turnover",
+                        "rebound",
+                        "jumpball",
+                        "steal",
+                    }
+                    if next_event and next_event.get("team") == team and (
+                        next_event.get("event_type") in retained_events
+                    ):
+                        possession_change = False
+                    else:
+                        possession_change = True
+                        new_team = "1" if team == "2" else "2"
+
+            # Rebound: defensive rebound changes possession, offensive does not
+            elif event_type == "rebound":
+                if current_team and team != current_team:
+                    possession_change = True
+                    new_team = team
+                    event_belongs_to_new_possession = True
 
             # Turnover - other team gets possession
             elif event_type == "turnover":
-                possession_change = True
-                new_team = "1" if team == "2" else "2"
+                if current_team == team:
+                    possession_change = True
+                    new_team = "1" if team == "2" else "2"
 
             # Steal - stealing team gets possession
             elif event_type == "steal":
-                possession_change = True
-                new_team = team
+                if current_team and team != current_team:
+                    possession_change = True
+                    new_team = team
+                    event_belongs_to_new_possession = True
+
+            # Jump ball - team in event gains control
+            elif event_type == "jumpball":
+                if "won" in action_lower and current_team and team != current_team:
+                    possession_change = True
+                    new_team = team
+                    event_belongs_to_new_possession = True
+
+            # Foul does not automatically change possession
+
+            if current_possession and not event_belongs_to_new_possession:
+                event["possession_number"] = current_possession["possession_number"]
+                event["possession_team"] = current_possession["team"]
+                add_event_to_possession(current_possession, event_payload)
 
             # Handle possession change
             if possession_change and new_team and new_team != "0":
                 # End current possession
                 if current_possession:
-                    current_possession["end_time"] = time_str
-                    current_possession["end_time_seconds"] = time_seconds
-                    current_possession["end_period"] = period
-                    current_possession["ending_event"] = {
-                        "event_type": event_type,
-                        "action": action,
-                        "player_id": player_id,
-                        "score": score,
-                    }
-
-                    # Calculate duration (clock counts down, so start time > end time)
-                    if (
-                        current_possession["start_time_seconds"] is not None
-                        and time_seconds is not None
-                        and current_possession["start_period"] == period
-                    ):
-                        # For same period: start - end (clock counts down)
-                        duration = (
-                            current_possession["start_time_seconds"] - time_seconds
-                        )
-                        current_possession["duration_seconds"] = max(0, duration)
-                    elif (
-                        current_possession["start_time_seconds"] is not None
-                        and time_seconds is not None
-                    ):
-                        # Different periods - can't accurately calculate
-                        current_possession["duration_seconds"] = None
-
+                    end_possession(
+                        current_possession, time_str, time_seconds, period, event_payload
+                    )
                     possessions.append(current_possession)
 
-                # Start new possession
-                current_possession = {
-                    "possession_number": len(possessions) + 1,
-                    "team": new_team,
-                    "start_time": time_str,
-                    "start_time_seconds": time_seconds,
-                    "start_period": period,
-                    "starting_event": {
-                        "event_type": event_type,
-                        "action": action,
-                        "player_id": player_id,
-                        "score": score,
-                    },
-                    "end_time": None,
-                    "end_time_seconds": None,
-                    "end_period": None,
-                    "ending_event": None,
-                    "duration_seconds": None,
-                    "events": [],
-                }
-
-            # Add ALL events to current possession (including offensive rebounds)
-            if current_possession:
-                current_possession["events"].append(
-                    {
-                        "event_type": event_type,
-                        "time": time_str,
-                        "action": action,
-                        "team": team,
-                        "player_id": player_id,
-                        "score": score,
-                    }
-                )
+                if event_belongs_to_new_possession:
+                    current_possession = start_possession(
+                        new_team, time_str, time_seconds, period, event
+                    )
+                    event["possession_number"] = current_possession[
+                        "possession_number"
+                    ]
+                    event["possession_team"] = current_possession["team"]
+                    add_event_to_possession(
+                        current_possession, event_payload, role="start"
+                    )
+                    expected_next_team = None
+                else:
+                    # Start next possession immediately using the change-of-control
+                    # event as the possession start marker.
+                    current_possession = start_possession(
+                        new_team, time_str, time_seconds, period, event
+                    )
+                    add_event_to_possession(
+                        current_possession, event_payload, role="start"
+                    )
+                    expected_next_team = None
 
         # Close final possession
         if current_possession:

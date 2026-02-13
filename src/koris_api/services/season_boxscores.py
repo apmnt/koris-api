@@ -1,6 +1,7 @@
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -14,6 +15,23 @@ from ..genius_api import GeniusSportsAPI, GeniusSportsBoxscoreError
 from .common import _get_genius_session, resolve_genius_competition_id
 
 
+def _attach_playbyplay_possession_counts(match_data: Dict[str, Any]) -> None:
+    playbyplay = match_data.get("playbyplay")
+    if not isinstance(playbyplay, dict):
+        match_data["home_number_of_possessions"] = None
+        match_data["away_number_of_possessions"] = None
+        return
+
+    possessions = playbyplay.get("possessions")
+    if not isinstance(possessions, dict):
+        match_data["home_number_of_possessions"] = None
+        match_data["away_number_of_possessions"] = None
+        return
+
+    match_data["home_number_of_possessions"] = possessions.get("team1_possessions")
+    match_data["away_number_of_possessions"] = possessions.get("team2_possessions")
+
+
 def download_matches_with_boxscores(
     season_id: str,
     category_id: str,
@@ -25,6 +43,13 @@ def download_matches_with_boxscores(
     verbose: bool = True,
 ) -> None:
     """Download all matches for a season, optionally including advanced box scores."""
+    def _parse_match_date(value: Optional[str]) -> int:
+        if not value:
+            return 0
+        try:
+            return int(datetime.fromisoformat(value).timestamp())
+        except ValueError:
+            return 0
 
     if verbose:
         print(f"Fetching matches for season {season_id}, category {category_id}...")
@@ -43,11 +68,12 @@ def download_matches_with_boxscores(
 
     # Process basic match data first
     processed_matches = BasketFiParser.parse_matches(matches, only_played=True)
-    if limit_games is not None and include_advanced:
-        candidate_limit = max(limit_games * 30, limit_games)
-        processed_matches = processed_matches[:candidate_limit]
-    elif limit_games is not None:
-        processed_matches = processed_matches[:limit_games]
+    if limit_games is not None:
+        processed_matches = sorted(
+            processed_matches,
+            key=lambda match: _parse_match_date(match.get("date")),
+            reverse=True,
+        )[:limit_games]
     matches_to_fetch_advanced = []
     existing_matches_by_id: Dict[str, Dict[str, Any]] = {}
 
@@ -134,6 +160,7 @@ def download_matches_with_boxscores(
             existing = existing_matches_by_id.get(key) if key else None
             if existing and existing.get("playbyplay"):
                 match_data["playbyplay"] = existing.get("playbyplay")
+                _attach_playbyplay_possession_counts(match_data)
                 continue
             if external_id:
                 matches_to_fetch_playbyplay.append(
@@ -308,6 +335,7 @@ def download_matches_with_boxscores(
                     index, playbyplay, error = future.result()
                     if playbyplay:
                         processed_matches[index]["playbyplay"] = playbyplay
+                        _attach_playbyplay_possession_counts(processed_matches[index])
                         matches_with_playbyplay += 1
                     else:
                         matches_playbyplay_failed += 1
@@ -350,6 +378,8 @@ def download_matches_with_boxscores(
     matches_playbyplay_failed = sum(
         1 for match in processed_matches if "playbyplay_error" in match
     )
+    for match in processed_matches:
+        _attach_playbyplay_possession_counts(match)
 
     # Save to file
     output_path = Path(output_file)
@@ -363,7 +393,7 @@ def download_matches_with_boxscores(
             "source": "genius",
             "league_id": None,
             "total_matches_in_season": total_matches,
-            "total_games_requested": None,
+            "total_games_requested": limit_games,
             "played_matches_saved": len(processed_matches),
             "matches_with_boxscore": matches_with_advanced,
             "matches_failed": matches_failed,
