@@ -24,8 +24,7 @@ class GeniusSportsBoxscoreError(Exception):
         self.status_code = status_code
         self.error_type = error_type
         super().__init__(
-            message
-            or f"Failed to fetch Genius Sports boxscore for match {match_id}"
+            message or f"Failed to fetch Genius Sports boxscore for match {match_id}"
         )
 
 
@@ -98,7 +97,9 @@ class GeniusSportsAPI:
         last_url: Optional[str] = None
         while True:
             last_error = None
-            for url in [template.format(match_id=match_id) for template in url_templates]:
+            for url in [
+                template.format(match_id=match_id) for template in url_templates
+            ]:
                 last_url = url
                 attempt = 0
                 while True:
@@ -107,7 +108,9 @@ class GeniusSportsAPI:
                         response = client.get(
                             url,
                             timeout=timeout_seconds,
-                            headers=None if session is not None else cls._DEFAULT_HEADERS,
+                            headers=None
+                            if session is not None
+                            else cls._DEFAULT_HEADERS,
                         )
                         if response.status_code == 404:
                             last_error = GeniusSportsBoxscoreError(
@@ -199,7 +202,11 @@ class GeniusSportsAPI:
         )
 
     @classmethod
-    def get_match_playbyplay(cls, match_id: str) -> Dict[str, Any]:
+    def get_match_playbyplay(
+        cls,
+        match_id: str,
+        competition_id: str = "42145",
+    ) -> Dict[str, Any]:
         """
         Fetch and parse play-by-play data from the Genius Sports hosted page.
 
@@ -209,7 +216,10 @@ class GeniusSportsAPI:
         Returns:
             Dictionary containing parsed play-by-play data with match info and events
         """
-        url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/42145/match/{match_id}/playbyplay"
+        url = (
+            "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/"
+            f"{competition_id}/match/{match_id}/playbyplay"
+        )
         response = requests.get(url)
         response.raise_for_status()
 
