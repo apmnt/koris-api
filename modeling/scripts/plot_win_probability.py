@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 
@@ -17,18 +18,21 @@ from matplotlib.ticker import FuncFormatter
 from koris_api.win_probability import (
     BucketedWinProbabilityModel,
     EloConfig,
+    WinProbabilityModelInput,
+    WinProbabilityPipelineData,
+    available_win_probability_models,
     attach_playbyplay_cache,
     build_match_results_frame,
     build_state_frame,
     compute_elo_probabilities,
     load_matches,
     load_playbyplay_cache,
-    predict_global_probabilities,
-    predict_state_probabilities,
+    predict_with_win_probability_model,
 )
 
 HOME_COLOR = "#1D4ED8"
 AWAY_COLOR = "#D97706"
+MODEL_MODE_CHOICES = available_win_probability_models()
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,14 +72,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode",
-        choices=["bucketed", "global", "hybrid"],
+        choices=MODEL_MODE_CHOICES,
         default="hybrid",
         help="Prediction mode for the plotted curve.",
     )
     parser.add_argument(
         "--compare-modes",
         nargs="+",
-        choices=["bucketed", "global", "hybrid"],
+        choices=MODEL_MODE_CHOICES,
         help="If provided, render these modes side by side in the same figure.",
     )
     parser.add_argument(
@@ -89,6 +93,39 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=30,
         help="Centered rolling window for the bold smoothed overlay.",
+    )
+    parser.add_argument(
+        "--point-diff-scale",
+        type=float,
+        default=8.0,
+        help="Default logistic scale for normalized score differential.",
+    )
+    parser.add_argument(
+        "--fit-point-diff-scale",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Fit the normalized score-diff logistic scale per plot panel to best match "
+            "the predicted win probability."
+        ),
+    )
+    parser.add_argument(
+        "--point-diff-scale-min",
+        type=float,
+        default=1.0,
+        help="Minimum scale considered when fitting normalized score differential.",
+    )
+    parser.add_argument(
+        "--point-diff-scale-max",
+        type=float,
+        default=40.0,
+        help="Maximum scale considered when fitting normalized score differential.",
+    )
+    parser.add_argument(
+        "--point-diff-scale-step",
+        type=float,
+        default=0.25,
+        help="Grid-search step size for score-differential normalization fitting.",
     )
     parser.add_argument(
         "--output-dir",
@@ -120,6 +157,28 @@ def load_model(model_dir: Path) -> BucketedWinProbabilityModel:
     return fitted
 
 
+def build_pipeline_data(
+    *,
+    matches: list[dict[str, Any]],
+    model: BucketedWinProbabilityModel,
+    season_filter: list[str] | None,
+) -> WinProbabilityPipelineData:
+    results = build_match_results_frame(matches)
+    scored_results = compute_elo_probabilities(results, model.elo_config)
+    pregame_home_wp_by_match_id = dict(
+        zip(scored_results["match_id"], scored_results["pregame_home_wp"])
+    )
+    states = build_state_frame(matches, pregame_home_wp_by_match_id)
+    if season_filter:
+        states = states[states["season"].isin(season_filter)].copy()
+    return WinProbabilityPipelineData(
+        matches=matches,
+        match_results=results,
+        scored_results=scored_results,
+        states=states,
+    )
+
+
 def elapsed_seconds(period_index: int, clock_seconds: int) -> int:
     if period_index <= 4:
         return (period_index - 1) * 600 + (600 - clock_seconds)
@@ -137,23 +196,40 @@ def sanitize_filename(value: str) -> str:
 
 
 def build_predictions(
-    states: pd.DataFrame,
+    pipeline_data: WinProbabilityPipelineData,
     model: BucketedWinProbabilityModel,
     mode: str,
     hybrid_cutoff_seconds: int,
 ) -> np.ndarray:
-    global_predictions = predict_global_probabilities(states, model.global_coefficients)
-    if mode == "global":
-        return global_predictions
+    model_input = WinProbabilityModelInput(
+        pipeline=pipeline_data,
+        artifact=model,
+        options={"hybrid_cutoff_seconds": hybrid_cutoff_seconds},
+    )
+    return predict_with_win_probability_model(mode, model_input)
 
-    bucketed_predictions = predict_state_probabilities(states, model)
-    if mode == "bucketed":
-        return bucketed_predictions
 
-    hybrid_predictions = global_predictions.copy()
-    mask = states["seconds_remaining"].to_numpy(dtype=int) <= hybrid_cutoff_seconds
-    hybrid_predictions[mask] = bucketed_predictions[mask]
-    return hybrid_predictions
+def append_model_probabilities(
+    pipeline_data: WinProbabilityPipelineData,
+    model: BucketedWinProbabilityModel,
+    modes: list[str],
+    hybrid_cutoff_seconds: int,
+) -> pd.DataFrame:
+    enriched_states = pipeline_data.states.copy()
+    for mode in sorted(set(modes)):
+        mode_pipeline_data = WinProbabilityPipelineData(
+            matches=pipeline_data.matches,
+            match_results=pipeline_data.match_results,
+            scored_results=pipeline_data.scored_results,
+            states=enriched_states,
+        )
+        enriched_states[f"home_win_probability_{mode}"] = build_predictions(
+            pipeline_data=mode_pipeline_data,
+            model=model,
+            mode=mode,
+            hybrid_cutoff_seconds=hybrid_cutoff_seconds,
+        )
+    return enriched_states
 
 
 def game_excitement_index(
@@ -168,13 +244,15 @@ def game_excitement_index(
 
 def smooth_step_series(
     frame: pd.DataFrame,
-    probability_column: str,
+    values: np.ndarray,
     total_seconds: int,
     window_seconds: int,
 ) -> tuple[np.ndarray, np.ndarray]:
+    series_frame = frame.copy()
+    series_frame["series_value"] = values
     event_series = (
-        frame.sort_values(by=["elapsed_seconds", "event_order"], kind="stable")
-        .groupby("elapsed_seconds", sort=True)[probability_column]
+        series_frame.sort_values(by=["elapsed_seconds", "event_order"], kind="stable")
+        .groupby("elapsed_seconds", sort=True)["series_value"]
         .last()
     )
     dense_index = pd.RangeIndex(0, total_seconds + 1)
@@ -187,6 +265,58 @@ def smooth_step_series(
     return dense_index.to_numpy(dtype=float), smoothed.to_numpy(dtype=float)
 
 
+def normalize_score_diff_probability(
+    score_diff: np.ndarray,
+    scale: float,
+) -> np.ndarray:
+    bounded_scale = max(float(scale), 1e-6)
+    logits = np.clip(score_diff / bounded_scale, -30.0, 30.0)
+    return 1.0 / (1.0 + np.exp(-logits))
+
+
+def fit_point_diff_scale(
+    score_diff: np.ndarray,
+    target_home_win_probability: np.ndarray,
+    *,
+    default_scale: float,
+    scale_min: float,
+    scale_max: float,
+    scale_step: float,
+    fit_enabled: bool,
+) -> tuple[float, np.ndarray]:
+    if not fit_enabled:
+        return default_scale, normalize_score_diff_probability(score_diff, default_scale)
+
+    lo = max(1e-6, min(scale_min, scale_max))
+    hi = max(scale_min, scale_max)
+    step = max(scale_step, 1e-6)
+    candidates = np.arange(lo, hi + step * 0.5, step, dtype=float)
+    if candidates.size == 0:
+        candidates = np.array([default_scale], dtype=float)
+
+    best_scale = float(default_scale)
+    best_curve = normalize_score_diff_probability(score_diff, best_scale)
+    best_mse = float(np.mean(np.square(best_curve - target_home_win_probability)))
+    for scale in candidates:
+        candidate_curve = normalize_score_diff_probability(score_diff, float(scale))
+        mse = float(np.mean(np.square(candidate_curve - target_home_win_probability)))
+        if mse < best_mse:
+            best_mse = mse
+            best_scale = float(scale)
+            best_curve = candidate_curve
+    return best_scale, best_curve
+
+
+def probability_error_metrics(
+    predicted: np.ndarray, baseline: np.ndarray
+) -> tuple[float, float, float]:
+    diff = predicted - baseline
+    mae = float(np.mean(np.abs(diff)))
+    rmse = float(np.sqrt(np.mean(np.square(diff))))
+    max_abs = float(np.max(np.abs(diff)))
+    return mae, rmse, max_abs
+
+
 def plot_mode_panel(
     ax: plt.Axes,
     frame: pd.DataFrame,
@@ -194,12 +324,37 @@ def plot_mode_panel(
     probability_column: str,
     mode_label: str,
     smooth_window_seconds: int,
+    point_diff_scale: float,
+    fit_point_diff_scale_enabled: bool,
+    point_diff_scale_min: float,
+    point_diff_scale_max: float,
+    point_diff_scale_step: float,
 ) -> None:
     total_seconds = int(frame["elapsed_seconds"].max())
     home_win_probability = frame[probability_column].to_numpy(dtype=float)
+    score_diff = frame["score_diff"].to_numpy(dtype=float)
+    fitted_scale, normalized_point_diff_probability = fit_point_diff_scale(
+        score_diff=score_diff,
+        target_home_win_probability=home_win_probability,
+        default_scale=point_diff_scale,
+        scale_min=point_diff_scale_min,
+        scale_max=point_diff_scale_max,
+        scale_step=point_diff_scale_step,
+        fit_enabled=fit_point_diff_scale_enabled,
+    )
+    mae, rmse, max_abs = probability_error_metrics(
+        home_win_probability,
+        normalized_point_diff_probability,
+    )
     smooth_x, smooth_home_probability = smooth_step_series(
         frame=frame,
-        probability_column=probability_column,
+        values=home_win_probability,
+        total_seconds=total_seconds,
+        window_seconds=smooth_window_seconds,
+    )
+    _, smooth_normalized_point_diff_probability = smooth_step_series(
+        frame=frame,
+        values=normalized_point_diff_probability,
         total_seconds=total_seconds,
         window_seconds=smooth_window_seconds,
     )
@@ -225,14 +380,31 @@ def plot_mode_panel(
         smooth_home_probability,
         color=HOME_COLOR,
         linewidth=2.7,
-        label=str(match["home_team"]),
+        label=f"{match['home_team']} prediction",
     )
     ax.plot(
         smooth_x,
         1.0 - smooth_home_probability,
         color=AWAY_COLOR,
         linewidth=2.7,
-        label=str(match["away_team"]),
+        label=f"{match['away_team']} prediction",
+    )
+    ax.plot(
+        smooth_x,
+        smooth_normalized_point_diff_probability,
+        color="#7C3AED",
+        linewidth=2.0,
+        linestyle="--",
+        label=f"{match['home_team']} normalized point diff",
+    )
+    ax.fill_between(
+        smooth_x,
+        smooth_home_probability,
+        smooth_normalized_point_diff_probability,
+        color="#7C3AED",
+        alpha=0.1,
+        linewidth=0.0,
+        label="prediction gap",
     )
 
     home_score = int(match["home_score"])
@@ -257,7 +429,10 @@ def plot_mode_panel(
         (
             f"GEI: {gei:.2f}\n"
             f"Min {match['home_team'] if home_win else match['away_team']} WP: "
-            f"{min_winner_probability * 100:.1f}%"
+            f"{min_winner_probability * 100:.1f}%\n"
+            f"Point-diff scale: {fitted_scale:.2f}\n"
+            f"Δ MAE: {mae * 100:.2f}pp  RMSE: {rmse * 100:.2f}pp\n"
+            f"Δ Max: {max_abs * 100:.2f}pp"
         ),
         transform=ax.transAxes,
         fontsize=9,
@@ -286,16 +461,13 @@ def main() -> None:
     playbyplay_by_match_id, _ = load_playbyplay_cache(pbp_cache_path)
     matches = attach_playbyplay_cache(matches, playbyplay_by_match_id)
 
-    results = build_match_results_frame(matches)
-    scored_results = compute_elo_probabilities(results, model.elo_config)
-    pregame_home_wp_by_match_id = dict(
-        zip(scored_results["match_id"], scored_results["pregame_home_wp"])
-    )
-
-    states = build_state_frame(matches, pregame_home_wp_by_match_id)
     season_filter = args.season or model.validation_seasons
-    if season_filter:
-        states = states[states["season"].isin(season_filter)].copy()
+    pipeline_data = build_pipeline_data(
+        matches=matches,
+        model=model,
+        season_filter=season_filter,
+    )
+    states = pipeline_data.states.copy()
 
     if states.empty:
         raise ValueError("No state rows available for plotting.")
@@ -303,13 +475,18 @@ def main() -> None:
     plot_modes = args.compare_modes or [args.mode]
     ranking_mode = "hybrid" if "hybrid" in plot_modes else plot_modes[0]
     prediction_modes = sorted(set(plot_modes + [ranking_mode]))
-    for mode in prediction_modes:
-        states[f"home_win_probability_{mode}"] = build_predictions(
-            states=states,
-            model=model,
-            mode=mode,
-            hybrid_cutoff_seconds=args.hybrid_cutoff_seconds,
-        )
+    pipeline_data = WinProbabilityPipelineData(
+        matches=pipeline_data.matches,
+        match_results=pipeline_data.match_results,
+        scored_results=pipeline_data.scored_results,
+        states=states,
+    )
+    states = append_model_probabilities(
+        pipeline_data=pipeline_data,
+        model=model,
+        modes=prediction_modes,
+        hybrid_cutoff_seconds=args.hybrid_cutoff_seconds,
+    )
     states["elapsed_seconds"] = [
         elapsed_seconds(int(period_index), int(clock_seconds))
         for period_index, clock_seconds in zip(
@@ -374,6 +551,11 @@ def main() -> None:
                 probability_column=f"home_win_probability_{mode}",
                 mode_label=mode,
                 smooth_window_seconds=args.smooth_window_seconds,
+                point_diff_scale=args.point_diff_scale,
+                fit_point_diff_scale_enabled=args.fit_point_diff_scale,
+                point_diff_scale_min=args.point_diff_scale_min,
+                point_diff_scale_max=args.point_diff_scale_max,
+                point_diff_scale_step=args.point_diff_scale_step,
             )
         axes_list[0].set_ylabel("Win Probability")
         axes_list[0].legend(loc="upper left")

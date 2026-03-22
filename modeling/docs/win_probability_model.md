@@ -20,6 +20,22 @@ The model follows the same core structure as the Yale NCAA model:
 
 Yale uses the Vegas point spread as the pregame prior. `koris-api` data does not include betting lines, so this implementation replaces that input with a **chronological Elo-based pregame win probability** learned from prior match results.
 
+## Pluggable prediction interface
+
+The win-probability pipeline now supports model switching through a shared interface:
+
+- `WinProbabilityPipelineData`: full pipeline payload (`matches`, `match_results`, `scored_results`, `states`)
+- `WinProbabilityModelInput`: wraps the full payload + fitted artifact + optional model options
+- `WinProbabilityModelInterface`: protocol with `name` and `predict(model_input)` methods
+
+Built-in registered model names:
+
+- `global`
+- `bucketed`
+- `hybrid`
+
+The plot script resolves mode choices dynamically from the registry, so changing model logic or adding a new model implementation only requires registering it (no plot pipeline branching edits).
+
 ## Files
 
 - `modeling/src/koris_api/win_probability.py`
@@ -29,7 +45,7 @@ Yale uses the Vegas point spread as the pregame prior. `koris-api` data does not
 - `modeling/scripts/train_win_probability_model.py`
   End-to-end training and validation script. It can optionally fetch missing play-by-play into a local cache before fitting.
 - `modeling/scripts/plot_win_probability.py`
-  Generates Yale-style win probability charts with time elapsed on the x-axis.
+  Generates Yale-style win probability charts with time elapsed on the x-axis, and now also overlays a normalized point-difference probability curve.
 
 ## Example
 
@@ -63,5 +79,8 @@ PYTHONPATH=src .venv/bin/python modeling/scripts/plot_win_probability.py \
   --season 2025-2026 \
   --top-n-exciting 3 \
   --mode hybrid \
-  --hybrid-cutoff-seconds 300
+  --hybrid-cutoff-seconds 300 \
+  --fit-point-diff-scale
 ```
+
+The plotter can fit a per-panel score-differential normalization scale (`--fit-point-diff-scale`, enabled by default) so the normalized point-difference curve matches model prediction as closely as possible (minimum MSE over a scale grid). The chart annotations include fitted scale and prediction-vs-point-difference divergence metrics (MAE, RMSE, max absolute gap).

@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from itertools import product
 from pathlib import Path
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence
 
 import numpy as np
 import pandas as pd
@@ -85,6 +85,128 @@ class BucketedWinProbabilityModel:
             "train_seasons": self.train_seasons,
             "validation_seasons": self.validation_seasons,
         }
+
+
+@dataclass(frozen=True)
+class WinProbabilityPipelineData:
+    matches: Sequence[dict[str, Any]]
+    match_results: pd.DataFrame
+    scored_results: pd.DataFrame
+    states: pd.DataFrame
+
+
+@dataclass(frozen=True)
+class WinProbabilityModelInput:
+    pipeline: WinProbabilityPipelineData
+    artifact: BucketedWinProbabilityModel
+    options: Mapping[str, Any] | None = None
+
+
+class WinProbabilityModelInterface(Protocol):
+    name: str
+
+    def predict(self, model_input: WinProbabilityModelInput) -> np.ndarray: ...
+
+
+class GlobalWinProbabilityPredictor:
+    name = "global"
+
+    def predict(self, model_input: WinProbabilityModelInput) -> np.ndarray:
+        return predict_global_probabilities(
+            model_input.pipeline.states,
+            model_input.artifact.global_coefficients,
+        )
+
+
+class BucketedWinProbabilityPredictor:
+    name = "bucketed"
+
+    def predict(self, model_input: WinProbabilityModelInput) -> np.ndarray:
+        return predict_state_probabilities(
+            model_input.pipeline.states,
+            model_input.artifact,
+        )
+
+
+class HybridWinProbabilityPredictor:
+    name = "hybrid"
+
+    def predict(self, model_input: WinProbabilityModelInput) -> np.ndarray:
+        cutoff_seconds = _resolve_int_option(
+            model_input,
+            "hybrid_cutoff_seconds",
+            default=300,
+        )
+        global_predictions = predict_global_probabilities(
+            model_input.pipeline.states,
+            model_input.artifact.global_coefficients,
+        )
+        bucketed_predictions = predict_state_probabilities(
+            model_input.pipeline.states,
+            model_input.artifact,
+        )
+        hybrid_predictions = global_predictions.copy()
+        mask = (
+            model_input.pipeline.states["seconds_remaining"].to_numpy(dtype=int)
+            <= cutoff_seconds
+        )
+        hybrid_predictions[mask] = bucketed_predictions[mask]
+        return hybrid_predictions
+
+
+WIN_PROBABILITY_MODEL_REGISTRY: dict[str, WinProbabilityModelInterface] = {}
+
+
+def register_win_probability_model(model: WinProbabilityModelInterface) -> None:
+    key = model.name.strip().lower()
+    if not key:
+        raise ValueError("Model name must be a non-empty string.")
+    WIN_PROBABILITY_MODEL_REGISTRY[key] = model
+
+
+def available_win_probability_models() -> list[str]:
+    return sorted(WIN_PROBABILITY_MODEL_REGISTRY.keys())
+
+
+def predict_with_win_probability_model(
+    model_name: str,
+    model_input: WinProbabilityModelInput,
+) -> np.ndarray:
+    key = model_name.strip().lower()
+    model = WIN_PROBABILITY_MODEL_REGISTRY.get(key)
+    if model is None:
+        available = ", ".join(available_win_probability_models())
+        raise ValueError(f"Unknown win-probability model '{model_name}'. Available: {available}")
+
+    predictions = np.asarray(model.predict(model_input), dtype=float)
+    if predictions.ndim != 1 or predictions.shape[0] != len(model_input.pipeline.states):
+        raise ValueError(
+            "Model prediction must return a 1D array with one value per input row."
+        )
+    return np.clip(predictions, 1e-6, 1 - 1e-6)
+
+
+def _resolve_int_option(
+    model_input: WinProbabilityModelInput,
+    option_key: str,
+    *,
+    default: int,
+) -> int:
+    if model_input.options is None or option_key not in model_input.options:
+        return default
+    value = model_input.options[option_key]
+    if not isinstance(value, int):
+        raise TypeError(f"Model option '{option_key}' must be an int, got {type(value).__name__}.")
+    return value
+
+
+def _register_default_win_probability_models() -> None:
+    register_win_probability_model(GlobalWinProbabilityPredictor())
+    register_win_probability_model(BucketedWinProbabilityPredictor())
+    register_win_probability_model(HybridWinProbabilityPredictor())
+
+
+_register_default_win_probability_models()
 
 
 def load_matches(paths: Sequence[str | Path]) -> list[dict[str, Any]]:
