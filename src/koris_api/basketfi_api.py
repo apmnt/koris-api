@@ -9,6 +9,7 @@ class BasketFiAPI:
     """Client for interacting with the Basket.fi/Torneopal API."""
 
     BASE_URL = "https://koripallo-api.torneopal.net/taso/rest"
+    DEFAULT_TIMEOUT = (5.0, 20.0)
     HEADERS = {
         "Accept": "json/df8e84j9xtdz269euy3h",
         "Accept-Encoding": "gzip, deflate, br",
@@ -44,7 +45,12 @@ class BasketFiAPI:
             )
 
         start_time = time.time()
-        response = requests.get(url, params=params, headers=cls.HEADERS)
+        response = requests.get(
+            url,
+            params=params,
+            headers=cls.HEADERS,
+            timeout=cls.DEFAULT_TIMEOUT,
+        )
         elapsed_time = time.time() - start_time
 
         # Raise an error for bad status codes
@@ -69,7 +75,12 @@ class BasketFiAPI:
         url = f"{cls.BASE_URL}/getMatch"
         timestamp = str(int(time.time() * 1000))
         querystring = {"match_id": match_id, "timeStamp": timestamp}
-        response = requests.get(url, headers=cls.HEADERS, params=querystring)
+        response = requests.get(
+            url,
+            headers=cls.HEADERS,
+            params=querystring,
+            timeout=cls.DEFAULT_TIMEOUT,
+        )
         response.raise_for_status()
         return cast(Dict[str, Any], response.json())
 
@@ -102,7 +113,12 @@ class BasketFiAPI:
             querystring["competition_id"] = competition_id
             querystring["category_id"] = category_id
 
-        response = requests.get(url, headers=cls.HEADERS, params=querystring)
+        response = requests.get(
+            url,
+            headers=cls.HEADERS,
+            params=querystring,
+            timeout=cls.DEFAULT_TIMEOUT,
+        )
         response.raise_for_status()
         return cast(Dict[str, Any], response.json())
 
@@ -120,6 +136,11 @@ class BasketFiAPI:
         """
         url = f"{cls.BASE_URL}/getCategory"
         querystring = {"competition_id": competition_id, "category_id": category_id}
-        response = requests.get(url, headers=cls.HEADERS, params=querystring)
+        response = requests.get(
+            url,
+            headers=cls.HEADERS,
+            params=querystring,
+            timeout=cls.DEFAULT_TIMEOUT,
+        )
         response.raise_for_status()
         return cast(Dict[str, Any], response.json())

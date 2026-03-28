@@ -45,7 +45,7 @@ class GeniusSportsAPI:
         session: Optional[requests.Session] = None,
         retries: int = 3,
         backoff_seconds: float = 0.6,
-        timeout_seconds: float = 15.0,
+        timeout_seconds: float = 30.0,
         not_found_retries: int = 0,
         not_found_backoff_seconds: float = 2.0,
         log_fn: Optional[Callable[[str], None]] = None,
@@ -84,7 +84,7 @@ class GeniusSportsAPI:
         session: Optional[requests.Session] = None,
         retries: int = 3,
         backoff_seconds: float = 0.6,
-        timeout_seconds: float = 15.0,
+        timeout_seconds: float = 30.0,
         not_found_retries: int = 0,
         not_found_backoff_seconds: float = 2.0,
         log_fn: Optional[Callable[[str], None]] = None,
@@ -206,6 +206,9 @@ class GeniusSportsAPI:
         cls,
         match_id: str,
         competition_id: str = "42145",
+        retries: int = 3,
+        backoff_seconds: float = 0.6,
+        timeout_seconds: float = 30.0,
     ) -> Dict[str, Any]:
         """
         Fetch and parse play-by-play data from the Genius Sports hosted page.
@@ -220,10 +223,45 @@ class GeniusSportsAPI:
             "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/"
             f"{competition_id}/match/{match_id}/playbyplay"
         )
-        response = requests.get(url)
-        response.raise_for_status()
+        last_error: Optional[Exception] = None
+        for attempt in range(1, retries + 2):
+            try:
+                response = requests.get(
+                    url,
+                    timeout=timeout_seconds,
+                    headers=cls._DEFAULT_HEADERS,
+                )
+                if response.status_code >= 500 and attempt <= retries:
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                response.raise_for_status()
+                return GeniusSportsParser.parse_playbyplay_html(response.text)
+            except requests.exceptions.ReadTimeout as exc:
+                last_error = exc
+                if attempt <= retries:
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                break
+            except requests.exceptions.HTTPError as exc:
+                last_error = exc
+                if (
+                    exc.response is not None
+                    and exc.response.status_code >= 500
+                    and attempt <= retries
+                ):
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                break
+            except requests.exceptions.RequestException as exc:
+                last_error = exc
+                if attempt <= retries:
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                break
 
-        return GeniusSportsParser.parse_playbyplay_html(response.text)
+        if last_error:
+            raise last_error
+        raise RuntimeError(f"Failed to fetch play-by-play for match {match_id}")
 
     @classmethod
     def get_genius_teams(cls, competition_id: str) -> List[Dict[str, Any]]:
