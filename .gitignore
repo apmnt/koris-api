@@ -1,3 +1,8 @@
 **/__pycache__/**
 **/output
+!modeling/output/
+!modeling/output/win_probability_1div/
+modeling/output/win_probability_1div/*
+!modeling/output/win_probability_1div/model_coefficients.json
+!modeling/output/win_probability_1div/metrics.json
 data

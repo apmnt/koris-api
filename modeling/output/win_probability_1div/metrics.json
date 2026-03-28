@@ -1,0 +1,53 @@
+{
+  "coverage": {
+    "matches_total": 285,
+    "train_matches": 165,
+    "validation_matches": 120,
+    "matches_with_playbyplay_after_cache": 285,
+    "train_state_rows": 90780,
+    "validation_state_rows": 69239,
+    "playbyplay_cache_entries": 246,
+    "playbyplay_fetch_errors": 0
+  },
+  "elo_config": {
+    "k_factor": 30.0,
+    "home_advantage": 120.0,
+    "carryover": 0.5,
+    "initial_rating": 1500.0,
+    "scale": 400.0
+  },
+  "train": {
+    "pregame_prior": {
+      "log_loss": 0.592074691049495,
+      "brier_score": 0.20281711678974249,
+      "accuracy": 0.7047367261511346
+    },
+    "single_logit": {
+      "log_loss": 0.3586139691120476,
+      "brier_score": 0.11717631969453847,
+      "accuracy": 0.8251266798854373
+    },
+    "bucketed_model": {
+      "log_loss": 0.3389972366716886,
+      "brier_score": 0.11059946985781616,
+      "accuracy": 0.8350407578761841
+    }
+  },
+  "validation": {
+    "pregame_prior": {
+      "log_loss": 0.6493758495083305,
+      "brier_score": 0.22949545922758532,
+      "accuracy": 0.6134548448128945
+    },
+    "single_logit": {
+      "log_loss": 0.44752391507398864,
+      "brier_score": 0.1498230411831767,
+      "accuracy": 0.7733502794667745
+    },
+    "bucketed_model": {
+      "log_loss": 0.4543692813275292,
+      "brier_score": 0.15073489052278333,
+      "accuracy": 0.7773653576741432
+    }
+  }
+}

@@ -1,0 +1,1989 @@
+{
+  "bucket_starts": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    32,
+    34,
+    36,
+    38,
+    40,
+    42,
+    44,
+    46,
+    48,
+    50,
+    52,
+    54,
+    56,
+    58,
+    60,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120,
+    130,
+    140,
+    150,
+    160,
+    170,
+    180,
+    190,
+    200,
+    210,
+    220,
+    230,
+    240,
+    250,
+    260,
+    270,
+    280,
+    290,
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370,
+    380,
+    390,
+    400,
+    410,
+    420,
+    430,
+    440,
+    450,
+    460,
+    470,
+    480,
+    490,
+    500,
+    510,
+    520,
+    530,
+    540,
+    550,
+    560,
+    570,
+    580,
+    590,
+    600,
+    610,
+    620,
+    630,
+    640,
+    650,
+    660,
+    670,
+    680,
+    690,
+    700,
+    710,
+    720,
+    730,
+    740,
+    750,
+    760,
+    770,
+    780,
+    790,
+    800,
+    810,
+    820,
+    830,
+    840,
+    850,
+    860,
+    870,
+    880,
+    890,
+    900,
+    910,
+    920,
+    930,
+    940,
+    950,
+    960,
+    970,
+    980,
+    990,
+    1000,
+    1010,
+    1020,
+    1030,
+    1040,
+    1050,
+    1060,
+    1070,
+    1080,
+    1090,
+    1100,
+    1110,
+    1120,
+    1130,
+    1140,
+    1150,
+    1160,
+    1170,
+    1180,
+    1190,
+    1200,
+    1210,
+    1220,
+    1230,
+    1240,
+    1250,
+    1260,
+    1270,
+    1280,
+    1290,
+    1300,
+    1310,
+    1320,
+    1330,
+    1340,
+    1350,
+    1360,
+    1370,
+    1380,
+    1390,
+    1400,
+    1410,
+    1420,
+    1430,
+    1440,
+    1450,
+    1460,
+    1470,
+    1480,
+    1490,
+    1500,
+    1510,
+    1520,
+    1530,
+    1540,
+    1550,
+    1560,
+    1570,
+    1580,
+    1590,
+    1600,
+    1610,
+    1620,
+    1630,
+    1640,
+    1650,
+    1660,
+    1670,
+    1680,
+    1690,
+    1700,
+    1710,
+    1720,
+    1730,
+    1740,
+    1750,
+    1760,
+    1770,
+    1780,
+    1790,
+    1800,
+    1810,
+    1820,
+    1830,
+    1840,
+    1850,
+    1860,
+    1870,
+    1880,
+    1890,
+    1900,
+    1910,
+    1920,
+    1930,
+    1940,
+    1950,
+    1960,
+    1970,
+    1980,
+    1990,
+    2000,
+    2010,
+    2020,
+    2030,
+    2040,
+    2050,
+    2060,
+    2070,
+    2080,
+    2090,
+    2100,
+    2110,
+    2120,
+    2130,
+    2140,
+    2150,
+    2160,
+    2170,
+    2180,
+    2190,
+    2200,
+    2210,
+    2220,
+    2230,
+    2240,
+    2250,
+    2260,
+    2270,
+    2280,
+    2290,
+    2300,
+    2310,
+    2320,
+    2330,
+    2340,
+    2350,
+    2360,
+    2370,
+    2380,
+    2390,
+    2400
+  ],
+  "feature_names": [
+    "intercept",
+    "score_diff",
+    "pre_game_prob"
+  ],
+  "global_coefficients": {
+    "intercept": -3.1690607413494356,
+    "score_diff": 0.20182319535483084,
+    "pre_game_prob": 5.6892694605682825
+  },
+  "coefficients": [
+    {
+      "bucket_start": 0,
+      "intercept": 26.709928336763586,
+      "score_diff": 8.221267936113534,
+      "pre_game_prob": -41.07295608249757
+    },
+    {
+      "bucket_start": 1,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 2,
+      "intercept": -12.557333390056044,
+      "score_diff": 4.543919286304985,
+      "pre_game_prob": 18.613344949980608
+    },
+    {
+      "bucket_start": 3,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 4,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 5,
+      "intercept": 6.416396573455212,
+      "score_diff": 1.8553251254911065,
+      "pre_game_prob": -7.023925283723874
+    },
+    {
+      "bucket_start": 6,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 7,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 8,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 9,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 10,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 11,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 12,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 13,
+      "intercept": -0.49091734889467525,
+      "score_diff": 6.829627505014413,
+      "pre_game_prob": 0.047195491620232094
+    },
+    {
+      "bucket_start": 14,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 15,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 16,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 17,
+      "intercept": 19.76271621059395,
+      "score_diff": 1.9727594329869926,
+      "pre_game_prob": -27.88586572092492
+    },
+    {
+      "bucket_start": 18,
+      "intercept": -0.3081726924453563,
+      "score_diff": 2.9494344104053067,
+      "pre_game_prob": 0.060856111589698315
+    },
+    {
+      "bucket_start": 19,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 20,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 21,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 22,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 23,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 24,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 25,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 26,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 27,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 28,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 29,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 30,
+      "intercept": 27.728281888035767,
+      "score_diff": 2.123010990487475,
+      "pre_game_prob": -39.60056572274877
+    },
+    {
+      "bucket_start": 32,
+      "intercept": 12.127337630532843,
+      "score_diff": 1.0487497826461658,
+      "pre_game_prob": -19.515935358882196
+    },
+    {
+      "bucket_start": 34,
+      "intercept": 11.735597968619246,
+      "score_diff": 6.421152983904169,
+      "pre_game_prob": 0.7060346961432853
+    },
+    {
+      "bucket_start": 36,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 38,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    },
+    {
+      "bucket_start": 40,
+      "intercept": 9.453242850138029,
+      "score_diff": 1.053385670519928,
+      "pre_game_prob": -14.434941592770098
+    },
+    {
+      "bucket_start": 42,
+      "intercept": 0.7371207454081338,
+      "score_diff": 3.838818153548155,
+      "pre_game_prob": -0.09763972291373067
+    },
+    {
+      "bucket_start": 44,
+      "intercept": -4.469072100305364,
+      "score_diff": 11.348011665357339,
+      "pre_game_prob": -0.9899527899521744
+    },
+    {
+      "bucket_start": 46,
+      "intercept": 8.291595368013645,
+      "score_diff": 2.2723354835685345,
+      "pre_game_prob": -5.788055769342741
+    },
+    {
+      "bucket_start": 48,
+      "intercept": -16.07892964186114,
+      "score_diff": 6.472318674365534,
+      "pre_game_prob": 25.773620990952683
+    },
+    {
+      "bucket_start": 50,
+      "intercept": 9.752141075868899,
+      "score_diff": 1.1250212452371764,
+      "pre_game_prob": -12.927655001075715
+    },
+    {
+      "bucket_start": 52,
+      "intercept": 0.8115527775022965,
+      "score_diff": 0.8596532592598568,
+      "pre_game_prob": 1.6172045199524396
+    },
+    {
+      "bucket_start": 54,
+      "intercept": -0.8218503293461186,
+      "score_diff": 0.9885260890367491,
+      "pre_game_prob": 1.9104252172489484
+    },
+    {
+      "bucket_start": 56,
+      "intercept": 13.877795426686138,
+      "score_diff": 0.7646358605728854,
+      "pre_game_prob": -18.358358590351656
+    },
+    {
+      "bucket_start": 58,
+      "intercept": 13.002680348839476,
+      "score_diff": 0.8451044198790437,
+      "pre_game_prob": -19.133435562138253
+    },
+    {
+      "bucket_start": 60,
+      "intercept": 1.1139824483088907,
+      "score_diff": 0.5070152968842927,
+      "pre_game_prob": -1.8426743660150777
+    },
+    {
+      "bucket_start": 70,
+      "intercept": 4.619343216790575,
+      "score_diff": 0.6099808601365736,
+      "pre_game_prob": -5.913806961325054
+    },
+    {
+      "bucket_start": 80,
+      "intercept": 2.1628168413524693,
+      "score_diff": 0.8670099460854124,
+      "pre_game_prob": -3.387230457608608
+    },
+    {
+      "bucket_start": 90,
+      "intercept": 7.108366349727652,
+      "score_diff": 0.6165339798512459,
+      "pre_game_prob": -9.966400469221625
+    },
+    {
+      "bucket_start": 100,
+      "intercept": 3.6345408087652027,
+      "score_diff": 0.6528996849755773,
+      "pre_game_prob": -4.071681947671444
+    },
+    {
+      "bucket_start": 110,
+      "intercept": 2.5112365830680106,
+      "score_diff": 0.6773074976284169,
+      "pre_game_prob": -3.121598384964951
+    },
+    {
+      "bucket_start": 120,
+      "intercept": 0.6157573526771742,
+      "score_diff": 0.48132746544762994,
+      "pre_game_prob": 0.6759786330808226
+    },
+    {
+      "bucket_start": 130,
+      "intercept": -0.7641097822817234,
+      "score_diff": 0.33899616486977996,
+      "pre_game_prob": 1.104584746798428
+    },
+    {
+      "bucket_start": 140,
+      "intercept": 0.1311372237493057,
+      "score_diff": 0.6833521528689566,
+      "pre_game_prob": 1.6626971141824893
+    },
+    {
+      "bucket_start": 150,
+      "intercept": -2.0170359249308647,
+      "score_diff": 0.3694442773257822,
+      "pre_game_prob": 3.510853820405882
+    },
+    {
+      "bucket_start": 160,
+      "intercept": 2.063541851044042,
+      "score_diff": 0.4774992315060159,
+      "pre_game_prob": -2.233373696368534
+    },
+    {
+      "bucket_start": 170,
+      "intercept": -1.69996690029412,
+      "score_diff": 0.4294110704701121,
+      "pre_game_prob": 2.250233878838001
+    },
+    {
+      "bucket_start": 180,
+      "intercept": -6.04309409247633,
+      "score_diff": 0.2965204124289601,
+      "pre_game_prob": 9.25125083690096
+    },
+    {
+      "bucket_start": 190,
+      "intercept": -0.9912179061544051,
+      "score_diff": 0.2882969446171486,
+      "pre_game_prob": 1.4404172409762086
+    },
+    {
+      "bucket_start": 200,
+      "intercept": -2.0235990765149796,
+      "score_diff": 0.3589485398917624,
+      "pre_game_prob": 2.982067575743918
+    },
+    {
+      "bucket_start": 210,
+      "intercept": 2.7870606617709925,
+      "score_diff": 0.4702403790484546,
+      "pre_game_prob": -4.1038553876783705
+    },
+    {
+      "bucket_start": 220,
+      "intercept": -2.0373828317973475,
+      "score_diff": 0.4606891974894567,
+      "pre_game_prob": 2.883491390896632
+    },
+    {
+      "bucket_start": 230,
+      "intercept": 0.6290576635260162,
+      "score_diff": 0.3595712639980663,
+      "pre_game_prob": -0.3156908348968122
+    },
+    {
+      "bucket_start": 240,
+      "intercept": -0.7971767674835148,
+      "score_diff": 0.333915011178467,
+      "pre_game_prob": 1.6448158540982627
+    },
+    {
+      "bucket_start": 250,
+      "intercept": -1.5502113723374065,
+      "score_diff": 0.30172961244725255,
+      "pre_game_prob": 2.8767255749504623
+    },
+    {
+      "bucket_start": 260,
+      "intercept": -0.9304838515255809,
+      "score_diff": 0.4591066840770757,
+      "pre_game_prob": 1.5048769217488018
+    },
+    {
+      "bucket_start": 270,
+      "intercept": -1.250994503267477,
+      "score_diff": 0.25689013842257735,
+      "pre_game_prob": 2.1610080200839055
+    },
+    {
+      "bucket_start": 280,
+      "intercept": -3.8211133780437043,
+      "score_diff": 0.3920716265888958,
+      "pre_game_prob": 5.210144511320057
+    },
+    {
+      "bucket_start": 290,
+      "intercept": -0.838632093816398,
+      "score_diff": 0.41947653196026213,
+      "pre_game_prob": 2.1900607671788426
+    },
+    {
+      "bucket_start": 300,
+      "intercept": 0.3787191560894911,
+      "score_diff": 0.45796961513218537,
+      "pre_game_prob": -0.5990050907694104
+    },
+    {
+      "bucket_start": 310,
+      "intercept": 1.1942435098510655,
+      "score_diff": 0.29080738594762306,
+      "pre_game_prob": -1.2829133894391298
+    },
+    {
+      "bucket_start": 320,
+      "intercept": -2.1054788341496145,
+      "score_diff": 0.2453537761989736,
+      "pre_game_prob": 3.933673955225308
+    },
+    {
+      "bucket_start": 330,
+      "intercept": 2.080040774554639,
+      "score_diff": 0.26214029184305504,
+      "pre_game_prob": -2.469092298568312
+    },
+    {
+      "bucket_start": 340,
+      "intercept": 0.9530285130360223,
+      "score_diff": 0.3662401176437961,
+      "pre_game_prob": -0.9486320035292274
+    },
+    {
+      "bucket_start": 350,
+      "intercept": -4.017356220917009,
+      "score_diff": 0.27540852383363024,
+      "pre_game_prob": 5.900577200398834
+    },
+    {
+      "bucket_start": 360,
+      "intercept": -3.002719459004206,
+      "score_diff": 0.274150148452884,
+      "pre_game_prob": 5.815964860187655
+    },
+    {
+      "bucket_start": 370,
+      "intercept": -2.2104624367379384,
+      "score_diff": 0.21743870975276558,
+      "pre_game_prob": 3.5123420655082245
+    },
+    {
+      "bucket_start": 380,
+      "intercept": -3.357070873395181,
+      "score_diff": 0.3656402178486143,
+      "pre_game_prob": 6.020634899822028
+    },
+    {
+      "bucket_start": 390,
+      "intercept": -0.561697549691495,
+      "score_diff": 0.21010942068566793,
+      "pre_game_prob": 1.1988486432021432
+    },
+    {
+      "bucket_start": 400,
+      "intercept": -2.1381860198545626,
+      "score_diff": 0.30827058889320075,
+      "pre_game_prob": 3.3366054662476037
+    },
+    {
+      "bucket_start": 410,
+      "intercept": 0.6649070728320704,
+      "score_diff": 0.2316708915853056,
+      "pre_game_prob": -0.726272474577235
+    },
+    {
+      "bucket_start": 420,
+      "intercept": -4.005849985575116,
+      "score_diff": 0.26072163718670754,
+      "pre_game_prob": 7.288286953399816
+    },
+    {
+      "bucket_start": 430,
+      "intercept": -2.4346913340015064,
+      "score_diff": 0.24917615185603587,
+      "pre_game_prob": 5.432217512091436
+    },
+    {
+      "bucket_start": 440,
+      "intercept": -0.051030949047985635,
+      "score_diff": 0.3560764279108167,
+      "pre_game_prob": 1.1824321363471753
+    },
+    {
+      "bucket_start": 450,
+      "intercept": -0.3340086310565155,
+      "score_diff": 0.24046659773476967,
+      "pre_game_prob": 1.2936079379668426
+    },
+    {
+      "bucket_start": 460,
+      "intercept": -1.8115256418736652,
+      "score_diff": 0.28920131157154666,
+      "pre_game_prob": 2.178437071205779
+    },
+    {
+      "bucket_start": 470,
+      "intercept": -0.935724097657539,
+      "score_diff": 0.35269997236190065,
+      "pre_game_prob": 2.0825061536754594
+    },
+    {
+      "bucket_start": 480,
+      "intercept": -1.4780461621593477,
+      "score_diff": 0.24279933384193542,
+      "pre_game_prob": 2.6195370057322855
+    },
+    {
+      "bucket_start": 490,
+      "intercept": -2.787798644799625,
+      "score_diff": 0.20317222198414278,
+      "pre_game_prob": 5.17004982243075
+    },
+    {
+      "bucket_start": 500,
+      "intercept": 0.9720813763807207,
+      "score_diff": 0.2514470848952008,
+      "pre_game_prob": -1.0281579406655386
+    },
+    {
+      "bucket_start": 510,
+      "intercept": -3.2143435384856005,
+      "score_diff": 0.22754972133178955,
+      "pre_game_prob": 5.955472587352846
+    },
+    {
+      "bucket_start": 520,
+      "intercept": -2.122661740300635,
+      "score_diff": 0.23344592045206625,
+      "pre_game_prob": 3.6566152184581657
+    },
+    {
+      "bucket_start": 530,
+      "intercept": -1.4424166188650946,
+      "score_diff": 0.2776851141297316,
+      "pre_game_prob": 2.9749576534459896
+    },
+    {
+      "bucket_start": 540,
+      "intercept": 1.3484024966764494,
+      "score_diff": 0.25988858520850905,
+      "pre_game_prob": -0.472608741765972
+    },
+    {
+      "bucket_start": 550,
+      "intercept": -4.781754038053299,
+      "score_diff": 0.1577748796197577,
+      "pre_game_prob": 7.572704553981498
+    },
+    {
+      "bucket_start": 560,
+      "intercept": -1.4166701459445663,
+      "score_diff": 0.20938212486505328,
+      "pre_game_prob": 2.6042916056740912
+    },
+    {
+      "bucket_start": 570,
+      "intercept": -0.7201962961421217,
+      "score_diff": 0.265386936889238,
+      "pre_game_prob": 1.0130021254362709
+    },
+    {
+      "bucket_start": 580,
+      "intercept": -1.7482636842026045,
+      "score_diff": 0.23455036307739374,
+      "pre_game_prob": 3.8378934516287653
+    },
+    {
+      "bucket_start": 590,
+      "intercept": -2.371421711201994,
+      "score_diff": 0.26720346371519105,
+      "pre_game_prob": 5.183027281530577
+    },
+    {
+      "bucket_start": 600,
+      "intercept": -1.9608454959672186,
+      "score_diff": 0.21381380906797925,
+      "pre_game_prob": 3.4133324379771657
+    },
+    {
+      "bucket_start": 610,
+      "intercept": -1.9605657447852063,
+      "score_diff": 0.33578367386893,
+      "pre_game_prob": 4.098067270170671
+    },
+    {
+      "bucket_start": 620,
+      "intercept": -1.5372630436243837,
+      "score_diff": 0.19616871283819534,
+      "pre_game_prob": 3.399430379021831
+    },
+    {
+      "bucket_start": 630,
+      "intercept": -1.8126640690281492,
+      "score_diff": 0.257421340917905,
+      "pre_game_prob": 2.620250264840836
+    },
+    {
+      "bucket_start": 640,
+      "intercept": -1.6392522011369384,
+      "score_diff": 0.18119834029442464,
+      "pre_game_prob": 3.0243846727381545
+    },
+    {
+      "bucket_start": 650,
+      "intercept": -1.0550427041364392,
+      "score_diff": 0.22126263801666046,
+      "pre_game_prob": 2.4911382621806153
+    },
+    {
+      "bucket_start": 660,
+      "intercept": -2.285549877305578,
+      "score_diff": 0.3033222200792386,
+      "pre_game_prob": 4.266288248781228
+    },
+    {
+      "bucket_start": 670,
+      "intercept": -1.6505975441556626,
+      "score_diff": 0.22837035934478603,
+      "pre_game_prob": 2.807342406656821
+    },
+    {
+      "bucket_start": 680,
+      "intercept": -0.8616610331946771,
+      "score_diff": 0.20077092849479652,
+      "pre_game_prob": 1.875189998241336
+    },
+    {
+      "bucket_start": 690,
+      "intercept": 1.9158483867702856,
+      "score_diff": 0.2461850500695044,
+      "pre_game_prob": -0.5399665292872509
+    },
+    {
+      "bucket_start": 700,
+      "intercept": -2.906631977587143,
+      "score_diff": 0.230040952000603,
+      "pre_game_prob": 6.340789188901834
+    },
+    {
+      "bucket_start": 710,
+      "intercept": -1.2357552726611218,
+      "score_diff": 0.2232794710501042,
+      "pre_game_prob": 2.662778925845658
+    },
+    {
+      "bucket_start": 720,
+      "intercept": -2.4673574654881687,
+      "score_diff": 0.21072384487794896,
+      "pre_game_prob": 4.724735556679722
+    },
+    {
+      "bucket_start": 730,
+      "intercept": -2.5736727239406223,
+      "score_diff": 0.21921509102277048,
+      "pre_game_prob": 4.653223065052161
+    },
+    {
+      "bucket_start": 740,
+      "intercept": -1.0584495371288114,
+      "score_diff": 0.16496961712708064,
+      "pre_game_prob": 2.302404995883523
+    },
+    {
+      "bucket_start": 750,
+      "intercept": -1.9418263851821127,
+      "score_diff": 0.16440605575320297,
+      "pre_game_prob": 3.760804165822175
+    },
+    {
+      "bucket_start": 760,
+      "intercept": 0.15073369109684834,
+      "score_diff": 0.22336016062638914,
+      "pre_game_prob": 0.32616425189734016
+    },
+    {
+      "bucket_start": 770,
+      "intercept": -2.6020121915835275,
+      "score_diff": 0.289050144641797,
+      "pre_game_prob": 4.42535199218452
+    },
+    {
+      "bucket_start": 780,
+      "intercept": -3.9186851502565716,
+      "score_diff": 0.17636294110507547,
+      "pre_game_prob": 6.989897516746308
+    },
+    {
+      "bucket_start": 790,
+      "intercept": -1.6840614428623892,
+      "score_diff": 0.2226526379472659,
+      "pre_game_prob": 3.054901172867854
+    },
+    {
+      "bucket_start": 800,
+      "intercept": -1.0113858968403244,
+      "score_diff": 0.1869968626033453,
+      "pre_game_prob": 2.249372593157496
+    },
+    {
+      "bucket_start": 810,
+      "intercept": -6.331554933073125,
+      "score_diff": 0.21605290878541886,
+      "pre_game_prob": 10.289955636902153
+    },
+    {
+      "bucket_start": 820,
+      "intercept": -1.0824370472561595,
+      "score_diff": 0.2691321719635276,
+      "pre_game_prob": 2.3159546529703787
+    },
+    {
+      "bucket_start": 830,
+      "intercept": -2.789604777094093,
+      "score_diff": 0.22604926777875478,
+      "pre_game_prob": 4.779055135468429
+    },
+    {
+      "bucket_start": 840,
+      "intercept": -2.1633493559218735,
+      "score_diff": 0.1767943597054921,
+      "pre_game_prob": 4.2061037855934265
+    },
+    {
+      "bucket_start": 850,
+      "intercept": -5.2145423590972175,
+      "score_diff": 0.2875120941408568,
+      "pre_game_prob": 9.321436437828366
+    },
+    {
+      "bucket_start": 860,
+      "intercept": -4.724644044018888,
+      "score_diff": 0.1935942975329359,
+      "pre_game_prob": 8.199582638604735
+    },
+    {
+      "bucket_start": 870,
+      "intercept": -6.745042421377765,
+      "score_diff": 0.24207841430241706,
+      "pre_game_prob": 11.868318136557953
+    },
+    {
+      "bucket_start": 880,
+      "intercept": -4.582966565294632,
+      "score_diff": 0.17220991036847075,
+      "pre_game_prob": 7.617173699898679
+    },
+    {
+      "bucket_start": 890,
+      "intercept": -1.3902291554000445,
+      "score_diff": 0.24591101474929503,
+      "pre_game_prob": 3.5025402862137676
+    },
+    {
+      "bucket_start": 900,
+      "intercept": -2.0360565780500783,
+      "score_diff": 0.19572741452637163,
+      "pre_game_prob": 3.1458904594721275
+    },
+    {
+      "bucket_start": 910,
+      "intercept": -3.0643972617760915,
+      "score_diff": 0.21562055857023057,
+      "pre_game_prob": 6.0042556565061345
+    },
+    {
+      "bucket_start": 920,
+      "intercept": -4.2159272881447585,
+      "score_diff": 0.22505097655784495,
+      "pre_game_prob": 7.230343343486829
+    },
+    {
+      "bucket_start": 930,
+      "intercept": -1.522877440846222,
+      "score_diff": 0.2609014674476603,
+      "pre_game_prob": 3.2213635392162008
+    },
+    {
+      "bucket_start": 940,
+      "intercept": -4.476346042724425,
+      "score_diff": 0.20005319814034073,
+      "pre_game_prob": 7.344060776796223
+    },
+    {
+      "bucket_start": 950,
+      "intercept": -2.859280737704377,
+      "score_diff": 0.18099735715368653,
+      "pre_game_prob": 5.198170908074274
+    },
+    {
+      "bucket_start": 960,
+      "intercept": -2.1206095624208663,
+      "score_diff": 0.20571606643554552,
+      "pre_game_prob": 4.126272757200729
+    },
+    {
+      "bucket_start": 970,
+      "intercept": -6.043789484299037,
+      "score_diff": 0.2567884882308094,
+      "pre_game_prob": 10.150033188379297
+    },
+    {
+      "bucket_start": 980,
+      "intercept": -4.241667618951086,
+      "score_diff": 0.24354109815008745,
+      "pre_game_prob": 7.619117078079751
+    },
+    {
+      "bucket_start": 990,
+      "intercept": -3.695475870418218,
+      "score_diff": 0.28223668590557044,
+      "pre_game_prob": 7.462015374683231
+    },
+    {
+      "bucket_start": 1000,
+      "intercept": -3.730528765827049,
+      "score_diff": 0.19071912493766877,
+      "pre_game_prob": 6.934291987371149
+    },
+    {
+      "bucket_start": 1010,
+      "intercept": -5.336025431864065,
+      "score_diff": 0.2537695583241904,
+      "pre_game_prob": 9.81893287564291
+    },
+    {
+      "bucket_start": 1020,
+      "intercept": -3.2802610318144705,
+      "score_diff": 0.16944282594986834,
+      "pre_game_prob": 5.84416919153467
+    },
+    {
+      "bucket_start": 1030,
+      "intercept": -3.735770889548853,
+      "score_diff": 0.1965586668324778,
+      "pre_game_prob": 6.537047215493992
+    },
+    {
+      "bucket_start": 1040,
+      "intercept": -2.578865663390046,
+      "score_diff": 0.2579332886213604,
+      "pre_game_prob": 5.507447211348961
+    },
+    {
+      "bucket_start": 1050,
+      "intercept": -2.687242124248594,
+      "score_diff": 0.21898173398817986,
+      "pre_game_prob": 4.900858136823816
+    },
+    {
+      "bucket_start": 1060,
+      "intercept": -5.52917454230896,
+      "score_diff": 0.1964387414932517,
+      "pre_game_prob": 9.380827899243132
+    },
+    {
+      "bucket_start": 1070,
+      "intercept": -2.9535937777793047,
+      "score_diff": 0.19026276621633847,
+      "pre_game_prob": 4.690492795212132
+    },
+    {
+      "bucket_start": 1080,
+      "intercept": -2.4982975409638413,
+      "score_diff": 0.21503126841805048,
+      "pre_game_prob": 5.303116345920262
+    },
+    {
+      "bucket_start": 1090,
+      "intercept": -1.625071818642234,
+      "score_diff": 0.22082218945783927,
+      "pre_game_prob": 4.268488220292437
+    },
+    {
+      "bucket_start": 1100,
+      "intercept": -3.748254426232238,
+      "score_diff": 0.23788307955197663,
+      "pre_game_prob": 6.1939173410999375
+    },
+    {
+      "bucket_start": 1110,
+      "intercept": -3.326285112557815,
+      "score_diff": 0.16042052325677839,
+      "pre_game_prob": 6.22344438441901
+    },
+    {
+      "bucket_start": 1120,
+      "intercept": -2.6433742923124877,
+      "score_diff": 0.1913534750926856,
+      "pre_game_prob": 4.562666264444614
+    },
+    {
+      "bucket_start": 1130,
+      "intercept": -2.2758061254563926,
+      "score_diff": 0.20818242017718985,
+      "pre_game_prob": 4.77010784079627
+    },
+    {
+      "bucket_start": 1140,
+      "intercept": -4.110998225682552,
+      "score_diff": 0.19078732496385217,
+      "pre_game_prob": 7.5174944180948735
+    },
+    {
+      "bucket_start": 1150,
+      "intercept": -2.1038325231195207,
+      "score_diff": 0.21487265136092695,
+      "pre_game_prob": 4.020167168061145
+    },
+    {
+      "bucket_start": 1160,
+      "intercept": -5.769004491106609,
+      "score_diff": 0.18274424661239133,
+      "pre_game_prob": 9.580782528546836
+    },
+    {
+      "bucket_start": 1170,
+      "intercept": -4.2603809791016305,
+      "score_diff": 0.22964567953535617,
+      "pre_game_prob": 8.020851996054233
+    },
+    {
+      "bucket_start": 1180,
+      "intercept": -4.106143388793313,
+      "score_diff": 0.22451569398275623,
+      "pre_game_prob": 7.391733868474171
+    },
+    {
+      "bucket_start": 1190,
+      "intercept": -5.831115615415862,
+      "score_diff": 0.3063899709103047,
+      "pre_game_prob": 10.298276788501314
+    },
+    {
+      "bucket_start": 1200,
+      "intercept": -3.531181863004861,
+      "score_diff": 0.18396863736894267,
+      "pre_game_prob": 6.2153174522326005
+    },
+    {
+      "bucket_start": 1210,
+      "intercept": -2.81441097458973,
+      "score_diff": 0.18109291676449737,
+      "pre_game_prob": 5.908949831712276
+    },
+    {
+      "bucket_start": 1220,
+      "intercept": -5.0525322805247,
+      "score_diff": 0.3073630370664361,
+      "pre_game_prob": 8.255879000616591
+    },
+    {
+      "bucket_start": 1230,
+      "intercept": -3.0648525287242463,
+      "score_diff": 0.22513712056356802,
+      "pre_game_prob": 5.82975979513805
+    },
+    {
+      "bucket_start": 1240,
+      "intercept": -1.4581598306222883,
+      "score_diff": 0.1995177623371631,
+      "pre_game_prob": 2.904663111364315
+    },
+    {
+      "bucket_start": 1250,
+      "intercept": -2.7620410659054135,
+      "score_diff": 0.13369149489469376,
+      "pre_game_prob": 5.373297451368219
+    },
+    {
+      "bucket_start": 1260,
+      "intercept": -3.330755291626084,
+      "score_diff": 0.18018549694594793,
+      "pre_game_prob": 6.583704758066641
+    },
+    {
+      "bucket_start": 1270,
+      "intercept": -4.556577878108871,
+      "score_diff": 0.2564931610056558,
+      "pre_game_prob": 8.27680939674702
+    },
+    {
+      "bucket_start": 1280,
+      "intercept": -4.864739709077925,
+      "score_diff": 0.174276441634511,
+      "pre_game_prob": 8.710045123110408
+    },
+    {
+      "bucket_start": 1290,
+      "intercept": -5.209534816288313,
+      "score_diff": 0.21801726719161577,
+      "pre_game_prob": 8.996302209491793
+    },
+    {
+      "bucket_start": 1300,
+      "intercept": -4.699064259054823,
+      "score_diff": 0.1823151880249244,
+      "pre_game_prob": 8.30826142197202
+    },
+    {
+      "bucket_start": 1310,
+      "intercept": -1.294354376458896,
+      "score_diff": 0.20433711860169018,
+      "pre_game_prob": 2.960506643519096
+    },
+    {
+      "bucket_start": 1320,
+      "intercept": -6.798359534061668,
+      "score_diff": 0.2689332397242229,
+      "pre_game_prob": 11.640772022282494
+    },
+    {
+      "bucket_start": 1330,
+      "intercept": -6.573011450955684,
+      "score_diff": 0.21500641650897215,
+      "pre_game_prob": 10.600770949644092
+    },
+    {
+      "bucket_start": 1340,
+      "intercept": -2.2020025540152735,
+      "score_diff": 0.19918558149370838,
+      "pre_game_prob": 3.8362126753636177
+    },
+    {
+      "bucket_start": 1350,
+      "intercept": -3.747741030123338,
+      "score_diff": 0.18401925280854048,
+      "pre_game_prob": 5.881970823752702
+    },
+    {
+      "bucket_start": 1360,
+      "intercept": -2.918767926851071,
+      "score_diff": 0.17299963922019929,
+      "pre_game_prob": 5.407723695153998
+    },
+    {
+      "bucket_start": 1370,
+      "intercept": -4.558396333813547,
+      "score_diff": 0.22211946872085353,
+      "pre_game_prob": 8.132481824436946
+    },
+    {
+      "bucket_start": 1380,
+      "intercept": -5.534957892037329,
+      "score_diff": 0.1740791673464569,
+      "pre_game_prob": 9.186554929028224
+    },
+    {
+      "bucket_start": 1390,
+      "intercept": -2.7962094925461796,
+      "score_diff": 0.19077423644058628,
+      "pre_game_prob": 5.3688562310431625
+    },
+    {
+      "bucket_start": 1400,
+      "intercept": -2.6654629422266067,
+      "score_diff": 0.1568989996410725,
+      "pre_game_prob": 4.558578876286136
+    },
+    {
+      "bucket_start": 1410,
+      "intercept": -5.417792730475412,
+      "score_diff": 0.2321318204090966,
+      "pre_game_prob": 8.898376132590506
+    },
+    {
+      "bucket_start": 1420,
+      "intercept": -3.2014010326737656,
+      "score_diff": 0.15569872336767476,
+      "pre_game_prob": 5.856281806269957
+    },
+    {
+      "bucket_start": 1430,
+      "intercept": -3.3846527968424356,
+      "score_diff": 0.1688946440313023,
+      "pre_game_prob": 5.581800867079967
+    },
+    {
+      "bucket_start": 1440,
+      "intercept": -1.728187924274705,
+      "score_diff": 0.26794498308615955,
+      "pre_game_prob": 4.439331311329872
+    },
+    {
+      "bucket_start": 1450,
+      "intercept": -3.587909392233694,
+      "score_diff": 0.17330923768956888,
+      "pre_game_prob": 5.699450339673192
+    },
+    {
+      "bucket_start": 1460,
+      "intercept": -5.870614543314723,
+      "score_diff": 0.20954890398382148,
+      "pre_game_prob": 10.053885202556618
+    },
+    {
+      "bucket_start": 1470,
+      "intercept": -2.10863053643195,
+      "score_diff": 0.15269201072247446,
+      "pre_game_prob": 3.9558562235673835
+    },
+    {
+      "bucket_start": 1480,
+      "intercept": -5.863120679720761,
+      "score_diff": 0.19068351717576942,
+      "pre_game_prob": 9.853670072264372
+    },
+    {
+      "bucket_start": 1490,
+      "intercept": -3.358627268462374,
+      "score_diff": 0.3165637593508125,
+      "pre_game_prob": 6.408000677060708
+    },
+    {
+      "bucket_start": 1500,
+      "intercept": -2.2775059117916743,
+      "score_diff": 0.17702166502016892,
+      "pre_game_prob": 3.90921043137952
+    },
+    {
+      "bucket_start": 1510,
+      "intercept": -3.4200746353130405,
+      "score_diff": 0.2015536239791348,
+      "pre_game_prob": 5.654204653502831
+    },
+    {
+      "bucket_start": 1520,
+      "intercept": -1.67069708749065,
+      "score_diff": 0.2684263833883389,
+      "pre_game_prob": 3.472339332618839
+    },
+    {
+      "bucket_start": 1530,
+      "intercept": -3.250806820895898,
+      "score_diff": 0.1485585095264001,
+      "pre_game_prob": 5.671314224294287
+    },
+    {
+      "bucket_start": 1540,
+      "intercept": -4.329695664854524,
+      "score_diff": 0.2496146296092692,
+      "pre_game_prob": 6.666669682854265
+    },
+    {
+      "bucket_start": 1550,
+      "intercept": -1.3484224024482026,
+      "score_diff": 0.16797294774919896,
+      "pre_game_prob": 3.5125373033726213
+    },
+    {
+      "bucket_start": 1560,
+      "intercept": -5.954577616320008,
+      "score_diff": 0.199918022726962,
+      "pre_game_prob": 10.739247365580264
+    },
+    {
+      "bucket_start": 1570,
+      "intercept": -3.523186125372372,
+      "score_diff": 0.1953219559763758,
+      "pre_game_prob": 6.764743482632457
+    },
+    {
+      "bucket_start": 1580,
+      "intercept": -3.8075698462446357,
+      "score_diff": 0.18280165894373057,
+      "pre_game_prob": 6.997831325093209
+    },
+    {
+      "bucket_start": 1590,
+      "intercept": -3.059592097179708,
+      "score_diff": 0.2187142364032166,
+      "pre_game_prob": 5.447457776601392
+    },
+    {
+      "bucket_start": 1600,
+      "intercept": -3.076331979703029,
+      "score_diff": 0.1791860676330197,
+      "pre_game_prob": 5.715998664105075
+    },
+    {
+      "bucket_start": 1610,
+      "intercept": -3.1007252970370542,
+      "score_diff": 0.19147237178208792,
+      "pre_game_prob": 5.278683187004488
+    },
+    {
+      "bucket_start": 1620,
+      "intercept": -3.5786213086881045,
+      "score_diff": 0.22570077764510954,
+      "pre_game_prob": 6.49978335451945
+    },
+    {
+      "bucket_start": 1630,
+      "intercept": -4.704552188853383,
+      "score_diff": 0.21177698670501935,
+      "pre_game_prob": 8.178641231100455
+    },
+    {
+      "bucket_start": 1640,
+      "intercept": -4.508590666963633,
+      "score_diff": 0.16447794347859476,
+      "pre_game_prob": 8.448939377267898
+    },
+    {
+      "bucket_start": 1650,
+      "intercept": -2.596024856608903,
+      "score_diff": 0.2088074714648523,
+      "pre_game_prob": 5.1484068011549216
+    },
+    {
+      "bucket_start": 1660,
+      "intercept": -3.8638528545816317,
+      "score_diff": 0.15157212125692632,
+      "pre_game_prob": 6.714055306055879
+    },
+    {
+      "bucket_start": 1670,
+      "intercept": -3.557980075867072,
+      "score_diff": 0.24730662495458736,
+      "pre_game_prob": 6.304026441974347
+    },
+    {
+      "bucket_start": 1680,
+      "intercept": -5.178671332775383,
+      "score_diff": 0.1867647484055547,
+      "pre_game_prob": 8.281168703628822
+    },
+    {
+      "bucket_start": 1690,
+      "intercept": -3.0580924336629542,
+      "score_diff": 0.2059524930903268,
+      "pre_game_prob": 5.71580441976231
+    },
+    {
+      "bucket_start": 1700,
+      "intercept": -4.893967395714764,
+      "score_diff": 0.17362227133811167,
+      "pre_game_prob": 8.708589193636946
+    },
+    {
+      "bucket_start": 1710,
+      "intercept": -2.0814935789424087,
+      "score_diff": 0.18018677413713846,
+      "pre_game_prob": 3.8848254742337733
+    },
+    {
+      "bucket_start": 1720,
+      "intercept": -4.858462364209764,
+      "score_diff": 0.21849803473764365,
+      "pre_game_prob": 8.65103980335163
+    },
+    {
+      "bucket_start": 1730,
+      "intercept": -3.2261606625990766,
+      "score_diff": 0.14709384249997695,
+      "pre_game_prob": 5.4789725045658955
+    },
+    {
+      "bucket_start": 1740,
+      "intercept": -4.291142917115857,
+      "score_diff": 0.16416467421986092,
+      "pre_game_prob": 7.379459504674361
+    },
+    {
+      "bucket_start": 1750,
+      "intercept": -4.046142835545655,
+      "score_diff": 0.20497428197565126,
+      "pre_game_prob": 7.1781800965469
+    },
+    {
+      "bucket_start": 1760,
+      "intercept": -3.414669060386911,
+      "score_diff": 0.1676890105624014,
+      "pre_game_prob": 6.124857740427996
+    },
+    {
+      "bucket_start": 1770,
+      "intercept": -1.7471773722773278,
+      "score_diff": 0.18760973760993802,
+      "pre_game_prob": 3.923335060536975
+    },
+    {
+      "bucket_start": 1780,
+      "intercept": -3.187383099635468,
+      "score_diff": 0.12242602226259552,
+      "pre_game_prob": 6.014351817798338
+    },
+    {
+      "bucket_start": 1790,
+      "intercept": -1.855529320732622,
+      "score_diff": 0.24109111158699378,
+      "pre_game_prob": 4.503406007848308
+    },
+    {
+      "bucket_start": 1800,
+      "intercept": -3.214203078328645,
+      "score_diff": 0.1791371932903218,
+      "pre_game_prob": 5.881243607989882
+    },
+    {
+      "bucket_start": 1810,
+      "intercept": -0.44817777287688076,
+      "score_diff": 0.17180093704976251,
+      "pre_game_prob": 2.1473635090167003
+    },
+    {
+      "bucket_start": 1820,
+      "intercept": -3.241793273843766,
+      "score_diff": 0.22796650628487358,
+      "pre_game_prob": 6.0207323149545475
+    },
+    {
+      "bucket_start": 1830,
+      "intercept": -1.1121303856987907,
+      "score_diff": 0.14360862880897993,
+      "pre_game_prob": 3.0755462118017567
+    },
+    {
+      "bucket_start": 1840,
+      "intercept": -4.878376587289346,
+      "score_diff": 0.11069852546354454,
+      "pre_game_prob": 8.111372540617653
+    },
+    {
+      "bucket_start": 1850,
+      "intercept": -6.807076829315958,
+      "score_diff": 0.2183882672025074,
+      "pre_game_prob": 11.053793082080203
+    },
+    {
+      "bucket_start": 1860,
+      "intercept": -1.3511413065372648,
+      "score_diff": 0.1913777240495729,
+      "pre_game_prob": 2.6951899289177588
+    },
+    {
+      "bucket_start": 1870,
+      "intercept": -4.026320563583466,
+      "score_diff": 0.1720115767574733,
+      "pre_game_prob": 7.0454137220624
+    },
+    {
+      "bucket_start": 1880,
+      "intercept": -3.731650013326322,
+      "score_diff": 0.10534927210740502,
+      "pre_game_prob": 6.879409544821278
+    },
+    {
+      "bucket_start": 1890,
+      "intercept": -2.7996376793218887,
+      "score_diff": 0.15047172244842796,
+      "pre_game_prob": 4.82089002414115
+    },
+    {
+      "bucket_start": 1900,
+      "intercept": -3.6659843323444212,
+      "score_diff": 0.11628849192853628,
+      "pre_game_prob": 6.719136134741956
+    },
+    {
+      "bucket_start": 1910,
+      "intercept": -4.305418045590112,
+      "score_diff": 0.15864754841951634,
+      "pre_game_prob": 7.109738843579544
+    },
+    {
+      "bucket_start": 1920,
+      "intercept": -4.182097616064996,
+      "score_diff": 0.09629376611880436,
+      "pre_game_prob": 7.318560240833218
+    },
+    {
+      "bucket_start": 1930,
+      "intercept": -3.9720181804725168,
+      "score_diff": 0.134829241082989,
+      "pre_game_prob": 6.64916182764105
+    },
+    {
+      "bucket_start": 1940,
+      "intercept": -2.6881455283881195,
+      "score_diff": 0.12564392514436815,
+      "pre_game_prob": 5.243076598589321
+    },
+    {
+      "bucket_start": 1950,
+      "intercept": -5.830466310645803,
+      "score_diff": 0.1294689340434685,
+      "pre_game_prob": 9.468640772368332
+    },
+    {
+      "bucket_start": 1960,
+      "intercept": -3.885601474653424,
+      "score_diff": 0.1318647348357377,
+      "pre_game_prob": 7.133787513823855
+    },
+    {
+      "bucket_start": 1970,
+      "intercept": -4.627114520146168,
+      "score_diff": 0.15820071767091215,
+      "pre_game_prob": 7.935592481302278
+    },
+    {
+      "bucket_start": 1980,
+      "intercept": -3.344281714734271,
+      "score_diff": 0.13581827648612346,
+      "pre_game_prob": 6.541677579458617
+    },
+    {
+      "bucket_start": 1990,
+      "intercept": -4.257548398109244,
+      "score_diff": 0.1222354725256547,
+      "pre_game_prob": 7.795282409330474
+    },
+    {
+      "bucket_start": 2000,
+      "intercept": -2.81881569993475,
+      "score_diff": 0.11358006983451602,
+      "pre_game_prob": 4.997128730910957
+    },
+    {
+      "bucket_start": 2010,
+      "intercept": -7.201722516037477,
+      "score_diff": 0.14412045234575008,
+      "pre_game_prob": 12.088764942577349
+    },
+    {
+      "bucket_start": 2020,
+      "intercept": -5.083506030118228,
+      "score_diff": 0.14245517391998913,
+      "pre_game_prob": 7.770936165559667
+    },
+    {
+      "bucket_start": 2030,
+      "intercept": -5.489545434225975,
+      "score_diff": 0.12597038788127163,
+      "pre_game_prob": 9.277661920786613
+    },
+    {
+      "bucket_start": 2040,
+      "intercept": -2.64359248686244,
+      "score_diff": 0.16658715594466492,
+      "pre_game_prob": 5.425345655676071
+    },
+    {
+      "bucket_start": 2050,
+      "intercept": -5.290931753251933,
+      "score_diff": 0.15256453537210057,
+      "pre_game_prob": 9.177017402255967
+    },
+    {
+      "bucket_start": 2060,
+      "intercept": -1.9356745524439922,
+      "score_diff": 0.13698557681936,
+      "pre_game_prob": 3.9940327322528244
+    },
+    {
+      "bucket_start": 2070,
+      "intercept": -7.78593214990091,
+      "score_diff": 0.17904310534228499,
+      "pre_game_prob": 12.694470873839009
+    },
+    {
+      "bucket_start": 2080,
+      "intercept": -3.2846195297312626,
+      "score_diff": 0.1184335156206037,
+      "pre_game_prob": 5.78885489910919
+    },
+    {
+      "bucket_start": 2090,
+      "intercept": -3.1933295897595606,
+      "score_diff": 0.0983865309462153,
+      "pre_game_prob": 6.023956479827852
+    },
+    {
+      "bucket_start": 2100,
+      "intercept": -3.818927572221641,
+      "score_diff": 0.1451408748489063,
+      "pre_game_prob": 7.229941919384713
+    },
+    {
+      "bucket_start": 2110,
+      "intercept": -6.487307550148526,
+      "score_diff": 0.14498853947519105,
+      "pre_game_prob": 10.47317111035101
+    },
+    {
+      "bucket_start": 2120,
+      "intercept": -3.2750208705869954,
+      "score_diff": 0.15356745902597232,
+      "pre_game_prob": 5.488262866850649
+    },
+    {
+      "bucket_start": 2130,
+      "intercept": -4.294785512264873,
+      "score_diff": 0.24002433253465386,
+      "pre_game_prob": 7.311983698571459
+    },
+    {
+      "bucket_start": 2140,
+      "intercept": -3.491411476525363,
+      "score_diff": 0.15939380791336272,
+      "pre_game_prob": 6.5834295324656305
+    },
+    {
+      "bucket_start": 2150,
+      "intercept": -4.109470206327658,
+      "score_diff": 0.2514959137295657,
+      "pre_game_prob": 7.152506277480108
+    },
+    {
+      "bucket_start": 2160,
+      "intercept": -4.146754611161083,
+      "score_diff": 0.1648119562441125,
+      "pre_game_prob": 7.201148275321685
+    },
+    {
+      "bucket_start": 2170,
+      "intercept": -2.6384997928913516,
+      "score_diff": 0.14862829160972862,
+      "pre_game_prob": 4.3940266016878
+    },
+    {
+      "bucket_start": 2180,
+      "intercept": -3.6314902457067966,
+      "score_diff": 0.14130206132826056,
+      "pre_game_prob": 6.971184306035315
+    },
+    {
+      "bucket_start": 2190,
+      "intercept": -2.785632981543181,
+      "score_diff": 0.20403725418362365,
+      "pre_game_prob": 5.294303431109624
+    },
+    {
+      "bucket_start": 2200,
+      "intercept": -5.417800799101408,
+      "score_diff": 0.2060287022832246,
+      "pre_game_prob": 9.137526210133815
+    },
+    {
+      "bucket_start": 2210,
+      "intercept": -2.511070960875263,
+      "score_diff": 0.152974828812679,
+      "pre_game_prob": 4.33733292543129
+    },
+    {
+      "bucket_start": 2220,
+      "intercept": -6.095194397782315,
+      "score_diff": 0.12630106230511254,
+      "pre_game_prob": 10.336446612290901
+    },
+    {
+      "bucket_start": 2230,
+      "intercept": -3.8493449975084286,
+      "score_diff": 0.0587847708665149,
+      "pre_game_prob": 6.803931544503794
+    },
+    {
+      "bucket_start": 2240,
+      "intercept": -3.579793894903259,
+      "score_diff": 0.1281935339098575,
+      "pre_game_prob": 6.035631758837093
+    },
+    {
+      "bucket_start": 2250,
+      "intercept": -4.297241175583166,
+      "score_diff": 0.06261918354841682,
+      "pre_game_prob": 7.3291242301834565
+    },
+    {
+      "bucket_start": 2260,
+      "intercept": -3.613522939399584,
+      "score_diff": 0.11394277431767631,
+      "pre_game_prob": 6.463961249124754
+    },
+    {
+      "bucket_start": 2270,
+      "intercept": -3.036414544558559,
+      "score_diff": 0.13008052630658873,
+      "pre_game_prob": 4.987380457161866
+    },
+    {
+      "bucket_start": 2280,
+      "intercept": -3.006645031473581,
+      "score_diff": 0.07357842193862163,
+      "pre_game_prob": 5.838580163433367
+    },
+    {
+      "bucket_start": 2290,
+      "intercept": -3.1942295737644435,
+      "score_diff": 0.06573423578886914,
+      "pre_game_prob": 6.054782018366827
+    },
+    {
+      "bucket_start": 2300,
+      "intercept": -1.7273955915985117,
+      "score_diff": 0.07579420974157886,
+      "pre_game_prob": 3.464636550478141
+    },
+    {
+      "bucket_start": 2310,
+      "intercept": -4.985641651620674,
+      "score_diff": 0.1063325495720294,
+      "pre_game_prob": 8.512302970743386
+    },
+    {
+      "bucket_start": 2320,
+      "intercept": -4.34182188271548,
+      "score_diff": 0.21119693000759854,
+      "pre_game_prob": 7.349091906051926
+    },
+    {
+      "bucket_start": 2330,
+      "intercept": -3.8585831293608646,
+      "score_diff": 0.06297784484983714,
+      "pre_game_prob": 6.576418481645074
+    },
+    {
+      "bucket_start": 2340,
+      "intercept": -6.574025590178923,
+      "score_diff": 4.377885805087528e-05,
+      "pre_game_prob": 11.018761552121704
+    },
+    {
+      "bucket_start": 2350,
+      "intercept": -3.351219602565204,
+      "score_diff": 0.21211649047445408,
+      "pre_game_prob": 6.043097020849514
+    },
+    {
+      "bucket_start": 2360,
+      "intercept": -2.7564939493998666,
+      "score_diff": 0.05499922148876811,
+      "pre_game_prob": 5.429970852969347
+    },
+    {
+      "bucket_start": 2370,
+      "intercept": -5.633399660111955,
+      "score_diff": 0.010733279753627537,
+      "pre_game_prob": 9.521150898430536
+    },
+    {
+      "bucket_start": 2380,
+      "intercept": -5.295323540171949,
+      "score_diff": 0.513532382498212,
+      "pre_game_prob": 8.863455667641626
+    },
+    {
+      "bucket_start": 2390,
+      "intercept": -4.147228326308317,
+      "score_diff": 0.20592976038967356,
+      "pre_game_prob": 7.30744792197798
+    },
+    {
+      "bucket_start": 2400,
+      "intercept": -3.1690607413494356,
+      "score_diff": 0.20182319535483084,
+      "pre_game_prob": 5.6892694605682825
+    }
+  ],
+  "elo_config": {
+    "k_factor": 30.0,
+    "home_advantage": 120.0,
+    "carryover": 0.5,
+    "initial_rating": 1500.0,
+    "scale": 400.0
+  },
+  "train_seasons": [
+    "2024-2025"
+  ],
+  "validation_seasons": [
+    "2025-2026"
+  ]
+}
