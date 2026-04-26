@@ -248,6 +248,8 @@ def _fetch_json(url: str) -> dict[str, Any]:
 
 def _live_events_from_data(data: dict[str, Any]) -> list[dict[str, Any]]:
     raw_events = data.get("pbp")
+    if isinstance(raw_events, dict):
+        raw_events = list(raw_events.values())
     if not isinstance(raw_events, list):
         return []
 
