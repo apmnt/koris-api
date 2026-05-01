@@ -50,10 +50,11 @@ def main() -> None:
 examples:
   uv run koris-api match 2514938 --box-score --output-dir out
   uv run koris-api match 2514938 --playbyplay --output-dir out
+  uv run koris-api match 2514938 --shot-chart --output-dir out
   uv run koris-api season 4 huki2526 --box-score --output-dir out
-  uv run koris-api season 4 2024-2025 --box-score --playbyplay --output-dir out
+  uv run koris-api season 4 2024-2025 --box-score --playbyplay --shot-chart --output-dir out
   uv run koris-api league 4 --output-dir out
-  uv run koris-api league 4 --box-score --playbyplay --output-dir out
+  uv run koris-api league 4 --box-score --playbyplay --shot-chart --output-dir out
 
 notes:
   - If no flags are provided for match, --box-score is assumed.
@@ -70,6 +71,11 @@ notes:
         "--playbyplay",
         action="store_true",
         help="Include play-by-play data",
+    )
+    shared.add_argument(
+        "--shot-chart",
+        action="store_true",
+        help="Include shot chart data (Genius data.json feed)",
     )
     shared.add_argument(
         "--output-dir",
@@ -103,7 +109,9 @@ notes:
     try:
         if args.action == "match":
             output_dir = _ensure_output_dir(args.output_dir)
-            include_box = args.box_score or not args.playbyplay
+            include_box = args.box_score or not (
+                args.playbyplay or args.shot_chart
+            )
             if include_box:
                 output_file = output_dir / f"genius_match_{args.match_id}.json"
                 boxscore = GeniusSportsAPI.get_match_boxscore(
@@ -124,10 +132,17 @@ notes:
                     json.dumps(playbyplay, indent=2, ensure_ascii=False),
                     encoding="utf-8",
                 )
+            if args.shot_chart:
+                output_file = output_dir / f"genius_shot_chart_{args.match_id}.json"
+                shot_chart = GeniusSportsAPI.get_match_shot_chart(str(args.match_id))
+                output_file.write_text(
+                    json.dumps(shot_chart, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
 
         elif args.action == "season":
             output_dir = _ensure_output_dir(args.output_dir)
-            include_box = args.box_score or args.playbyplay
+            include_box = args.box_score or args.playbyplay or args.shot_chart
             season_id = args.season_id
             if include_box:
                 start_year = _parse_season_start_year(season_id)
@@ -136,6 +151,10 @@ notes:
                     output_dir / f"season_boxscores_{season_id}_{_timestamp()}.json"
                 )
                 if is_historical:
+                    if args.shot_chart:
+                        raise ValueError(
+                            "Shot chart data is not available for historical BasketHotel seasons."
+                        )
                     download_baskethotel_season_boxscores(
                         category_id=args.category_id,
                         season_id=season_id,
@@ -152,6 +171,7 @@ notes:
                         output_file=str(output_file),
                         include_advanced=args.box_score,
                         include_playbyplay=args.playbyplay,
+                        include_shot_chart=args.shot_chart,
                         limit_games=args.limit_games,
                         max_workers=40,
                         verbose=True,
@@ -181,7 +201,7 @@ notes:
                 )
 
         elif args.action == "league":
-            include_box = args.box_score or args.playbyplay
+            include_box = args.box_score or args.playbyplay or args.shot_chart
             if args.output_dir:
                 output_dir = Path(args.output_dir)
             else:
@@ -198,6 +218,7 @@ notes:
                     limit_seasons=None,
                     include_playbyplay=args.playbyplay,
                     include_advanced=args.box_score,
+                    include_shot_chart=args.shot_chart,
                     max_workers=40,
                     verbose=True,
                 )

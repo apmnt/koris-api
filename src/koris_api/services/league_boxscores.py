@@ -230,6 +230,7 @@ def download_league_boxscores_playbyplay_all_seasons(
     limit_seasons: Optional[int] = None,
     include_playbyplay: bool = False,
     include_advanced: bool = False,
+    include_shot_chart: bool = False,
     max_workers: int = 5,
     verbose: bool = True,
 ) -> None:
@@ -301,6 +302,10 @@ def download_league_boxscores_playbyplay_all_seasons(
 
         if is_historical:
             output_file = output_path / f"{safe_category}_{season_name}_baskethotel.json"
+            if include_shot_chart and verbose:
+                print(
+                    "  - Shot chart skipped (not supported for historical BasketHotel seasons)"
+                )
             download_baskethotel_season_boxscores(
                 category_id=category_id,
                 season_id=season_name or str(competition_id),
@@ -318,6 +323,7 @@ def download_league_boxscores_playbyplay_all_seasons(
                 output_file=str(output_file),
                 include_advanced=include_advanced,
                 include_playbyplay=include_playbyplay,
+                include_shot_chart=include_shot_chart,
                 max_workers=max_workers,
                 verbose=verbose,
             )

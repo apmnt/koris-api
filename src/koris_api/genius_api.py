@@ -264,6 +264,117 @@ class GeniusSportsAPI:
         raise RuntimeError(f"Failed to fetch play-by-play for match {match_id}")
 
     @classmethod
+    def get_match_shot_chart(
+        cls,
+        match_id: str,
+        retries: int = 3,
+        backoff_seconds: float = 0.6,
+        timeout_seconds: float = 30.0,
+    ) -> Dict[str, Any]:
+        """
+        Fetch shot chart coordinates from Genius Sports live data.json feed.
+
+        Args:
+            match_id: The match identifier from Genius Sports
+
+        Returns:
+            Dictionary containing shot list with x/y coordinates and metadata
+        """
+        url = f"https://fibalivestats.dcd.shared.geniussports.com/data/{match_id}/data.json"
+        last_error: Optional[Exception] = None
+        for attempt in range(1, retries + 2):
+            try:
+                response = requests.get(
+                    url,
+                    timeout=timeout_seconds,
+                    headers=cls._DEFAULT_HEADERS,
+                )
+                if response.status_code >= 500 and attempt <= retries:
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                response.raise_for_status()
+                live_data = cast(Dict[str, Any], response.json())
+                return cls._parse_match_shot_chart(match_id, live_data)
+            except requests.exceptions.ReadTimeout as exc:
+                last_error = exc
+                if attempt <= retries:
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                break
+            except requests.exceptions.HTTPError as exc:
+                last_error = exc
+                if (
+                    exc.response is not None
+                    and exc.response.status_code >= 500
+                    and attempt <= retries
+                ):
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                break
+            except requests.exceptions.RequestException as exc:
+                last_error = exc
+                if attempt <= retries:
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                break
+
+        if last_error:
+            raise last_error
+        raise RuntimeError(f"Failed to fetch shot chart for match {match_id}")
+
+    @classmethod
+    def _parse_match_shot_chart(
+        cls, match_id: str, live_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        teams_raw = live_data.get("tm")
+        if not isinstance(teams_raw, dict):
+            raise ValueError(f"Invalid shot chart payload for match {match_id}: missing tm")
+
+        teams: Dict[str, Optional[str]] = {}
+        shots: List[Dict[str, Any]] = []
+
+        for team_no, team_data in teams_raw.items():
+            if not isinstance(team_data, dict):
+                continue
+            team_no_str = str(team_no)
+            team_name = team_data.get("name")
+            teams[team_no_str] = str(team_name) if team_name is not None else None
+
+            team_shots = team_data.get("shot")
+            if not isinstance(team_shots, list):
+                continue
+
+            for shot in team_shots:
+                if not isinstance(shot, dict):
+                    continue
+                shots.append(
+                    {
+                        "team_no": team_no_str,
+                        "team_name": teams[team_no_str],
+                        "player_id": shot.get("p"),
+                        "player_number": shot.get("pno"),
+                        "player": shot.get("player"),
+                        "shirt_number": shot.get("shirtNumber"),
+                        "period": shot.get("per"),
+                        "period_type": shot.get("perType"),
+                        "action_type": shot.get("actionType"),
+                        "shot_type": shot.get("subType"),
+                        "made": shot.get("r"),
+                        "x": shot.get("x"),
+                        "y": shot.get("y"),
+                        "action_number": shot.get("actionNumber"),
+                        "previous_action": shot.get("previousAction"),
+                    }
+                )
+
+        return {
+            "source": "fibalivestats",
+            "match_id": str(match_id),
+            "teams": teams,
+            "shots": shots,
+        }
+
+    @classmethod
     def get_genius_teams(cls, competition_id: str) -> List[Dict[str, Any]]:
         """
         Fetch teams from Genius Sports teams page for a specific competition.

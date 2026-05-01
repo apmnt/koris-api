@@ -482,6 +482,52 @@ def test_genius_boxscore_mocked(genius_boxscore_html):
         assert len(boxscore["teams"]) == 2
 
 
+def test_genius_shot_chart_mocked():
+    """Test get_match_shot_chart API method with mocked response."""
+    with patch("requests.get") as mock_get:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "tm": {
+                "1": {
+                    "name": "Team One",
+                    "shot": [
+                        {
+                            "r": 1,
+                            "x": 11.5,
+                            "y": 52.0,
+                            "p": 10,
+                            "pno": 10,
+                            "per": 2,
+                            "perType": "REGULAR",
+                            "actionType": "3pt",
+                            "subType": "jumpshot",
+                            "player": "A. Player",
+                            "shirtNumber": "10",
+                            "actionNumber": 123,
+                            "previousAction": "",
+                        }
+                    ],
+                },
+                "2": {"name": "Team Two", "shot": []},
+            }
+        }
+        mock_get.return_value = mock_response
+
+        shot_chart = GeniusSportsAPI.get_match_shot_chart("2844823")
+
+        assert shot_chart["source"] == "fibalivestats"
+        assert shot_chart["match_id"] == "2844823"
+        assert shot_chart["teams"] == {"1": "Team One", "2": "Team Two"}
+        assert len(shot_chart["shots"]) == 1
+        assert shot_chart["shots"][0]["team_no"] == "1"
+        assert shot_chart["shots"][0]["player"] == "A. Player"
+        assert shot_chart["shots"][0]["made"] == 1
+        assert shot_chart["shots"][0]["x"] == 11.5
+        assert shot_chart["shots"][0]["y"] == 52.0
+
+
 def test_genius_team_statistics_mocked(genius_team_statistics_html):
     """Test get_team_statistics API method with mocked response."""
     with patch("requests.get") as mock_get:

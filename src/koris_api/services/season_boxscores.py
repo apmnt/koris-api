@@ -38,6 +38,7 @@ def download_matches_with_boxscores(
     output_file: str,
     include_advanced: bool = False,
     include_playbyplay: bool = False,
+    include_shot_chart: bool = False,
     limit_games: Optional[int] = None,
     max_workers: int = 5,
     verbose: bool = True,
@@ -78,7 +79,7 @@ def download_matches_with_boxscores(
     existing_matches_by_id: Dict[str, Dict[str, Any]] = {}
 
     # If output file already exists, reuse any previously fetched boxscores/playbyplay/errors.
-    if include_advanced or include_playbyplay:
+    if include_advanced or include_playbyplay or include_shot_chart:
         output_path = Path(output_file)
         if output_path.exists():
             try:
@@ -176,11 +177,49 @@ def download_matches_with_boxscores(
                 f"Resume: {len(matches_to_fetch_playbyplay)} matches missing playbyplay."
             )
 
+    matches_to_fetch_shot_chart = []
+    if include_shot_chart:
+        if existing_matches_by_id and verbose:
+            existing_with_shot_chart = 0
+            existing_with_shot_chart_error = 0
+            for match in existing_matches_by_id.values():
+                if match.get("shot_chart"):
+                    existing_with_shot_chart += 1
+                elif match.get("shot_chart_error"):
+                    existing_with_shot_chart_error += 1
+            print(
+                f"Resume: {existing_with_shot_chart} with shot chart, "
+                f"{existing_with_shot_chart_error} with error from existing file."
+            )
+        for idx, match_data in enumerate(processed_matches):
+            external_id = match_data.get("match_external_id")
+            match_id = match_data.get("match_id")
+            key = str(external_id) if external_id else str(match_id)
+            existing = existing_matches_by_id.get(key) if key else None
+            if existing and existing.get("shot_chart"):
+                match_data["shot_chart"] = existing.get("shot_chart")
+                continue
+            if external_id:
+                matches_to_fetch_shot_chart.append(
+                    {
+                        "index": idx,
+                        "external_id": external_id,
+                        "home_team": match_data["home_team"],
+                        "away_team": match_data["away_team"],
+                    }
+                )
+        if verbose:
+            print(
+                f"Resume: {len(matches_to_fetch_shot_chart)} matches missing shot chart."
+            )
+
     # Fetch advanced stats concurrently if requested
     matches_with_advanced = 0
     matches_failed = 0
     matches_with_playbyplay = 0
     matches_playbyplay_failed = 0
+    matches_with_shot_chart = 0
+    matches_shot_chart_failed = 0
 
     if include_advanced and matches_to_fetch_advanced:
         if verbose:
@@ -351,6 +390,54 @@ def download_matches_with_boxscores(
                             )
                     pbar.update(1)
 
+    if include_shot_chart and matches_to_fetch_shot_chart:
+        if verbose:
+            print(
+                f"\nFetching shot charts for {len(matches_to_fetch_shot_chart)} played matches..."
+            )
+
+        def fetch_shot_chart(
+            match_info: Dict[str, Any],
+        ) -> tuple[int, Optional[Dict[str, Any]], Optional[str]]:
+            try:
+                shot_chart = GeniusSportsAPI.get_match_shot_chart(
+                    str(match_info["external_id"])
+                )
+                return (match_info["index"], shot_chart, None)
+            except Exception as e:
+                return (match_info["index"], None, str(e))
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(fetch_shot_chart, match_info): match_info
+                for match_info in matches_to_fetch_shot_chart
+            }
+
+            with tqdm(
+                total=len(matches_to_fetch_shot_chart),
+                desc="Fetching shot charts",
+                disable=not verbose,
+            ) as pbar:
+                for future in as_completed(futures):
+                    match_info = futures[future]
+                    index, shot_chart, error = future.result()
+                    if shot_chart:
+                        processed_matches[index]["shot_chart"] = shot_chart
+                        matches_with_shot_chart += 1
+                    else:
+                        matches_shot_chart_failed += 1
+                        if error:
+                            processed_matches[index]["shot_chart_error"] = {
+                                "error_message": error,
+                                "match_external_id": match_info.get("external_id"),
+                            }
+                        if verbose and error:
+                            tqdm.write(
+                                f"  ✗ {match_info['home_team']} vs {match_info['away_team']}: "
+                                f"{error[:80]}"
+                            )
+                    pbar.update(1)
+
     if limit_games is not None and include_advanced:
 
         def has_player_stats(match: Dict[str, Any]) -> bool:
@@ -378,6 +465,12 @@ def download_matches_with_boxscores(
     matches_playbyplay_failed = sum(
         1 for match in processed_matches if "playbyplay_error" in match
     )
+    matches_with_shot_chart = sum(
+        1 for match in processed_matches if "shot_chart" in match
+    )
+    matches_shot_chart_failed = sum(
+        1 for match in processed_matches if "shot_chart_error" in match
+    )
     for match in processed_matches:
         _attach_playbyplay_possession_counts(match)
 
@@ -401,6 +494,9 @@ def download_matches_with_boxscores(
             "matches_with_playbyplay": matches_with_playbyplay,
             "matches_playbyplay_failed": matches_playbyplay_failed,
             "include_playbyplay": include_playbyplay,
+            "matches_with_shot_chart": matches_with_shot_chart,
+            "matches_shot_chart_failed": matches_shot_chart_failed,
+            "include_shot_chart": include_shot_chart,
             "limit_games": limit_games,
             "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
         },
@@ -444,6 +540,12 @@ def download_matches_with_boxscores(
             )
             if matches_playbyplay_failed > 0:
                 print(f"  - Play-by-play failed: {matches_playbyplay_failed}")
+        if include_shot_chart:
+            print(
+                f"  - Shot charts: {matches_with_shot_chart}/{len(matches_to_fetch_shot_chart)} matches"
+            )
+            if matches_shot_chart_failed > 0:
+                print(f"  - Shot charts failed: {matches_shot_chart_failed}")
         print(f"{'=' * 60}")
 
 
