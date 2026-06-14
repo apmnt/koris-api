@@ -264,6 +264,93 @@ class GeniusSportsAPI:
         raise RuntimeError(f"Failed to fetch play-by-play for match {match_id}")
 
     @classmethod
+    def fetch_match_data_json(
+        cls,
+        match_id: str,
+        retries: int = 3,
+        backoff_seconds: float = 0.6,
+        timeout_seconds: float = 30.0,
+    ) -> Dict[str, Any]:
+        """Fetch the FIBA LiveStats ``data.json`` feed for a match.
+
+        Unlike the hosted ``competition/{id}/...`` HTML pages, this feed is keyed
+        only by ``match_id`` and stays available for past and playoff matches, so
+        it is the reliable source for box score and play-by-play data.
+        """
+        url = f"https://fibalivestats.dcd.shared.geniussports.com/data/{match_id}/data.json"
+        last_error: Optional[Exception] = None
+        for attempt in range(1, retries + 2):
+            try:
+                response = requests.get(
+                    url,
+                    timeout=timeout_seconds,
+                    headers=cls._DEFAULT_HEADERS,
+                )
+                if response.status_code >= 500 and attempt <= retries:
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                response.raise_for_status()
+                return cast(Dict[str, Any], response.json())
+            except requests.exceptions.ReadTimeout as exc:
+                last_error = exc
+                if attempt <= retries:
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                break
+            except requests.exceptions.RequestException as exc:
+                last_error = exc
+                if attempt <= retries:
+                    time.sleep(backoff_seconds * attempt)
+                    continue
+                break
+
+        if last_error:
+            raise last_error
+        raise RuntimeError(f"Failed to fetch data.json for match {match_id}")
+
+    @classmethod
+    def get_match_boxscore_livestats(
+        cls,
+        match_id: str,
+        data: Optional[Dict[str, Any]] = None,
+        retries: int = 3,
+        backoff_seconds: float = 0.6,
+        timeout_seconds: float = 30.0,
+    ) -> Dict[str, Any]:
+        """Box score from the FIBA LiveStats feed (genius intermediate shape)."""
+        from .genius_livestats_parser import parse_boxscore
+
+        if data is None:
+            data = cls.fetch_match_data_json(
+                match_id,
+                retries=retries,
+                backoff_seconds=backoff_seconds,
+                timeout_seconds=timeout_seconds,
+            )
+        return parse_boxscore(data)
+
+    @classmethod
+    def get_match_playbyplay_livestats(
+        cls,
+        match_id: str,
+        data: Optional[Dict[str, Any]] = None,
+        retries: int = 3,
+        backoff_seconds: float = 0.6,
+        timeout_seconds: float = 30.0,
+    ) -> Dict[str, Any]:
+        """Play-by-play from the FIBA LiveStats feed (with possessions)."""
+        from .genius_livestats_parser import parse_playbyplay
+
+        if data is None:
+            data = cls.fetch_match_data_json(
+                match_id,
+                retries=retries,
+                backoff_seconds=backoff_seconds,
+                timeout_seconds=timeout_seconds,
+            )
+        return parse_playbyplay(data)
+
+    @classmethod
     def get_match_shot_chart(
         cls,
         match_id: str,
