@@ -22,7 +22,7 @@ message Game {
 message Team {
   optional string name = 1;
   repeated ExternalId external_ids = 2;
-  repeated PlayerBoxScore players = 3;
+  repeated Player players = 3;
   // Source-reported team totals, including team-only stats where applicable.
   Stats totals = 4;
   // Current score; final only when the game's status is FINAL.
@@ -31,12 +31,34 @@ message Team {
   optional bool win = 6;
 }
 
-message PlayerBoxScore {
+message Shot {
+  // One-based period across the game, including overtime.
+  optional uint32 period = 4;
+  optional bool overtime = 5;
+  // 1 = free throw, 2 or 3 = field goal; absent when unknown.
+  optional uint32 point_value = 6;
+  // True = made, false = missed; absent when unknown.
+  optional bool made = 7;
+  // Coordinates in the game's shot_coordinate_system; zero is valid.
+  optional double x = 8;
+  optional double y = 9;
+  // Source shot description, e.g. layup or jump shot.
+  optional string shot_type = 10;
+  // Source shot/action IDs, scoped to the game when necessary.
+  repeated ExternalId external_ids = 11;
+  // Game-clock seconds remaining in this period, including fractional seconds.
+  optional double game_clock_seconds_remaining = 12;
+  // Possession shot-clock seconds remaining, when reported.
+  optional double shot_clock_seconds_remaining = 13;
+}
+
+message Player {
   optional string name = 1;
   repeated ExternalId external_ids = 2;
   // Preserve jersey numbers such as "00".
   optional string jersey_number = 3;
   Stats stats = 4;
+  repeated Shot shots = 5;
 }
 
 // Shared player/team stats. Missing values remain absent, not zero.
