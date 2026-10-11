@@ -14,8 +14,6 @@ message Game {
   optional string time = 6;
 
   GameStatus status = 7;
-  // Current score; final only when status is FINAL.
-  Score score = 8;
 
   optional string league = 9;
   optional string season = 10;
@@ -24,6 +22,46 @@ message Game {
 message Team {
   optional string name = 1;
   repeated ExternalId external_ids = 2;
+  repeated PlayerBoxScore players = 3;
+  // Source-reported team totals, including team-only stats where applicable.
+  Stats totals = 4;
+  // Current score; final only when the game's status is FINAL.
+  optional uint32 score = 5;
+  // Whether this team won; absent until the result is known.
+  optional bool win = 6;
+}
+
+message PlayerBoxScore {
+  optional string name = 1;
+  repeated ExternalId external_ids = 2;
+  // Preserve jersey numbers such as "00".
+  optional string jersey_number = 3;
+  Stats stats = 4;
+}
+
+// Shared player/team stats. Missing values remain absent, not zero.
+message Stats {
+  optional uint32 points = 1;
+  optional uint32 two_pointers_made = 2;
+  optional uint32 two_pointers_attempted = 3;
+  optional uint32 three_pointers_made = 4;
+  optional uint32 three_pointers_attempted = 5;
+  optional uint32 free_throws_made = 6;
+  optional uint32 free_throws_attempted = 7;
+  optional uint32 offensive_rebounds = 8;
+  optional uint32 defensive_rebounds = 9;
+  optional uint32 rebounds = 10;
+  optional uint32 assists = 11;
+  optional uint32 steals = 12;
+  optional uint32 turnovers = 13;
+  optional uint32 blocks = 14;
+  optional uint32 personal_fouls = 15;
+  // Player participation fields; leave absent in team totals.
+  // Set only with source evidence; zero playing time does not prove DNP.
+  optional bool played = 17;
+  // Seconds played, including fractional seconds when reported.
+  optional double seconds_played = 18;
+  optional bool starter = 19;
 }
 
 // Identity is (namespace, scope, value); preserve IDs as strings.
@@ -33,12 +71,6 @@ message ExternalId {
   string value = 2;
   // Set when the ID is only unique within a league, season, or game.
   optional string scope = 3;
-}
-
-message Score {
-  // Unknown and zero are different values.
-  optional uint32 home = 1;
-  optional uint32 away = 2;
 }
 
 enum GameStatus {
