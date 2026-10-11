@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package koris.v1;
+
+// Basic game record. Optional fields are absent when unknown.
+message Game {
+  string id = 1;
+  repeated ExternalId external_ids = 2;
+  Team home = 3;
+  Team away = 4;
+
+  // Local schedule: YYYY-MM-DD and HH:MM (24-hour).
+  optional string date = 5;
+  optional string time = 6;
+
+  GameStatus status = 7;
+  // Current score; final only when status is FINAL.
+  Score score = 8;
+
+  optional string league = 9;
+  optional string season = 10;
+}
+
+message Team {
+  optional string name = 1;
+  repeated ExternalId external_ids = 2;
+}
+
+// Identity is (namespace, scope, value); preserve IDs as strings.
+message ExternalId {
+  // Examples: basketfi.match, genius.match, baskethotel.game, basketfi.team.
+  string namespace = 1;
+  string value = 2;
+  // Set when the ID is only unique within a league, season, or game.
+  optional string scope = 3;
+}
+
+message Score {
+  // Unknown and zero are different values.
+  optional uint32 home = 1;
+  optional uint32 away = 2;
+}
+
+enum GameStatus {
+  GAME_STATUS_UNSPECIFIED = 0;
+  GAME_STATUS_SCHEDULED = 1;
+  GAME_STATUS_IN_PROGRESS = 2;
+  GAME_STATUS_FINAL = 3;
+  GAME_STATUS_POSTPONED = 4;
+  GAME_STATUS_CANCELLED = 5;
+}
