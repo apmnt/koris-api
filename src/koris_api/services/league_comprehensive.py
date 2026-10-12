@@ -9,9 +9,9 @@ from ..pipeline.export import write_json
 from ..pipeline.types import Component
 from ..seasons import current_season_id
 from .common import (
-    _augment_seasons_with_baskethotel,
     _fetch_historical_matches,
     _is_historical_season,
+    available_season_rows,
 )
 from .game_exports import enrich_matches, season_reference
 
@@ -96,7 +96,7 @@ def download_league_comprehensive(
 
     category = category_data["category"]
     seasons = category["seasons"]
-    seasons = _augment_seasons_with_baskethotel(seasons, category_id)
+    seasons = available_season_rows(seasons, category_id)
     category_name = category.get("category_name", "Unknown")
 
     # Validate category name

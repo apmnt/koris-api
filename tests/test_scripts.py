@@ -122,8 +122,6 @@ def test_annotation_script_runs_offline_and_aligns_html_with_parsed_possessions(
         "scripts/download_1div_advanced_boxscores.py",
         "scripts/annotate_playbyplay_possessions.py",
         "tests/generate_fixtures.py",
-        "modeling/scripts/train_win_probability_model.py",
-        "modeling/scripts/plot_win_probability.py",
     ],
 )
 def test_script_help_runs_as_an_executable(script: str) -> None:

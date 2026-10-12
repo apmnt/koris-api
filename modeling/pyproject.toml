@@ -1,0 +1,10 @@
+[project]
+name = "koris-modeling"
+version = "0.1.0"
+description = "Basketball analysis and modeling with koris-api"
+requires-python = ">=3.10"
+dependencies = ["koris-api"]
+
+[build-system]
+requires = ["uv_build>=0.9.27,<0.10.0"]
+build-backend = "uv_build"

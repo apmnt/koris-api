@@ -24,24 +24,24 @@ from ..pipeline.types import (
 )
 from ..seasons import current_season_id
 from .common import (
-    _augment_seasons_with_baskethotel,
     _extract_season_start_year,
     _fetch_baskethotel_schedule_game_ids,
     _get_baskethotel_league_id,
     _resolve_baskethotel_season_id,
+    available_season_rows,
 )
 
 
-def download_canonical_season(
+def fetch_canonical_season(
     season_id: str,
     category_id: str,
-    directory: Path,
     components: tuple[Component, ...],
     *,
-    binary: bool = False,
+    cache_dir: Path | None = None,
     limit_games: int | None = None,
     max_workers: int = 5,
 ) -> BatchReport:
+    """Fetch canonical games into memory without writing exports."""
     year = _extract_season_start_year(season_id)
     historical = year is not None and year <= 2023
     league_id: str | None = None
@@ -75,7 +75,7 @@ def download_canonical_season(
                     season_id=resolved_season,
                 ),
                 components,
-                cache_dir=directory / ".cache" / season_id,
+                cache_dir=cache_dir,
             )
         source_id = row.get("match_external_id")
         if not isinstance(source_id, str) or not source_id:
@@ -97,13 +97,33 @@ def download_canonical_season(
             resolve_reference(source_id),
             components,
             basketfi=row,
-            cache_dir=directory / ".cache" / season_id,
+            cache_dir=cache_dir,
         )
 
-    report = BatchReport(
+    return BatchReport(
         run_batch(
             [cast(JSONObject, row) for row in played], work, max_workers=max_workers
         )
+    )
+
+
+def download_canonical_season(
+    season_id: str,
+    category_id: str,
+    directory: Path,
+    components: tuple[Component, ...],
+    *,
+    binary: bool = False,
+    limit_games: int | None = None,
+    max_workers: int = 5,
+) -> BatchReport:
+    report = fetch_canonical_season(
+        season_id,
+        category_id,
+        components,
+        cache_dir=directory / ".cache" / season_id,
+        limit_games=limit_games,
+        max_workers=max_workers,
     )
     for outcome in report.outcomes:
         if outcome.game is not None:
@@ -118,7 +138,7 @@ def download_canonical_season(
         {
             "season_id": season_id,
             "category_id": category_id,
-            "requested_games": len(played),
+            "requested_games": len(report.outcomes),
             "failed_games": report.failed,
             "failures": [
                 {
@@ -149,7 +169,7 @@ def download_canonical_league(
     category = BasketFiAPI.get_category(current_season_id(), category_id).get(
         "category", {}
     )
-    seasons = _augment_seasons_with_baskethotel(
+    seasons = available_season_rows(
         category.get("seasons", []), category_id
     )
     if not seasons:

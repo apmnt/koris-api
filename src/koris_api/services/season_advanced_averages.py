@@ -15,7 +15,6 @@ from ..baskethotel_api import BasketHotelAPI
 from ..data import text
 from ..genius_api import GeniusSportsAPI
 from .common import (
-    _augment_seasons_with_baskethotel,
     _fetch_baskethotel_schedule_game_ids,
     _get_baskethotel_league_id,
     _get_genius_session,
@@ -24,6 +23,7 @@ from .common import (
     _stat_value,
     _summarize_baskethotel_boxscore,
     _summarize_boxscore,
+    available_season_rows,
     resolve_genius_competition_id,
 )
 
@@ -64,7 +64,7 @@ def download_season_advanced_averages(
         try:
             category_data = BasketFiAPI.get_category(season_id, category_id)
             seasons = category_data.get("category", {}).get("seasons", [])
-            seasons = _augment_seasons_with_baskethotel(seasons, category_id)
+            seasons = available_season_rows(seasons, category_id)
             season_ids = []
             for season in seasons:
                 comp_id = season.get("competition_id") or season.get("season_id")

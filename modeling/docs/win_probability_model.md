@@ -38,10 +38,10 @@ The plot script resolves mode choices dynamically from the registry, so changing
 
 ## Files
 
-- `modeling/src/koris_api/win_probability.py`
-  Core loading, state extraction, Elo fitting, bucketed logistic fitting, and evaluation helpers.
+- `modeling/src/koris_modeling/win_probability.py`
+  Re-exports the shared helpers for modeling scripts.
 - `src/koris_api/win_probability.py`
-  Compatibility shim so existing imports still work after the move.
+  Core loading, state extraction, Elo fitting, bucketed logistic fitting, and evaluation helpers, also used by production live predictions.
 - `modeling/scripts/train_win_probability_model.py`
   End-to-end training and validation script. It can optionally fetch missing play-by-play into a local cache before fitting.
 - `modeling/scripts/plot_win_probability.py`
@@ -49,8 +49,10 @@ The plot script resolves mode choices dynamically from the registry, so changing
 
 ## Example
 
+Run from the repository root after `uv sync --group modeling`.
+
 ```bash
-PYTHONPATH=src .venv/bin/python modeling/scripts/train_win_probability_model.py \
+uv run --group modeling python modeling/scripts/train_win_probability_model.py \
   --season-file data/1div_24-25.json \
   --season-file data/1div_25-26.json \
   --train-season 2024-2025 \
@@ -71,7 +73,7 @@ Outputs:
 ## Example Plots
 
 ```bash
-PYTHONPATH=src .venv/bin/python modeling/scripts/plot_win_probability.py \
+uv run --group modeling python modeling/scripts/plot_win_probability.py \
   --model-dir modeling/output/win_probability \
   --season-file data/1div_24-25.json \
   --season-file data/1div_25-26.json \

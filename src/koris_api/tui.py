@@ -19,7 +19,6 @@ from .pipeline.export import write_json
 from .pipeline.games import export_legacy
 from .seasons import current_season_id
 from .services.common import (
-    _augment_seasons_with_baskethotel,
     _extract_season_start_year,
     _fetch_baskethotel_schedule_game_ids,
     _fetch_baskethotel_team_map,
@@ -27,6 +26,7 @@ from .services.common import (
     _get_baskethotel_session,
     _merge_baskethotel_match,
     _resolve_baskethotel_season_id,
+    available_season_rows,
 )
 from .services.game_exports import enrich_matches, season_reference
 
@@ -1432,7 +1432,7 @@ class KorisApp(App[None]):
             # Extract seasons from the response
             if "category" in data and "seasons" in data["category"]:
                 seasons_list = data["category"]["seasons"]
-                seasons_list = _augment_seasons_with_baskethotel(
+                seasons_list = available_season_rows(
                     seasons_list, self.current_category
                 )
                 self.seasons = {}

@@ -10,10 +10,10 @@ from ..pipeline.types import BatchReport, Component, GameOutcome
 from ..seasons import current_season_id
 from .baskethotel_season_boxscores import download_baskethotel_season_boxscores
 from .common import (
-    _augment_seasons_with_baskethotel,
     _extract_season_start_year,
     _fetch_historical_matches,
     _is_historical_season,
+    available_season_rows,
 )
 from .game_exports import enrich_matches, season_reference
 from .season_boxscores import download_matches_with_boxscores
@@ -68,7 +68,7 @@ def download_league_boxscores_all_seasons(
     )
 
     seasons = category["seasons"]
-    seasons = _augment_seasons_with_baskethotel(seasons, category_id)
+    seasons = available_season_rows(seasons, category_id)
 
     filtered = []
     for season in seasons:
@@ -279,7 +279,7 @@ def download_league_boxscores_playbyplay_all_seasons(
     )
 
     seasons = category["seasons"]
-    seasons = _augment_seasons_with_baskethotel(seasons, category_id)
+    seasons = available_season_rows(seasons, category_id)
 
     filtered = []
     for season in seasons:
@@ -366,7 +366,7 @@ def download_league_all_seasons(
         return
 
     seasons = category_data["category"]["seasons"]
-    seasons = _augment_seasons_with_baskethotel(seasons, category_id)
+    seasons = available_season_rows(seasons, category_id)
     category_name = category_data["category"].get("category_name", "Unknown")
 
     if not seasons:

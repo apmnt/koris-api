@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import FuncFormatter
 
-from koris_api.win_probability import (
+from koris_modeling.win_probability import (
     BucketedWinProbabilityModel,
     EloConfig,
     WinProbabilityModelInput,
@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model-dir",
-        default="modeling/output/win_probability_1div",
+        default="output/win_probability_1div",
         help="Directory containing model_coefficients.json and metrics.json.",
     )
     parser.add_argument(

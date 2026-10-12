@@ -206,7 +206,7 @@ def _resolve_baskethotel_season_id(
     return season_map.get(season_name)
 
 
-def _augment_seasons_with_baskethotel(
+def available_season_rows(
     seasons: list[dict[str, Any]], category_id: str
 ) -> list[dict[str, Any]]:
     seasons = [dict(season) for season in seasons]

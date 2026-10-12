@@ -1,6 +1,6 @@
 import pandas as pd
 
-from koris_api.win_probability import (
+from koris_modeling.win_probability import (
     _seconds_remaining,
     _trim_events_to_terminal_game,
     fit_bucketed_model,

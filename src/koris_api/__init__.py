@@ -1,9 +1,21 @@
 import requests
 
+from .api import (
+    DataIssue,
+    Season,
+    SeasonData,
+    get_game,
+    get_season,
+    list_seasons,
+    load_season,
+    save_season,
+)
 from .basketfi_api import BasketFiAPI
 from .baskethotel_api import BasketHotelAPI
 from .cli import main
 from .genius_api import GeniusSportsAPI
+from .pipeline import Component, GameOutcome, GameRef, Provider
+from .schema.koris.v1.game_pb2 import Game
 from .services.baskethotel_season_boxscores import (
     download_baskethotel_season_boxscores,
 )
@@ -40,8 +52,16 @@ __version__ = "0.1.0"
 __all__ = [
     "BasketFiAPI",
     "BasketHotelAPI",
+    "Component",
+    "DataIssue",
+    "Game",
+    "GameOutcome",
+    "GameRef",
     "GeniusSportsAPI",
     "KorisAPI",  # Backward compatibility
+    "Provider",
+    "Season",
+    "SeasonData",
     "_fetch_baskethotel_schedule_game_ids",
     "_fetch_baskethotel_team_map",
     "_resolve_baskethotel_season_id",
@@ -59,8 +79,13 @@ __all__ = [
     "download_season_comprehensive",
     "download_season_game_leaders",
     "download_team_season",
+    "get_game",
+    "get_season",
+    "list_seasons",
     "load_genius_ids",
+    "load_season",
     "main",
     "requests",
     "retry_advanced_boxscores_404s",
+    "save_season",
 ]

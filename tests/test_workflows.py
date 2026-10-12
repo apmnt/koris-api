@@ -200,7 +200,7 @@ def test_league_script_backend_counts_partial_failures(
     )
     monkeypatch.setattr(
         league_boxscores,
-        "_augment_seasons_with_baskethotel",
+        "available_season_rows",
         lambda seasons, category_id: seasons,
     )
 
@@ -235,7 +235,7 @@ def test_league_backend_does_not_silently_succeed_without_output(
     )
     monkeypatch.setattr(
         league_boxscores,
-        "_augment_seasons_with_baskethotel",
+        "available_season_rows",
         lambda seasons, category_id: seasons,
     )
     monkeypatch.setattr(

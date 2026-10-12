@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from koris_api.win_probability import (
+from koris_modeling.win_probability import (
     accuracy_score,
     attach_playbyplay_cache,
     brier_score,
@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
-        default="modeling/output/win_probability",
+        default="output/win_probability",
         help="Directory for coefficients, metrics, and validation tables.",
     )
     parser.add_argument(
