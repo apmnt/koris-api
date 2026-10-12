@@ -1,17 +1,24 @@
 import json
+import logging
 from pathlib import Path
-from typing import Optional, cast
+from typing import Any, ClassVar, TypedDict, cast
+
 import pandas as pd
 import requests
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Button, Static, Select, DataTable
-from textual.containers import Container, Horizontal, VerticalScroll
 from textual.binding import Binding
+from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import Screen
+from textual.widgets import Button, DataTable, Footer, Header, Select, Static
+
 from .basketfi_api import BasketFiAPI
-from .genius_api import GeniusSportsAPI
-from .boxscore_normalizer import normalize_boxscore
-from .__init__ import (
+from .baskethotel_api import BasketHotelAPI
+from .data import fields, records
+from .pipeline import Component, fetch_game, resolve_reference
+from .pipeline.export import write_json
+from .pipeline.games import export_legacy
+from .seasons import current_season_id
+from .services.common import (
     _augment_seasons_with_baskethotel,
     _extract_season_start_year,
     _fetch_baskethotel_schedule_game_ids,
@@ -21,14 +28,28 @@ from .__init__ import (
     _merge_baskethotel_match,
     _resolve_baskethotel_season_id,
 )
-from .baskethotel_api import BasketHotelAPI
-from .__init__ import _augment_seasons_with_baskethotel
+from .services.game_exports import enrich_matches, season_reference
 
 
-class MatchViewScreen(Screen):
+class HistoricalFetchContext(TypedDict):
+    season_data: dict[str, Any]
+    season_name: str
+    category_id: str
+    category_name: str
+    fetch_id: int
+
+
+class BoxscoreSaveContext(TypedDict):
+    matches: list[dict[str, Any]]
+    filename: str
+    season_name: str | None
+    category_id: str
+
+
+class MatchViewScreen(Screen[None]):
     """Screen to display detailed match information."""
 
-    CSS = """
+    CSS: ClassVar[str] = """
     MatchViewScreen {
         background: $surface;
     }
@@ -64,7 +85,7 @@ class MatchViewScreen(Screen):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar = [
         Binding("escape", "back", "Back", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
@@ -74,9 +95,9 @@ class MatchViewScreen(Screen):
         match_id: str,
         home_team: str,
         away_team: str,
-        season_name: Optional[str] = None,
-        category_id: Optional[str] = None,
-        match_summary: Optional[dict] = None,
+        season_name: str | None = None,
+        category_id: str | None = None,
+        match_summary: dict[str, Any] | None = None,
     ):
         super().__init__()
         self.match_id = match_id
@@ -85,10 +106,10 @@ class MatchViewScreen(Screen):
         self.season_name = season_name
         self.category_id = category_id
         self.match_summary = match_summary or {}
-        self.match_data: Optional[dict] = None
-        self.boxscore_data: Optional[dict] = None
-        self.boxscore_match_id: Optional[str] = None  # Genius Sports match ID
-        self.boxscore_competition_id: Optional[str] = "12345"
+        self.match_data: dict[str, Any] | None = None
+        self.boxscore_data: dict[str, Any] | None = None
+        self.boxscore_match_id: str | None = None  # Genius Sports match ID
+        self.boxscore_competition_id: str | None = None
         self.is_historical = False
 
     def compose(self) -> ComposeResult:
@@ -121,7 +142,7 @@ class MatchViewScreen(Screen):
     def on_mount(self) -> None:
         """Fetch and display match data when screen is mounted."""
         season_year = _extract_season_start_year(self.season_name)
-        self.is_historical = season_year is not None and season_year < 2022
+        self.is_historical = season_year is not None and season_year <= 2023
         if self.match_summary.get("boxscore"):
             self.boxscore_data = self.match_summary.get("boxscore")
         self.load_match_data()
@@ -164,14 +185,13 @@ class MatchViewScreen(Screen):
                         self.boxscore_competition_id = self.match_data[
                             "category_external_id"
                         ]
-                    if not self.boxscore_competition_id:
-                        self.boxscore_competition_id = "12345"
                     self.render_match_info()
                 else:
                     display.update(f"No data found for match {self.match_id}")
 
         except Exception as e:
-            display.update(f"Error loading match data: {str(e)}")
+            logging.getLogger(__name__).debug("tui: operation failed", exc_info=True)
+            display.update(f"Error loading match data: {e!s}")
 
     def render_match_info(self) -> None:
         """Render the match information."""
@@ -220,7 +240,7 @@ class MatchViewScreen(Screen):
                 info_lines.append(f"Quarters: {' | '.join(quarters)}")
 
         # Referees
-        if "referees" in match and match["referees"]:
+        if match.get("referees"):
             info_lines.append("\n[bold green]REFEREES[/bold green]")
             for ref in match["referees"]:
                 name = f"{ref.get('first_name', '')} {ref.get('last_name', '')}".strip()
@@ -239,49 +259,40 @@ class MatchViewScreen(Screen):
         if self.boxscore_data:
             loading.update("[dim]Boxscore already loaded.[/dim]")
             return
-        source_label = "BasketHotel" if self.is_historical else "Genius Sports"
         header.update("")
         loading.update("[dim]Loading advanced statistics...[/dim]")
 
         # Run the fetch in a worker to avoid blocking the UI
         self.run_worker(self._fetch_boxscore_worker, exclusive=False, thread=True)
 
-    def _fetch_boxscore_worker(self) -> dict | None:
-        """Worker function to fetch box score data."""
+    def _source_reference(self):
+        if self.is_historical:
+            if not self.season_name or not self.category_id:
+                raise ValueError(
+                    "Season or category not available for BasketHotel match"
+                )
+            return season_reference(
+                self.category_id, self.season_name, historical=True
+            )({"match_id": self.match_id})
+        if not self.boxscore_match_id:
+            raise ValueError("External match ID is not available")
+        return resolve_reference(str(self.boxscore_match_id))
+
+    def _fetch_boxscore_worker(self) -> dict[str, Any] | None:
+        """The UI renders outcomes from the shared application workflow."""
         try:
-            if self.is_historical:
-                if not self.season_name or not self.category_id:
-                    return {
-                        "error": "Season or category not available for BasketHotel match"
-                    }
-                league_id = _get_baskethotel_league_id(str(self.category_id))
-                resolved_season_id = (
-                    _resolve_baskethotel_season_id(self.season_name, league_id)
-                    or self.season_name
-                )
-                session = _get_baskethotel_session()
-                boxscore_data = BasketHotelAPI().fetch_boxscore_data(
-                    str(self.match_id),
-                    season_id=str(resolved_season_id),
-                    league_id=str(league_id),
-                    session=session,
-                )
-                normalized = normalize_boxscore(boxscore_data, source="baskethotel")
-                return {"data": normalized}
-
-            if not self.boxscore_match_id:
-                return {"error": "Genius Sports match ID not available for this match"}
-
-            # Fetch the box score data
-            boxscore_data = GeniusSportsAPI.get_match_boxscore(
-                str(self.boxscore_match_id),
-                competition_id=self.boxscore_competition_id or "12345",
-            )
-            normalized = normalize_boxscore(boxscore_data, source="genius")
-            return {"data": normalized}
-
-        except Exception as e:
-            return {"error": str(e)}
+            outcome = fetch_game(self._source_reference(), (Component.BOXSCORE,))
+            result = export_legacy(outcome, {})
+            if result.get("boxscore"):
+                return {"data": result["boxscore"]}
+            error = fields(result.get("advanced_boxscore_error"))
+            return {
+                "error": error.get("error_message")
+                or outcome.conversion_failure
+                or "Boxscore unavailable"
+            }
+        except (ValueError, OSError) as exc:
+            return {"error": str(exc)}
 
     def on_worker_state_changed(self, event) -> None:
         """Handle worker state changes."""
@@ -302,7 +313,7 @@ class MatchViewScreen(Screen):
             f"[dim red]Advanced statistics not available: {error_msg}[/dim red]"
         )
 
-    def _update_boxscore_display(self, boxscore_data: dict) -> None:
+    def _update_boxscore_display(self, boxscore_data: dict[str, Any]) -> None:
         """Update the UI with fetched box score data."""
         self.boxscore_data = boxscore_data
 
@@ -393,7 +404,7 @@ class MatchViewScreen(Screen):
             )
 
         # Show coaching staff
-        if "coaches" in home_team and home_team["coaches"]:
+        if home_team.get("coaches"):
             coaches = home_team["coaches"]
             coach_text = f"  [dim]Head Coach: {coaches.get('head_coach', 'N/A')}"
             if coaches.get("assistant_coach"):
@@ -471,7 +482,7 @@ class MatchViewScreen(Screen):
             )
 
         # Show coaching staff
-        if "coaches" in away_team and away_team["coaches"]:
+        if away_team.get("coaches"):
             coaches = away_team["coaches"]
             coach_text = f"  [dim]Head Coach: {coaches.get('head_coach', 'N/A')}"
             if coaches.get("assistant_coach"):
@@ -482,7 +493,6 @@ class MatchViewScreen(Screen):
                 f"\n[bold cyan]{away_team.get('team_name', 'Away Team')} - Player Statistics[/bold cyan]\n{coach_text}"
             )
 
-
     def _format_minutes(self, value: object) -> str:
         if value is None:
             return "-"
@@ -490,11 +500,11 @@ class MatchViewScreen(Screen):
 
     def _format_pct(self, value: object) -> str:
         try:
-            return f"{float(value):.1f}"
+            return f"{float(str(value)):.1f}"
         except (TypeError, ValueError):
             return "0.0"
 
-    def _render_match_totals(self, totals: dict) -> None:
+    def _render_match_totals(self, totals: dict[str, Any]) -> None:
         header = self.query_one("#advanced_match_totals_header", Static)
         table = self.query_one("#advanced_match_totals_table", DataTable)
         header.update("\n[bold cyan]Match Totals[/bold cyan]")
@@ -539,7 +549,7 @@ class MatchViewScreen(Screen):
             str(totals.get("Index", 0)),
         )
 
-    def _render_team_totals(self, teams: list) -> None:
+    def _render_team_totals(self, teams: list[dict[str, Any]]) -> None:
         header = self.query_one("#advanced_team_totals_header", Static)
         table = self.query_one("#advanced_team_totals_table", DataTable)
         header.update("\n[bold cyan]Team Totals[/bold cyan]")
@@ -618,9 +628,13 @@ class MatchViewScreen(Screen):
 
         # Fetch play-by-play data
         try:
-            playbyplay_data = GeniusSportsAPI.get_match_playbyplay(
-                str(self.boxscore_match_id)
-            )
+            outcome = fetch_game(self._source_reference(), (Component.PLAYBYPLAY,))
+            result = export_legacy(outcome, {})
+            playbyplay_data = fields(result.get("playbyplay"))
+            if not playbyplay_data:
+                raise ValueError(
+                    outcome.conversion_failure or "Play-by-play unavailable"
+                )
 
             # Create a formatted display
             lines = []
@@ -629,7 +643,7 @@ class MatchViewScreen(Screen):
             )
 
             # Show match info
-            match_info = playbyplay_data.get("match_info", {})
+            match_info = fields(playbyplay_data.get("match_info"))
             if match_info:
                 lines.append(
                     f"[bold]{match_info.get('home_team', 'Home')} {match_info.get('home_score', '-')} - {match_info.get('away_score', '-')} {match_info.get('away_team', 'Away')}[/bold]"
@@ -639,7 +653,7 @@ class MatchViewScreen(Screen):
                 )
 
             # Show possession statistics
-            possessions = playbyplay_data.get("possessions", {})
+            possessions = fields(playbyplay_data.get("possessions"))
             if possessions:
                 lines.append("[bold green]POSSESSION STATISTICS[/bold green]")
                 lines.append(
@@ -647,16 +661,16 @@ class MatchViewScreen(Screen):
                 )
                 lines.append(
                     f"  Team 1 (Home): {possessions.get('team1_possessions', 0)} possessions, "
-                    f"Avg {possessions.get('team1_avg_possession_length_seconds', 0):.1f}s per possession"
+                    f"Avg {float(str(possessions.get('team1_avg_possession_length_seconds') or 0)):.1f}s per possession"
                 )
                 lines.append(
                     f"  Team 2 (Away): {possessions.get('team2_possessions', 0)} possessions, "
-                    f"Avg {possessions.get('team2_avg_possession_length_seconds', 0):.1f}s per possession"
+                    f"Avg {float(str(possessions.get('team2_avg_possession_length_seconds') or 0)):.1f}s per possession"
                 )
                 lines.append("")
 
             # Group events by period
-            events = playbyplay_data.get("events", [])
+            events = records(playbyplay_data.get("events"))
             current_period = None
 
             for event in events:
@@ -697,17 +711,18 @@ class MatchViewScreen(Screen):
             loading.update("\n".join(lines))
 
         except Exception as e:
-            loading.update(f"[dim red]Error loading play-by-play: {str(e)}[/dim red]")
+            logging.getLogger(__name__).debug("tui: operation failed", exc_info=True)
+            loading.update(f"[dim red]Error loading play-by-play: {e!s}[/dim red]")
 
     def action_back(self) -> None:
         """Go back to the main screen."""
         self.app.pop_screen()
 
 
-class TeamViewScreen(Screen):
+class TeamViewScreen(Screen[None]):
     """Screen to display detailed team information."""
 
-    CSS = """
+    CSS: ClassVar[str] = """
     TeamViewScreen {
         background: $surface;
     }
@@ -743,18 +758,18 @@ class TeamViewScreen(Screen):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar = [
         Binding("escape", "back", "Back", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
 
-    def __init__(self, team_id: str, team_name: str, season: Optional[str] = None):
+    def __init__(self, team_id: str, team_name: str, season: str | None = None):
         super().__init__()
         self.team_id = team_id
         self.team_name = team_name
         self.season = season
         self.team_data = None
-        self.team_matches: list = []
+        self.team_matches: list[dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
         """Create the team view layout."""
@@ -791,7 +806,8 @@ class TeamViewScreen(Screen):
                 display.update(f"No data found for {self.team_name}")
 
         except Exception as e:
-            display.update(f"Error loading team data: {str(e)}")
+            logging.getLogger(__name__).debug("tui: operation failed", exc_info=True)
+            display.update(f"Error loading team data: {e!s}")
 
     def render_team_info(self) -> None:
         """Render the team information."""
@@ -839,7 +855,7 @@ class TeamViewScreen(Screen):
             info_sections.append("")
 
         # Coaching Staff
-        if "officials" in team and team["officials"]:
+        if team.get("officials"):
             info_sections.append("[bold green]COACHING STAFF[/bold green]")
             for official in team["officials"]:
                 role = official.get("official_role", "Coach")
@@ -852,7 +868,7 @@ class TeamViewScreen(Screen):
         display.update("\n".join(info_sections))
 
         # Render players in DataTable
-        if "players" in team and team["players"]:
+        if team.get("players"):
             info_sections.append(
                 f"\n[bold green]PLAYERS ({team.get('players_count', len(team['players']))})[/bold green]"
             )
@@ -869,9 +885,11 @@ class TeamViewScreen(Screen):
 
             for player in sorted(
                 team["players"],
-                key=lambda p: int(p.get("shirt_number", "999"))
-                if p.get("shirt_number", "").isdigit()
-                else 999,
+                key=lambda p: (
+                    int(p.get("shirt_number", "999"))
+                    if p.get("shirt_number", "").isdigit()
+                    else 999
+                ),
             ):
                 number = player.get("shirt_number", "-")
                 name = f"{player.get('first_name', '')} {player.get('last_name', '')}".strip()
@@ -994,13 +1012,12 @@ class TeamViewScreen(Screen):
             matches_header = self.query_one("#matches_header", Static)
             status_code = e.response.status_code if e.response else "unknown"
             matches_header.update(
-                f"\n[bold red]TEAM MATCHES[/bold red] - HTTP Error {status_code}: {str(e)}"
+                f"\n[bold red]TEAM MATCHES[/bold red] - HTTP Error {status_code}: {e!s}"
             )
         except Exception as e:
+            logging.getLogger(__name__).debug("tui: operation failed", exc_info=True)
             matches_header = self.query_one("#matches_header", Static)
-            matches_header.update(
-                f"\n[bold red]TEAM MATCHES[/bold red] - Error: {str(e)}"
-            )
+            matches_header.update(f"\n[bold red]TEAM MATCHES[/bold red] - Error: {e!s}")
 
     def render_team_matches(self) -> None:
         """Render team matches in a DataTable."""
@@ -1097,35 +1114,34 @@ class TeamViewScreen(Screen):
                     TeamViewScreen(str(opponent_id), opponent_name, self.season)
                 )
 
-        elif col_index == 4:  # Score - show match view for played matches
-            if match["is_played"]:
-                match_id = match.get("match_id")
-                if match_id:
-                    # Determine home and away team names based on venue
-                    if match["venue"] == "Home":
-                        home_team = self.team_name
-                        away_team = match["opponent"]
-                    else:
-                        home_team = match["opponent"]
-                        away_team = self.team_name
+        elif col_index == 4 and match["is_played"]:
+            match_id = match.get("match_id")
+            if match_id:
+                # Determine home and away team names based on venue
+                if match["venue"] == "Home":
+                    home_team = self.team_name
+                    away_team = match["opponent"]
+                else:
+                    home_team = match["opponent"]
+                    away_team = self.team_name
 
-                    self.app.push_screen(
-                        MatchViewScreen(
-                            str(match_id),
-                            home_team,
-                            away_team,
-                        )
+                self.app.push_screen(
+                    MatchViewScreen(
+                        str(match_id),
+                        home_team,
+                        away_team,
                     )
+                )
 
     def action_back(self) -> None:
         """Go back to the main screen."""
         self.app.pop_screen()
 
 
-class KorisApp(App):
+class KorisApp(App[None]):
     """A Textual app for browsing Koripallo API data."""
 
-    CSS = """
+    CSS: ClassVar[str] = """
     Screen {
         background: $surface;
     }
@@ -1177,7 +1193,7 @@ class KorisApp(App):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar = [
         Binding("q", "quit", "Quit", show=True),
         Binding("r", "refresh", "Refresh", show=True),
     ]
@@ -1186,7 +1202,7 @@ class KorisApp(App):
         super().__init__()
         self.categories = self.load_categories()
         self.current_category = "2"
-        self.current_competition_id = "huki2526"
+        self.current_competition_id = current_season_id()
         self.current_data = None
         self.seasons = {}  # Will be populated when category data is fetched
         self.current_season = None
@@ -1196,19 +1212,19 @@ class KorisApp(App):
         self.matches_data = []  # Store matches for saving
         self.show_upcoming = True  # Show upcoming games by default
         self.last_fetch_time = 0  # Store last fetch duration
-        self._historical_fetch_context = None
+        self._historical_fetch_context: HistoricalFetchContext | None = None
         self._historical_fetch_start = None
-        self._boxscore_save_context = None
+        self._boxscore_save_context: BoxscoreSaveContext | None = None
         self._historical_matches_cache = {}
         self._active_fetch_id = 0
         self._matches_table_initialized = False
 
-    def load_categories(self) -> dict:
+    def load_categories(self) -> dict[str, Any]:
         """Load categories from JSON file"""
         categories_path = Path(__file__).parent.parent.parent / "categories.json"
         if categories_path.exists():
             with open(categories_path) as f:
-                return cast(dict, json.load(f))
+                return cast(dict[str, Any], json.load(f))
         return {
             "2": {"category_name": "Miesten I divisioona A"},
             "4": {"category_name": "Korisliiga"},
@@ -1341,11 +1357,13 @@ class KorisApp(App):
         # Filter matches same way as render_matches
         filtered_matches = []
         for match in self.matches_data:
-            if current_filter == "all":
-                filtered_matches.append(match)
-            elif current_filter == "played" and match["is_played"]:
-                filtered_matches.append(match)
-            elif current_filter == "upcoming" and not match["is_played"]:
+            if (
+                current_filter == "all"
+                or current_filter == "played"
+                and match["is_played"]
+                or current_filter == "upcoming"
+                and not match["is_played"]
+            ):
                 filtered_matches.append(match)
 
         # Get the row and column indices
@@ -1356,7 +1374,7 @@ class KorisApp(App):
             match = filtered_matches[row_index]
             season_name = self.current_season_name or self.current_season
             season_year = _extract_season_start_year(season_name)
-            is_historical = season_year is not None and season_year < 2022
+            is_historical = season_year is not None and season_year <= 2023
 
             # Check which cell was clicked (column index)
             # Columns: "Home Team"(0), "Score"(1), "Away Team"(2), "Date"(3), "Time"(4)
@@ -1409,7 +1427,7 @@ class KorisApp(App):
         try:
             status.update("Loading seasons...")
             # Use the default competition_id to get category data
-            data = BasketFiAPI.get_category("huki2526", self.current_category)
+            data = BasketFiAPI.get_category(current_season_id(), self.current_category)
 
             # Extract seasons from the response
             if "category" in data and "seasons" in data["category"]:
@@ -1449,7 +1467,8 @@ class KorisApp(App):
                 status.add_class("error")
 
         except Exception as e:
-            status.update(f"Error loading seasons: {str(e)}")
+            logging.getLogger(__name__).debug("tui: operation failed", exc_info=True)
+            status.update(f"Error loading seasons: {e!s}")
             status.add_class("error")
 
     def _format_progress_bar(self, current: int, total: int, width: int = 30) -> str:
@@ -1459,7 +1478,7 @@ class KorisApp(App):
         return f"[{'#' * filled}{'.' * (width - filled)}] {current}/{total}"
 
     def _update_loading_bar(
-        self, current: int, total: int, message: Optional[str] = None
+        self, current: int, total: int, message: str | None = None
     ) -> None:
         if message:
             status = self.query_one("#status", Static)
@@ -1488,14 +1507,16 @@ class KorisApp(App):
             str(filter_select.value) if filter_select.value != Select.BLANK else "all"
         )
 
-    def _match_passes_filter(self, match_row: dict, filter_value: str) -> bool:
+    def _match_passes_filter(
+        self, match_row: dict[str, Any], filter_value: str
+    ) -> bool:
         if filter_value == "all":
             return True
         if filter_value == "played":
             return match_row["is_played"]
         return not match_row["is_played"]
 
-    def _append_match_row(self, match_row: dict) -> None:
+    def _append_match_row(self, match_row: dict[str, Any]) -> None:
         self._init_matches_table()
         current_filter = self._current_filter()
         if not self._match_passes_filter(match_row, current_filter):
@@ -1515,7 +1536,9 @@ class KorisApp(App):
         total_matches = len(self.matches_data)
         current_filter = self._current_filter()
         filtered_count = sum(
-            1 for match in self.matches_data if self._match_passes_filter(match, current_filter)
+            1
+            for match in self.matches_data
+            if self._match_passes_filter(match, current_filter)
         )
         if current_filter == "all":
             status.update(
@@ -1529,7 +1552,9 @@ class KorisApp(App):
         status.remove_class("error")
         status.add_class("info")
 
-    def _start_historical_fetch(self, season_data: dict, season_name: str) -> None:
+    def _start_historical_fetch(
+        self, season_data: dict[str, Any], season_name: str
+    ) -> None:
         cache_key = f"{self.current_category}:{season_name}"
         cached = self._historical_matches_cache.get(cache_key)
         if cached is not None:
@@ -1544,6 +1569,7 @@ class KorisApp(App):
             "season_name": season_name,
             "category_id": self.current_category,
             "category_name": self.categories[self.current_category]["category_name"],
+            "fetch_id": self._active_fetch_id + 1,
         }
         import time
 
@@ -1556,8 +1582,10 @@ class KorisApp(App):
             self._fetch_historical_matches_worker, exclusive=True, thread=True
         )
 
-    def _fetch_historical_matches_worker(self) -> dict:
-        context = self._historical_fetch_context or {}
+    def _fetch_historical_matches_worker(self) -> dict[str, Any]:
+        context = self._historical_fetch_context
+        if context is None:
+            raise RuntimeError("Historical fetch context is missing")
         season_data = context.get("season_data", {})
         season_name = context.get("season_name", "")
         category_id = context.get("category_id", "")
@@ -1629,7 +1657,9 @@ class KorisApp(App):
                     season_name,
                 )
             except Exception:
-                pass
+                logging.getLogger(__name__).debug(
+                    "tui: operation failed", exc_info=True
+                )
 
             self.call_from_thread(self._update_loading_bar, idx, total)
 
@@ -1642,7 +1672,7 @@ class KorisApp(App):
     def _on_historical_match_loaded(
         self,
         fetch_id: int,
-        match: dict,
+        match: dict[str, Any],
         current: int,
         total: int,
         season_name: str,
@@ -1656,8 +1686,8 @@ class KorisApp(App):
         )
 
     def _append_match(
-        self, match: dict, season_name: str, is_historical: bool
-    ) -> dict:
+        self, match: dict[str, Any], season_name: str, is_historical: bool
+    ) -> dict[str, Any]:
         if is_historical:
             home_team = match.get("home_team", "N/A")
             away_team = match.get("away_team", "N/A")
@@ -1739,7 +1769,7 @@ class KorisApp(App):
         return match_row
 
     def _process_matches_payload(
-        self, data: dict, season_name: str, is_historical: bool
+        self, data: dict[str, Any], season_name: str, is_historical: bool
     ) -> None:
         status = self.query_one("#status", Static)
         self.current_data = data
@@ -1774,7 +1804,7 @@ class KorisApp(App):
             )
 
             season_year = _extract_season_start_year(season_name)
-            is_historical = season_year is not None and season_year < 2022
+            is_historical = season_year is not None and season_year <= 2023
 
             if is_historical and season_data.get("competition_id") == season_name:
                 self._start_historical_fetch(season_data, season_name)
@@ -1800,13 +1830,14 @@ class KorisApp(App):
             self._process_matches_payload(data, season_name, False)
 
         except Exception as e:
-            status.update(f"Error: {str(e)}")
+            logging.getLogger(__name__).debug("tui: operation failed", exc_info=True)
+            status.update(f"Error: {e!s}")
             status.remove_class("info")
             status.add_class("error")
 
     def render_matches(self) -> None:
         """Render matches based on current filter"""
-        status = self.query_one("#status", Static)
+        self.query_one("#status", Static)
         table = self.query_one(DataTable)
         filter_select = self.query_one("#filter_select", Select)
 
@@ -1822,11 +1853,13 @@ class KorisApp(App):
         # Filter matches
         filtered_matches = []
         for match in self.matches_data:
-            if current_filter == "all":
-                filtered_matches.append(match)
-            elif current_filter == "played" and match["is_played"]:
-                filtered_matches.append(match)
-            elif current_filter == "upcoming" and not match["is_played"]:
+            if (
+                current_filter == "all"
+                or current_filter == "played"
+                and match["is_played"]
+                or current_filter == "upcoming"
+                and not match["is_played"]
+            ):
                 filtered_matches.append(match)
 
         # Add to table
@@ -1841,9 +1874,9 @@ class KorisApp(App):
             )
 
         # Update status with count and time
-        total_matches = len(self.matches_data)
-        filtered_count = len(filtered_matches)
-        season_name = self.current_season_name or self.current_season
+        len(self.matches_data)
+        len(filtered_matches)
+        season_name = str(self.current_season_name or self.current_season or "")
 
         self._update_status_counts(season_name)
 
@@ -1876,11 +1909,13 @@ class KorisApp(App):
                 # Remove the is_played field before saving
                 match_copy = {k: v for k, v in match.items() if k != "is_played"}
 
-                if current_filter == "all":
-                    filtered_matches.append(match_copy)
-                elif current_filter == "played" and match["is_played"]:
-                    filtered_matches.append(match_copy)
-                elif current_filter == "upcoming" and not match["is_played"]:
+                if (
+                    current_filter == "all"
+                    or current_filter == "played"
+                    and match["is_played"]
+                    or current_filter == "upcoming"
+                    and not match["is_played"]
+                ):
                     filtered_matches.append(match_copy)
 
             # Generate filename
@@ -1889,7 +1924,7 @@ class KorisApp(App):
             )
             category_name = category_name.replace(" ", "_").replace("/", "_")
             season = (
-                (self.current_season_name or self.current_season).replace("-", "_")
+                str(self.current_season_name or self.current_season).replace("-", "_")
                 if (self.current_season_name or self.current_season)
                 else "season"
             )
@@ -1920,93 +1955,63 @@ class KorisApp(App):
             status.add_class("info")
 
         except Exception as e:
-            status.update(f"Error saving data: {str(e)}")
+            logging.getLogger(__name__).debug("tui: operation failed", exc_info=True)
+            status.update(f"Error saving data: {e!s}")
             status.remove_class("info")
             status.add_class("error")
 
-    def _start_boxscore_save(self, matches: list, filename: str) -> None:
+    def _start_boxscore_save(
+        self, matches: list[dict[str, Any]], filename: str
+    ) -> None:
         self._boxscore_save_context = {
             "matches": matches,
             "filename": filename,
             "season_name": self.current_season_name or self.current_season,
             "category_id": self.current_category,
         }
-        self._update_loading_bar(
-            0, len(matches), "Downloading boxscores and saving..."
-        )
+        self._update_loading_bar(0, len(matches), "Downloading boxscores and saving...")
         self.run_worker(self._save_boxscores_worker, exclusive=True, thread=True)
 
-    def _save_boxscores_worker(self) -> dict:
-        context = self._boxscore_save_context or {}
-        matches = context.get("matches", [])
-        filename = context.get("filename", "matches.json")
-        season_name = context.get("season_name")
-        category_id = context.get("category_id")
-
+    def _save_boxscores_worker(self) -> dict[str, Any]:
+        context = self._boxscore_save_context
+        if context is None:
+            raise RuntimeError("Boxscore save context is missing")
+        original = context["matches"]
+        filename = context["filename"]
+        season_name = context["season_name"] or ""
         season_year = _extract_season_start_year(season_name)
-        is_historical = season_year is not None and season_year < 2022
-
-        results = []
-        total = len(matches)
-        for idx, match in enumerate(matches, start=1):
-            match_id = match.get("Match ID")
-            external_id = match.get("Match External ID")
-            category_external_id = match.get("Category External ID") or match.get(
-                "category_external_id"
-            )
-            if not category_external_id:
-                category_external_id = "12345"
-            boxscore = None
-            source = None
-
-            try:
-                if is_historical:
-                    league_id = _get_baskethotel_league_id(str(category_id))
-                    resolved_season_id = (
-                        _resolve_baskethotel_season_id(season_name, league_id)
-                        or season_name
-                    )
-                    session = _get_baskethotel_session()
-                    boxscore_raw = BasketHotelAPI().fetch_boxscore_data(
-                        str(match_id),
-                        season_id=str(resolved_season_id),
-                        league_id=str(league_id),
-                        session=session,
-                    )
-                    boxscore = normalize_boxscore(boxscore_raw, source="baskethotel")
-                    source = "baskethotel"
-                else:
-                    if not external_id:
-                        match_detail = BasketFiAPI.get_match(str(match_id))
-                        external_id = (
-                            match_detail.get("match", {}).get("match_external_id")
-                        )
-                        if not category_external_id:
-                            category_external_id = (
-                                match_detail.get("match", {}).get("category_external_id")
-                            ) or "12345"
-                    if external_id:
-                        boxscore_raw = GeniusSportsAPI.get_match_boxscore(
-                            str(external_id),
-                            competition_id=category_external_id,
-                        )
-                        boxscore = normalize_boxscore(boxscore_raw, source="genius")
-                        source = "genius"
-            except Exception:
-                boxscore = None
-
-            enriched = dict(match)
-            if boxscore:
-                enriched["boxscore_source"] = source
-                enriched["boxscore"] = boxscore
-            results.append(enriched)
-
-            self.call_from_thread(self._update_loading_bar, idx, total)
-
-        Path(filename).write_text(
-            json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8"
+        historical = season_year is not None and season_year <= 2023
+        rows = [
+            {
+                **row,
+                "match_id": row.get("Match ID"),
+                "match_external_id": row.get("Match External ID"),
+            }
+            for row in original
+        ]
+        reference_for = season_reference(
+            context["category_id"], season_name, historical=historical
         )
-        return {"filename": filename, "count": len(results)}
+
+        def update(completed: int, total: int) -> None:
+            self.call_from_thread(self._update_loading_bar, completed, total)
+
+        enriched, report = enrich_matches(
+            rows, (Component.BOXSCORE,), reference_for, progress=update
+        )
+        results = [
+            {
+                **row,
+                **{
+                    field: result[field]
+                    for field in ("boxscore", "advanced_boxscore_error")
+                    if field in result
+                },
+            }
+            for row, result in zip(original, enriched)
+        ]
+        write_json(Path(filename), results)
+        return {"filename": filename, "count": len(results), "failed": report.failed}
 
     def on_worker_state_changed(self, event) -> None:
         if event.worker.name == "_fetch_historical_matches_worker":

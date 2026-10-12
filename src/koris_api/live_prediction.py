@@ -29,7 +29,9 @@ DEFAULT_MODEL_MODE = "hybrid"
 DEFAULT_MODEL_DIR = PACKAGE_ROOT / "modeling" / "output" / "win_probability_1div"
 DEFAULT_DATA_DIR = PACKAGE_ROOT / "data"
 DEFAULT_COMPETITION_ID = "42145"
-SEASON_FILENAME_RE = re.compile(r"^(?P<league>[a-z0-9-]+)_(?P<season>\d{2}-\d{2})\.json$")
+SEASON_FILENAME_RE = re.compile(
+    r"^(?P<league>[a-z0-9-]+)_(?P<season>\d{2}-\d{2})\.json$"
+)
 
 
 def _as_int(value: Any) -> int | None:
@@ -136,7 +138,9 @@ def smooth_step_series(
     return dense_index.to_numpy(dtype=float), smoothed.to_numpy(dtype=float)
 
 
-def normalize_score_diff_probability(score_diff: np.ndarray, scale: float) -> np.ndarray:
+def normalize_score_diff_probability(
+    score_diff: np.ndarray, scale: float
+) -> np.ndarray:
     bounded_scale = max(float(scale), 1e-6)
     logits = np.clip(score_diff / bounded_scale, -30.0, 30.0)
     return 1.0 / (1.0 + np.exp(-logits))
@@ -153,7 +157,9 @@ def fit_point_diff_scale(
     fit_enabled: bool,
 ) -> tuple[float, np.ndarray]:
     if not fit_enabled:
-        return default_scale, normalize_score_diff_probability(score_diff, default_scale)
+        return default_scale, normalize_score_diff_probability(
+            score_diff, default_scale
+        )
 
     lo = max(1e-6, min(scale_min, scale_max))
     hi = max(scale_min, scale_max)
@@ -391,7 +397,9 @@ def build_live_game_prediction(
 
     model = load_model(model_dir_path)
     matches = load_matches(season_file_paths)
-    pbp_cache_path = Path(pbp_cache) if pbp_cache else model_dir_path / "playbyplay_cache.json"
+    pbp_cache_path = (
+        Path(pbp_cache) if pbp_cache else model_dir_path / "playbyplay_cache.json"
+    )
     playbyplay_by_match_id, _ = load_playbyplay_cache(pbp_cache_path)
     matches = attach_playbyplay_cache(matches, playbyplay_by_match_id)
     live_match = _build_live_match(
@@ -416,7 +424,9 @@ def build_live_game_prediction(
     pipeline_data = build_pipeline_data(matches=pipeline_matches, model=model)
     states = pipeline_data.states.copy()
     if states.empty:
-        raise ValueError("No state rows were available for live match prediction export.")
+        raise ValueError(
+            "No state rows were available for live match prediction export."
+        )
 
     model_input = WinProbabilityModelInput(
         pipeline=pipeline_data,
@@ -439,9 +449,13 @@ def build_live_game_prediction(
 
     current_elapsed_seconds = _as_int(live_match.get("_current_elapsed_seconds"))
     if current_elapsed_seconds is not None:
-        live_frame = live_frame[live_frame["elapsed_seconds"] <= current_elapsed_seconds]
+        live_frame = live_frame[
+            live_frame["elapsed_seconds"] <= current_elapsed_seconds
+        ]
     if live_frame.empty:
-        raise ValueError(f"No live states remained after trimming live match {match_id}")
+        raise ValueError(
+            f"No live states remained after trimming live match {match_id}"
+        )
 
     live_frame = live_frame.sort_values(
         by=["elapsed_seconds", "event_order"],
@@ -465,7 +479,7 @@ def build_live_game_prediction(
         normalized_point_diff_probability,
     )
 
-    smooth_x, smooth_home_probability = smooth_step_series(
+    _smooth_x, smooth_home_probability = smooth_step_series(
         frame=live_frame,
         values=home_win_probability,
         total_seconds=total_seconds,

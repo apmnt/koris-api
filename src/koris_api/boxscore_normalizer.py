@@ -2,20 +2,36 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
 import re
+from collections.abc import Mapping, Sequence
+from decimal import Decimal
+from typing import TypedDict
+
+from .data import fields, records, text
 
 
-def _to_int(value: Any) -> int:
+class NormalizedTeam(TypedDict):
+    team_name: str | None
+    players: list[dict[str, object]]
+    totals: Mapping[str, object]
+
+
+class NormalizedBoxScore(TypedDict):
+    source: str | None
+    teams: list[NormalizedTeam]
+    match_totals: dict[str, int | float]
+
+
+def _to_int(value: object) -> int:
     if value is None:
         return 0
     try:
-        return int(value)
+        return int(value) if isinstance(value, (str, int, float, Decimal)) else 0
     except (TypeError, ValueError):
         return 0
 
 
-def _to_float(value: Any) -> float:
+def _to_float(value: object) -> float:
     if value is None:
         return 0.0
     if isinstance(value, str):
@@ -25,12 +41,12 @@ def _to_float(value: Any) -> float:
         except ValueError:
             return 0.0
     try:
-        return float(value)
+        return float(value) if isinstance(value, (str, int, float, Decimal)) else 0.0
     except (TypeError, ValueError):
         return 0.0
 
 
-def _to_minutes_str(value: Any) -> Optional[str]:
+def _to_minutes_str(value: object) -> str | None:
     if value is None:
         return None
     if isinstance(value, str):
@@ -40,13 +56,15 @@ def _to_minutes_str(value: Any) -> Optional[str]:
             return f"{int(value.strip())}:00"
         return value
     try:
+        if not isinstance(value, (int, float, Decimal)):
+            return None
         minutes = int(float(value))
         return f"{minutes}:00"
     except (TypeError, ValueError):
         return None
 
 
-def _parse_made_attempt(value: Any) -> tuple[int, int]:
+def _parse_made_attempt(value: object) -> tuple[int, int]:
     if value is None:
         return (0, 0)
     if isinstance(value, str) and "-" in value:
@@ -56,7 +74,7 @@ def _parse_made_attempt(value: Any) -> tuple[int, int]:
     return (_to_int(value), 0)
 
 
-def _percentage_from(value: Any, made: int, attempted: int) -> float:
+def _percentage_from(value: object, made: int, attempted: int) -> float:
     if value is not None and value != "":
         return _to_float(value)
     if attempted <= 0:
@@ -64,11 +82,11 @@ def _percentage_from(value: Any, made: int, attempted: int) -> float:
     return round((made / attempted) * 100.0, 1)
 
 
-def _detect_source(players: List[Dict[str, Any]]) -> str:
+def _detect_source(players: list[Mapping[str, object]]) -> str:
     if not players:
         return "unknown"
     sample = players[0]
-    keys = {str(k) for k in sample.keys()}
+    keys = {str(k) for k in sample}
     if "PIST" in keys or "LEV" in keys:
         return "baskethotel"
     if "Points" in keys or "Total Rebounds" in keys:
@@ -76,7 +94,7 @@ def _detect_source(players: List[Dict[str, Any]]) -> str:
     return "unknown"
 
 
-def _extract_player_number(name: Optional[str]) -> tuple[Optional[int], Optional[str]]:
+def _extract_player_number(name: str | None) -> tuple[int | None, str | None]:
     if not name:
         return (None, name)
     match = re.match(r"^#\s*(\d+)\s*(.*)$", str(name).strip())
@@ -88,13 +106,15 @@ def _extract_player_number(name: Optional[str]) -> tuple[Optional[int], Optional
 
 
 def _normalize_player_genius(
-    player: Dict[str, Any], team_name: Optional[str]
-) -> Dict[str, Any]:
+    player: Mapping[str, object], team_name: str | None
+) -> dict[str, object]:
     player_number = player.get("Shirt Number")
     two_made = _to_int(player.get("2 Points Made"))
     two_att = _to_int(player.get("2 Points Attempted"))
     three_made = _to_int(player.get("3 Points Made"))
-    three_att = _to_int(player.get("3 Points Atttempted") or player.get("3 Points Attempted"))
+    three_att = _to_int(
+        player.get("3 Points Atttempted") or player.get("3 Points Attempted")
+    )
     ft_made = _to_int(player.get("Free Throws Made"))
     ft_att = _to_int(player.get("Free Throws Attempted"))
     return {
@@ -108,7 +128,9 @@ def _normalize_player_genius(
         "2P%": _percentage_from(player.get("2 Points Percentage"), two_made, two_att),
         "3PM": three_made,
         "3PA": three_att,
-        "3P%": _percentage_from(player.get("3 Point Percentage"), three_made, three_att),
+        "3P%": _percentage_from(
+            player.get("3 Point Percentage"), three_made, three_att
+        ),
         "FTM": ft_made,
         "FTA": ft_att,
         "FT%": _percentage_from(player.get("Free Throw Percentage"), ft_made, ft_att),
@@ -126,9 +148,9 @@ def _normalize_player_genius(
 
 
 def _normalize_player_baskethotel(
-    player: Dict[str, Any], team_name: Optional[str]
-) -> Dict[str, Any]:
-    raw_name = player.get("Player") or player.get("Pelaaja")
+    player: Mapping[str, object], team_name: str | None
+) -> dict[str, object]:
+    raw_name = text(player.get("Player") or player.get("Pelaaja"))
     extracted_number, cleaned_name = _extract_player_number(raw_name)
     two_made, two_att = _parse_made_attempt(player.get("2P"))
     three_made, three_att = _parse_made_attempt(player.get("3P"))
@@ -167,12 +189,15 @@ def _normalize_player_baskethotel(
 
 
 def normalize_boxscore(
-    boxscore: Dict[str, Any], source: Optional[str] = None
-) -> Dict[str, Any]:
-    teams = []
-    for team in boxscore.get("teams", []):
-        team_name = team.get("team_name")
-        players = team.get("players", []) or []
+    boxscore: Mapping[str, object], source: str | None = None
+) -> NormalizedBoxScore:
+    # A provider-tagged response takes precedence over legacy callers' defaults.
+    source = text(boxscore.get("source")) or source
+    raw_teams = records(boxscore.get("teams"))
+    teams: list[NormalizedTeam] = []
+    for team in raw_teams:
+        team_name = text(team.get("team_name"))
+        players = records(team.get("players"))
         detected_source = source or _detect_source(players)
         if detected_source == "baskethotel":
             normalized_players = [
@@ -182,40 +207,24 @@ def normalize_boxscore(
             normalized_players = [
                 _normalize_player_genius(player, team_name) for player in players
             ]
+        if detected_source == "sportradar":
+            normalized_players = [
+                {
+                    **normalized,
+                    **{
+                        key: raw[key]
+                        for key in ("player_id", "starter", "played")
+                        if key in raw
+                    },
+                }
+                for normalized, raw in zip(normalized_players, players)
+            ]
 
-        totals = {
-            "Points": sum(p["Points"] for p in normalized_players),
-            "2PM": sum(p["2PM"] for p in normalized_players),
-            "2PA": sum(p["2PA"] for p in normalized_players),
-            "2P%": _percentage_from(
-                None,
-                sum(p["2PM"] for p in normalized_players),
-                sum(p["2PA"] for p in normalized_players),
-            ),
-            "3PM": sum(p["3PM"] for p in normalized_players),
-            "3PA": sum(p["3PA"] for p in normalized_players),
-            "3P%": _percentage_from(
-                None,
-                sum(p["3PM"] for p in normalized_players),
-                sum(p["3PA"] for p in normalized_players),
-            ),
-            "FTM": sum(p["FTM"] for p in normalized_players),
-            "FTA": sum(p["FTA"] for p in normalized_players),
-            "FT%": _percentage_from(
-                None,
-                sum(p["FTM"] for p in normalized_players),
-                sum(p["FTA"] for p in normalized_players),
-            ),
-            "OFF": sum(p["OFF"] for p in normalized_players),
-            "DEF": sum(p["DEF"] for p in normalized_players),
-            "REB": sum(p["REB"] for p in normalized_players),
-            "AST": sum(p["AST"] for p in normalized_players),
-            "STL": sum(p["STL"] for p in normalized_players),
-            "TO": sum(p["TO"] for p in normalized_players),
-            "BLK": sum(p["BLK"] for p in normalized_players),
-            "PF": sum(p["PF"] for p in normalized_players),
-            "Index": sum(p["Index"] for p in normalized_players),
-        }
+        totals: Mapping[str, object] = _totals(normalized_players)
+
+        if detected_source == "sportradar":
+            reported = _normalize_player_genius(fields(team["totals"]), team_name)
+            totals = {key: reported[key] for key in totals}
 
         teams.append(
             {
@@ -225,43 +234,45 @@ def normalize_boxscore(
             }
         )
 
-    match_totals = {
-        "Points": sum(team["totals"]["Points"] for team in teams),
-        "2PM": sum(team["totals"]["2PM"] for team in teams),
-        "2PA": sum(team["totals"]["2PA"] for team in teams),
-        "2P%": _percentage_from(
-            None,
-            sum(team["totals"]["2PM"] for team in teams),
-            sum(team["totals"]["2PA"] for team in teams),
-        ),
-        "3PM": sum(team["totals"]["3PM"] for team in teams),
-        "3PA": sum(team["totals"]["3PA"] for team in teams),
-        "3P%": _percentage_from(
-            None,
-            sum(team["totals"]["3PM"] for team in teams),
-            sum(team["totals"]["3PA"] for team in teams),
-        ),
-        "FTM": sum(team["totals"]["FTM"] for team in teams),
-        "FTA": sum(team["totals"]["FTA"] for team in teams),
-        "FT%": _percentage_from(
-            None,
-            sum(team["totals"]["FTM"] for team in teams),
-            sum(team["totals"]["FTA"] for team in teams),
-        ),
-        "OFF": sum(team["totals"]["OFF"] for team in teams),
-        "DEF": sum(team["totals"]["DEF"] for team in teams),
-        "REB": sum(team["totals"]["REB"] for team in teams),
-        "AST": sum(team["totals"]["AST"] for team in teams),
-        "STL": sum(team["totals"]["STL"] for team in teams),
-        "TO": sum(team["totals"]["TO"] for team in teams),
-        "BLK": sum(team["totals"]["BLK"] for team in teams),
-        "PF": sum(team["totals"]["PF"] for team in teams),
-        "Index": sum(team["totals"]["Index"] for team in teams),
-    }
+    match_totals = _totals([fields(team["totals"]) for team in teams])
 
     return {
         "source": source
-        or _detect_source(boxscore.get("teams", [{}])[0].get("players", [])),
+        or (
+            _detect_source(records(raw_teams[0].get("players")))
+            if raw_teams
+            else "unknown"
+        ),
         "teams": teams,
         "match_totals": match_totals,
     }
+
+
+def _totals(rows: Sequence[Mapping[str, object]]) -> dict[str, int | float]:
+    """Aggregate the legacy export's numeric fields in one place."""
+    values: dict[str, int | float] = {
+        key: sum(_to_int(row.get(key)) for row in rows)
+        for key in (
+            "Points",
+            "2PM",
+            "2PA",
+            "3PM",
+            "3PA",
+            "FTM",
+            "FTA",
+            "OFF",
+            "DEF",
+            "REB",
+            "AST",
+            "STL",
+            "TO",
+            "BLK",
+            "PF",
+            "Index",
+        )
+    }
+    for prefix in ("2P", "3P", "FT"):
+        values[prefix + "%"] = _percentage_from(
+            None, int(values[prefix + "M"]), int(values[prefix + "A"])
+        )
+    return values

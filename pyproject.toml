@@ -11,12 +11,14 @@ dependencies = [
     "requests",
     "textual",
     "pandas",
+    "numpy>=1.23",
     "openpyxl",
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
     "tqdm>=4.66.0",
     "httpx>=0.27.0",
     "pyarrow>=22.0.0",
+    "protobuf>=3.20.3,<8",
 ]
 
 [project.scripts]
@@ -40,8 +42,39 @@ warn_unused_ignores = false
 warn_no_return = true
 strict_equality = true
 
+[tool.ruff]
+extend-exclude = ["src/koris_api/schema"]
+
+[tool.basedpyright]
+# Standard checks catch type errors in legacy/API/UI code without requiring
+# every dynamic response and framework callback to have strict annotations.
+typeCheckingMode = "standard"
+# Keep stronger checks on the typed application core as it grows.
+strict = [
+    "src/koris_api/pipeline",
+    "src/koris_api/converters",
+    "src/koris_api/analysis",
+    "src/koris_api/data.py",
+    "src/koris_api/basketfi_parser.py",
+    "src/koris_api/boxscore_normalizer.py",
+    "src/koris_api/genius_livestats_parser.py",
+    "src/koris_api/sportradar_parser.py",
+    "src/koris_api/seasons.py",
+    "src/koris_api/cli.py",
+]
+include = ["src", "tests"]
+# uv uses the enclosing workspace environment, rather than a local .venv.
+venvPath = "../.."
+venv = ".venv"
+pythonVersion = "3.10"
+# Generated bindings are checked through their consumers, not edited by hand.
+ignore = ["src/koris_api/schema"]
+
 [dependency-groups]
 dev = [
+    "ruff==0.17.0",
+    "basedpyright==1.40.2",
+    "pandas-stubs>=2.3.3,<3",
     "matplotlib>=3.10.8",
     "types-requests>=2.32.4.20250913",
     "types-beautifulsoup4>=4.12.0.20250516",

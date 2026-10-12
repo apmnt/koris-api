@@ -19,7 +19,7 @@ import json
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -53,8 +53,7 @@ def parse_args() -> argparse.Namespace:
         "--base-name",
         default=None,
         help=(
-            "Base output name without extension. "
-            "Defaults to match_<id> when possible."
+            "Base output name without extension. Defaults to match_<id> when possible."
         ),
     )
     parser.add_argument(
@@ -75,7 +74,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _infer_base_name(playbyplay_url: Optional[str], input_html: Optional[str]) -> str:
+def _infer_base_name(playbyplay_url: str | None, input_html: str | None) -> str:
     if playbyplay_url:
         match = re.search(r"/match/([^/]+)/playbyplay", playbyplay_url)
         if match:
@@ -109,7 +108,7 @@ def _extract_event_rows_with_team(soup: BeautifulSoup) -> list[Tag]:
     return rows
 
 
-def _normalize_text(value: Any) -> Optional[str]:
+def _normalize_text(value: Any) -> str | None:
     if value is None:
         return None
     text = str(value).strip()
@@ -145,7 +144,7 @@ def _map_possession_end_event_indices(
         end_event = possession_events[-1]
         end_signature = _event_signature(end_event)
 
-        found_index: Optional[int] = None
+        found_index: int | None = None
         for idx in range(search_start, len(parsed_signatures)):
             if parsed_signatures[idx] == end_signature:
                 found_index = idx
@@ -222,7 +221,12 @@ def _annotate_html_with_possession_dividers(
         possessions_ending_here = index_to_possessions.get(idx)
         if not possessions_ending_here:
             continue
-        classes = row.get("class", [])
+        classes_value = row.get("class", [])
+        classes = (
+            list(classes_value)
+            if isinstance(classes_value, list)
+            else str(classes_value).split()
+        )
         if "possession-end" not in classes:
             classes.append("possession-end")
             row["class"] = classes
@@ -259,7 +263,9 @@ def main() -> None:
         source_description = str(input_path)
 
     parsed = GeniusSportsParser.parse_playbyplay_html(html)
-    annotated_html, divider_count = _annotate_html_with_possession_dividers(html, parsed)
+    annotated_html, divider_count = _annotate_html_with_possession_dividers(
+        html, parsed
+    )
 
     original_html_path.write_text(html, encoding="utf-8")
     annotated_html_path.write_text(annotated_html, encoding="utf-8")
@@ -275,8 +281,7 @@ def main() -> None:
     print(f"Annotated HTML: {annotated_html_path}")
     print(f"Parsed JSON: {parsed_json_path}")
     print(
-        f"Inserted {divider_count} divider lines "
-        f"for {total_possessions} possessions."
+        f"Inserted {divider_count} divider lines for {total_possessions} possessions."
     )
 
 

@@ -20,8 +20,8 @@ from koris_api.win_probability import (
     EloConfig,
     WinProbabilityModelInput,
     WinProbabilityPipelineData,
-    available_win_probability_models,
     attach_playbyplay_cache,
+    available_win_probability_models,
     build_match_results_frame,
     build_state_frame,
     compute_elo_probabilities,
@@ -186,7 +186,7 @@ def elapsed_seconds(period_index: int, clock_seconds: int) -> int:
 
 
 def format_elapsed(seconds: float, _: int) -> str:
-    total_seconds = int(round(seconds))
+    total_seconds = round(seconds)
     minutes, secs = divmod(total_seconds, 60)
     return f"{minutes}:{secs:02d}"
 
@@ -285,7 +285,9 @@ def fit_point_diff_scale(
     fit_enabled: bool,
 ) -> tuple[float, np.ndarray]:
     if not fit_enabled:
-        return default_scale, normalize_score_diff_probability(score_diff, default_scale)
+        return default_scale, normalize_score_diff_probability(
+            score_diff, default_scale
+        )
 
     lo = max(1e-6, min(scale_min, scale_max))
     hi = max(scale_min, scale_max)
@@ -407,8 +409,8 @@ def plot_mode_panel(
         label="prediction gap",
     )
 
-    home_score = int(match["home_score"])
-    away_score = int(match["away_score"])
+    home_score = int(str(match["home_score"]))
+    away_score = int(str(match["away_score"]))
     home_win = home_score > away_score
     winner_probability = (
         home_win_probability if home_win else 1.0 - home_win_probability
@@ -524,8 +526,8 @@ def main() -> None:
         if match is None:
             continue
 
-        home_score = int(match["home_score"])
-        away_score = int(match["away_score"])
+        home_score = int(str(match["home_score"]))
+        away_score = int(str(match["away_score"]))
         if len(plot_modes) == 1:
             fig, axes = plt.subplots(1, 1, figsize=(12, 7))
             axes_list = [axes]
@@ -564,7 +566,7 @@ def main() -> None:
             f"{match['date']}_{match_id}_{match['away_team']}_at_{match['home_team']}_{'_vs_'.join(plot_modes)}.png"
         )
         output_path = output_dir / file_name
-        fig.tight_layout(rect=[0, 0, 1, 0.92])
+        fig.tight_layout(rect=(0, 0, 1, 0.92))
         fig.savefig(output_path, dpi=180)
         plt.close(fig)
         print(f"Wrote {output_path}")

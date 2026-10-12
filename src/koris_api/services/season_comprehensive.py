@@ -1,30 +1,27 @@
 import json
+import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional, Dict, Any
-
-import requests
-from tqdm import tqdm
+from typing import Any
 
 from ..basketfi_api import BasketFiAPI
 from ..basketfi_parser import BasketFiParser
-from ..boxscore_normalizer import normalize_boxscore
-from ..genius_api import GeniusSportsAPI
+from ..pipeline.export import write_json
+from ..pipeline.types import Component
+from ..seasons import current_season_id
 from .common import (
     _extract_season_start_year,
     _fetch_historical_matches,
-    _get_genius_session,
     _is_historical_season,
-    resolve_genius_competition_id,
 )
+from .game_exports import enrich_matches, load_matches, season_reference
 
 
 def download_season_comprehensive(
     category_id: str,
     competition_id: str,
     output_file: str,
-    season_name: Optional[str] = None,
+    season_name: str | None = None,
     include_advanced: bool = False,
     max_workers: int = 5,
     show_header: bool = True,
@@ -78,7 +75,9 @@ def download_season_comprehensive(
         if "call" in category_data and "error" in category_data.get("call", {}):
             # Invalid season-id, try to get available seasons with fallback
             try:
-                fallback_data = BasketFiAPI.get_category("huki2526", category_id)
+                fallback_data = BasketFiAPI.get_category(
+                    current_season_id(), category_id
+                )
                 if (
                     "category" in fallback_data
                     and "seasons" in fallback_data["category"]
@@ -88,7 +87,7 @@ def download_season_comprehensive(
                     )
                     seasons_list = fallback_data["category"].get("seasons", [])
                     season_year = _extract_season_start_year(competition_id)
-                    if season_year is not None and season_year < 2022:
+                    if season_year is not None and season_year <= 2023:
                         category_data = fallback_data
                     else:
                         print(
@@ -99,9 +98,11 @@ def download_season_comprehensive(
                             print(
                                 f"  {season.get('competition_id', 'N/A'):15} - {season.get('season_name', 'Unknown')}"
                             )
-                        return
+                        raise ValueError(f"Invalid season {competition_id}")
             except Exception:
-                pass
+                logging.getLogger(__name__).debug(
+                    "season_comprehensive: operation failed", exc_info=True
+                )
 
             # Fallback failed, show generic error
             if "category" not in category_data:
@@ -110,23 +111,26 @@ def download_season_comprehensive(
                 print("  4  - Korisliiga (Men's top division)")
                 print("  2  - Miesten I divisioona A (Men's 1st division A)")
                 print("  13 - Naisten Korisliiga (Women's top division)")
-                return
+                raise ValueError(f"Invalid season {competition_id}")
 
     except Exception as e:
+        logging.getLogger(__name__).debug(
+            "season_comprehensive: operation failed", exc_info=True
+        )
         season_year = _extract_season_start_year(competition_id)
-        if season_year is not None and season_year < 2022:
-            fallback_data = BasketFiAPI.get_category("huki2526", category_id)
+        if season_year is not None and season_year <= 2023:
+            fallback_data = BasketFiAPI.get_category(current_season_id(), category_id)
             category_data = fallback_data
         else:
             error_msg = "Error: Failed to fetch category/season information.\n"
             error_msg += f"This usually means the category-id ({category_id}) or season-id ({competition_id}) is invalid.\n"
-            error_msg += f"Details: {str(e)}\n\n"
+            error_msg += f"Details: {e!s}\n\n"
             error_msg += "Common category IDs:\n"
             error_msg += "  4  - Korisliiga (Men's top division)\n"
             error_msg += "  2  - Miesten I divisioona A (Men's 1st division A)\n"
             error_msg += "  13 - Naisten Korisliiga (Women's top division)\n"
             print(error_msg)
-            return
+            raise ValueError(f"Invalid category/season: {category_id}/{competition_id}")
 
     # Validate category data
     if "category" not in category_data:
@@ -138,7 +142,7 @@ def download_season_comprehensive(
         print("  4  - Korisliiga (Men's top division)")
         print("  2  - Miesten I divisioona A (Men's 1st division A)")
         print("  13 - Naisten Korisliiga (Women's top division)")
-        return
+        raise ValueError(f"Invalid category/season: {category_id}/{competition_id}")
 
     category_name = category_data["category"].get("category_name", "Unknown")
 
@@ -151,7 +155,7 @@ def download_season_comprehensive(
         ]
         season_year = _extract_season_start_year(competition_id)
         if competition_id not in valid_competition_ids and (
-            season_year is None or season_year >= 2022
+            season_year is None or season_year > 2023
         ):
             print(
                 f"Error: Invalid season-id ({competition_id}) for category '{category_name}'."
@@ -161,7 +165,7 @@ def download_season_comprehensive(
                 print(
                     f"  {season.get('competition_id', 'N/A'):15} - {season.get('season_name', 'Unknown')}"
                 )
-            return
+            raise ValueError(f"Invalid category/season: {category_id}/{competition_id}")
 
     season_entry = None
     if seasons_list:
@@ -176,11 +180,11 @@ def download_season_comprehensive(
         is_historical = _is_historical_season(season_entry)
     else:
         season_year = _extract_season_start_year(season_name or competition_id)
-        is_historical = season_year is not None and season_year < 2022
+        is_historical = season_year is not None and season_year <= 2023
 
     # Additional validation - check if category name is meaningful
     if category_name == "Unknown" or not category_name:
-        print(f"Warning: Category name could not be determined.")
+        print("Warning: Category name could not be determined.")
         print(
             f"This might indicate an invalid category-id ({category_id}) or season-id ({competition_id})."
         )
@@ -190,7 +194,7 @@ def download_season_comprehensive(
         print(f"✓ League: {category_name}\n")
 
     # Initialize comprehensive data structure
-    comprehensive_data = {
+    comprehensive_data: dict[str, Any] = {
         "metadata": {
             "category_id": category_id,
             "category_name": category_name,
@@ -212,6 +216,8 @@ def download_season_comprehensive(
         competition_id=competition_id, category_id=category_id
     )
     matches = matches_data.get("matches", [])
+    total_matches = len(matches)
+    teams_with_details: list[dict[str, Any]] = []
 
     if not matches and not is_historical:
         if verbose:
@@ -243,182 +249,36 @@ def download_season_comprehensive(
             processed_matches = BasketFiParser.parse_matches(
                 matches, season_name=season_name or competition_id, only_played=True
             )
-    matches_to_fetch_advanced = []
-    existing_matches_by_id: Dict[str, Dict[str, Any]] = {}
-    existing_teams: list[Dict[str, Any]] = []
-    if include_advanced and output_path.exists():
+    existing_teams: list[dict[str, Any]] = []
+    if output_path.exists():
         try:
             existing_payload = json.loads(output_path.read_text(encoding="utf-8"))
-            existing_matches = existing_payload.get("matches") or []
-            if isinstance(existing_matches, list):
-                for match in existing_matches:
-                    external_id = match.get("match_external_id")
-                    match_id = match.get("match_id")
-                    key = str(external_id) if external_id else str(match_id)
-                    if key:
-                        existing_matches_by_id[key] = match
             existing_teams = existing_payload.get("teams") or []
-        except Exception:
-            existing_matches_by_id = {}
+        except (ValueError, OSError, AttributeError):
             existing_teams = []
-
-        # Check if we should fetch advanced stats for matches
-        if include_advanced:
-            if existing_matches_by_id:
-                existing_with_boxscore = 0
-                existing_with_error = 0
-                for match in existing_matches_by_id.values():
-                    if match.get("boxscore"):
-                        existing_with_boxscore += 1
-                    elif match.get("advanced_boxscore_error"):
-                        existing_with_error += 1
-                if verbose:
-                    print(
-                        f"Resume: {existing_with_boxscore} with boxscore, "
-                        f"{existing_with_error} with error from existing file."
-                    )
-            for idx, match_data in enumerate(processed_matches):
-                external_id = match_data.get("match_external_id")
-                match_id = match_data.get("match_id")
-                key = str(external_id) if external_id else str(match_id)
-                existing = existing_matches_by_id.get(key) if key else None
-                if existing:
-                    if existing.get("boxscore"):
-                        match_data["boxscore"] = existing.get("boxscore")
-                        continue
-                    # If previous run had an error, try again.
-                external_id = match_data.get("match_external_id")
-                if external_id:
-                    competition_id_resolved = resolve_genius_competition_id(
-                        category_id=category_id,
-                        season_id=competition_id,
-                        match_category_external_id=match_data.get(
-                            "category_external_id"
-                        ),
-                    )
-                    matches_to_fetch_advanced.append(
-                        {
-                            "index": idx,
-                            "external_id": external_id,
-                            "competition_id": competition_id_resolved,
-                            "home_team": match_data["home_team"],
-                            "away_team": match_data["away_team"],
-                            "match_date": match_data.get("date")
-                            or match_data.get("match_date")
-                            or "Unknown date",
-                            "url": GeniusSportsAPI.build_match_boxscore_url(
-                                str(external_id),
-                                competition_id=competition_id_resolved,
-                            ),
-                        }
-                    )
-            if verbose:
-                print(
-                    f"Resume: {len(matches_to_fetch_advanced)} matches missing advanced boxscores."
-                )
-
-        # Fetch advanced stats concurrently if requested
-        matches_with_advanced = 0
-        matches_failed = 0
-
-        if include_advanced and matches_to_fetch_advanced:
-            if verbose:
-                print(
-                    f"\nFetching advanced box scores for {len(matches_to_fetch_advanced)} played matches..."
-                )
-
-            def fetch_boxscore(
-                match_info: Dict[str, Any],
-            ) -> tuple[int, Optional[Dict[str, Any]], Optional[str], Optional[str]]:
-                """Fetch box score for a single match. Returns (index, boxscore_data, error_msg, error_type)."""
-                try:
-                    session = _get_genius_session(max_workers)
-                    boxscore = GeniusSportsAPI.get_match_boxscore(
-                        str(match_info["external_id"]),
-                        competition_id=match_info.get("competition_id"),
-                        session=session,
-                        log_fn=tqdm.write if verbose else None,
-                    )
-                    return (match_info["index"], boxscore, None, None)
-                except requests.exceptions.HTTPError as e:
-                    error_type = (
-                        f"HTTP {e.response.status_code}" if e.response else "HTTP Error"
-                    )
-                    return (match_info["index"], None, str(e), error_type)
-                except ValueError as e:
-                    # Parsing errors (like the int() conversion error)
-                    return (match_info["index"], None, str(e), "Parse Error")
-                except Exception as e:
-                    error_type = type(e).__name__
-                    return (match_info["index"], None, str(e), error_type)
-
-            # Use ThreadPoolExecutor for concurrent fetching
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all tasks
-                futures = {
-                    executor.submit(fetch_boxscore, match_info): match_info
-                    for match_info in matches_to_fetch_advanced
-                }
-
-                # Process results with progress bar
-                with tqdm(
-                    total=len(matches_to_fetch_advanced),
-                    desc="Fetching advanced stats",
-                    disable=not verbose,
-                ) as pbar:
-                    for future in as_completed(futures):
-                        match_info = futures[future]
-                        index, boxscore, error, error_type = future.result()
-
-                        if boxscore:
-                            processed_matches[index]["boxscore"] = normalize_boxscore(
-                                boxscore, source="genius"
-                            )
-                            matches_with_advanced += 1
-                        else:
-                            matches_failed += 1
-                            # Add error information to match data for debugging
-                            if error:
-                                processed_matches[index]["advanced_boxscore_error"] = {
-                                    "error_type": error_type or "Unknown",
-                                    "error_message": error,
-                                }
-                            if verbose and error:
-                                # Show abbreviated error for common issues
-                                if error_type == "Parse Error":
-                                    error_display = (
-                                        "Data parsing failed (check match data quality)"
-                                    )
-                                elif error_type and error_type.startswith("HTTP"):
-                                    error_display = f"{error_type} {match_info.get('url', '')}".strip()
-                                else:
-                                    # For other errors, show type and short message
-                                    error_display = (
-                                        f"{error_type}: {error[:40]}"
-                                        if error_type
-                                        else error[:50]
-                                    )
-                                    if match_info.get("url"):
-                                        error_display = (
-                                            f"{error_display} {match_info['url']}"
-                                        )
-
-                                tqdm.write(
-                                    f"  ✗ {match_info['match_date']} - {match_info['home_team']} vs {match_info['away_team']}: {error_display}"
-                                )
-
-                        pbar.update(1)
-
-        comprehensive_data["matches"] = processed_matches
-        comprehensive_data["metadata"]["total_matches"] = total_matches
-        comprehensive_data["metadata"]["played_matches_saved"] = len(processed_matches)
-        comprehensive_data["metadata"]["matches_with_advanced_stats"] = (
-            matches_with_advanced
+    if include_advanced:
+        processed_matches, report = enrich_matches(
+            processed_matches,
+            (Component.BOXSCORE,),
+            season_reference(
+                category_id, season_name or competition_id, historical=is_historical
+            ),
+            cached=load_matches(output_path),
+            cache_dir=output_path.parent / ".cache" / competition_id,
+            max_workers=max_workers,
         )
-        comprehensive_data["metadata"]["matches_failed"] = matches_failed
-
-        if verbose:
-            print(f"✓ Downloaded {len(processed_matches)} played matches\n")
+        comprehensive_data["metadata"]["conversion_failures"] = report.failed
+    matches_with_advanced = sum(bool(row.get("boxscore")) for row in processed_matches)
+    matches_failed = (
+        len(processed_matches) - matches_with_advanced if include_advanced else 0
+    )
+    comprehensive_data["matches"] = processed_matches
+    comprehensive_data["metadata"].update(
+        total_matches=total_matches,
+        played_matches_saved=len(processed_matches),
+        matches_with_advanced_stats=matches_with_advanced,
+        matches_failed=matches_failed,
+    )
 
     # Step 2: Collect all unique teams
     if verbose:
@@ -463,6 +323,9 @@ def download_season_comprehensive(
                 else:
                     teams_with_details.append(team_info)
             except Exception as e:
+                logging.getLogger(__name__).debug(
+                    "season_comprehensive: operation failed", exc_info=True
+                )
                 if verbose:
                     print(f"    ✗ Error: {e}")
                 teams_with_details.append({**team_info, "error": str(e)})
@@ -475,8 +338,10 @@ def download_season_comprehensive(
             print(f"✓ Fetched {len(teams_with_details)} teams\n")
 
     # Save everything to a single comprehensive file
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(comprehensive_data, f, indent=2, ensure_ascii=False)
+    comprehensive_data["metadata"]["teams_failed"] = sum(
+        bool(team.get("error")) for team in comprehensive_data["teams"]
+    )
+    write_json(output_path, comprehensive_data)
 
     # Final summary
     if verbose and show_header:
@@ -486,9 +351,9 @@ def download_season_comprehensive(
         print(f"League: {category_name}")
         print(f"Season: {season_name or competition_id}")
         print(f"Output file: {output_path.absolute()}")
-        print(f"\nData summary:")
+        print("\nData summary:")
         print(f"  - Matches: {len(comprehensive_data['matches'])} (played matches)")
-        print(f"  - Teams: {len(teams_with_details)}")
+        print(f"  - Teams: {len(comprehensive_data['teams'])}")
         if include_advanced:
             matches_with_player_data = sum(
                 1 for m in comprehensive_data["matches"] if "boxscore" in m

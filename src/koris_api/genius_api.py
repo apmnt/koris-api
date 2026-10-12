@@ -1,23 +1,28 @@
-"""Genius Sports HTML scraping client for advanced box scores and player data."""
+"""Genius Sports client with compatibility routing for current Sportradar games."""
+
+import json
+import logging
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, ClassVar, cast
 
 import requests
-from typing import Dict, Any, Optional, List, cast, Callable
-import time
-import json
-from pathlib import Path
-from bs4 import BeautifulSoup, NavigableString, Tag
-import re
+
+from .data import fields
 from .genius_parser import GeniusSportsParser
+from .sportradar_api import fetch_fixture, is_sportradar_id
+from .sportradar_parser import parse_boxscore as parse_sportradar_boxscore
+from .sportradar_parser import parse_playbyplay as parse_sportradar_playbyplay
 
 
 class GeniusSportsBoxscoreError(Exception):
     def __init__(
         self,
         match_id: str,
-        url: Optional[str] = None,
-        status_code: Optional[int] = None,
-        error_type: Optional[str] = None,
-        message: Optional[str] = None,
+        url: str | None = None,
+        status_code: int | None = None,
+        error_type: str | None = None,
+        message: str | None = None,
     ) -> None:
         self.match_id = match_id
         self.url = url
@@ -29,9 +34,9 @@ class GeniusSportsBoxscoreError(Exception):
 
 
 class GeniusSportsAPI:
-    """Client for scraping basketball data from Genius Sports hosted pages."""
+    """Fetch game data, routing Basket.fi UUID fixtures to its Sportradar widget."""
 
-    _DEFAULT_HEADERS = {
+    _DEFAULT_HEADERS: ClassVar[dict[str, str]] = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9,fi;q=0.8",
@@ -41,15 +46,15 @@ class GeniusSportsAPI:
     def get_match_boxscore(
         cls,
         match_id: str,
-        competition_id: Optional[str] = None,
-        session: Optional[requests.Session] = None,
+        competition_id: str | None = None,
+        session: requests.Session | None = None,
         retries: int = 3,
         backoff_seconds: float = 0.6,
         timeout_seconds: float = 30.0,
         not_found_retries: int = 0,
         not_found_backoff_seconds: float = 2.0,
-        log_fn: Optional[Callable[[str], None]] = None,
-    ) -> Dict[str, Any]:
+        log_fn: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Fetch and parse box score data from the Genius Sports hosted page.
 
@@ -63,9 +68,22 @@ class GeniusSportsAPI:
         Returns:
             Dictionary containing parsed box score data with team stats and player stats
         """
+        if is_sportradar_id(match_id):
+            return parse_sportradar_boxscore(
+                fetch_fixture(
+                    match_id, "statistics", timeout=timeout_seconds, session=session
+                )
+            )
+        if not competition_id:
+            return cls.get_match_boxscore_livestats(
+                match_id,
+                retries=retries,
+                backoff_seconds=backoff_seconds,
+                timeout_seconds=timeout_seconds,
+            )
         html, _ = cls.fetch_match_boxscore_html(
             match_id=match_id,
-            competition_id=competition_id or "12345",
+            competition_id=competition_id,
             session=session,
             retries=retries,
             backoff_seconds=backoff_seconds,
@@ -80,112 +98,45 @@ class GeniusSportsAPI:
     def fetch_match_boxscore_html(
         cls,
         match_id: str,
-        competition_id: Optional[str] = None,
-        session: Optional[requests.Session] = None,
+        competition_id: str | None = None,
+        session: requests.Session | None = None,
         retries: int = 3,
         backoff_seconds: float = 0.6,
         timeout_seconds: float = 30.0,
         not_found_retries: int = 0,
         not_found_backoff_seconds: float = 2.0,
-        log_fn: Optional[Callable[[str], None]] = None,
+        log_fn: Callable[[str], None] | None = None,
     ) -> tuple[str, str]:
-        url_templates = cls._get_match_boxscore_url_templates(
-            match_id=match_id, competition_id=competition_id or "12345"
+        from .pipeline.transport import RequestsTransport, RetryPolicy
+        from .pipeline.types import Request
+
+        transport = RequestsTransport(
+            session or requests, RetryPolicy(retries, timeout_seconds, backoff_seconds)
         )
-        client = session or requests
-        last_error: Optional[Exception] = None
-        last_url: Optional[str] = None
-        while True:
-            last_error = None
-            for url in [
-                template.format(match_id=match_id) for template in url_templates
-            ]:
-                last_url = url
-                attempt = 0
-                while True:
-                    attempt += 1
-                    try:
-                        response = client.get(
-                            url,
-                            timeout=timeout_seconds,
-                            headers=None
-                            if session is not None
-                            else cls._DEFAULT_HEADERS,
-                        )
-                        if response.status_code == 404:
-                            last_error = GeniusSportsBoxscoreError(
-                                match_id=match_id,
-                                url=url,
-                                status_code=404,
-                                error_type="HTTPError",
-                                message="HTTP 404 Not Found",
-                            )
-                            break
-                        if response.status_code >= 500 and attempt <= retries:
-                            time.sleep(backoff_seconds * attempt)
-                            continue
-                        response.raise_for_status()
-                        return response.text, url
-                    except requests.exceptions.ReadTimeout as exc:
-                        last_error = exc
-                        if attempt <= retries:
-                            time.sleep(backoff_seconds * attempt)
-                            continue
-                        break
-                    except requests.exceptions.HTTPError as exc:
-                        last_error = exc
-                        if exc.response is not None and exc.response.status_code == 404:
-                            last_error = GeniusSportsBoxscoreError(
-                                match_id=match_id,
-                                url=url,
-                                status_code=404,
-                                error_type="HTTPError",
-                                message=str(exc),
-                            )
-                            break
-                        if attempt <= retries:
-                            time.sleep(backoff_seconds * attempt)
-                            continue
-                        break
-
-            break
-
-        if isinstance(last_error, GeniusSportsBoxscoreError):
-            raise last_error
-        if isinstance(last_error, requests.exceptions.HTTPError):
-            status_code = (
-                last_error.response.status_code if last_error.response else None
-            )
-            raise GeniusSportsBoxscoreError(
-                match_id=match_id,
-                url=last_url,
-                status_code=status_code,
-                error_type="HTTPError",
-                message=str(last_error),
-            )
-        if isinstance(last_error, requests.exceptions.ReadTimeout):
-            raise GeniusSportsBoxscoreError(
-                match_id=match_id,
-                url=last_url,
-                status_code=None,
-                error_type="ReadTimeout",
-                message=str(last_error),
-            )
-        if last_error:
-            raise GeniusSportsBoxscoreError(
-                match_id=match_id,
-                url=last_url,
-                status_code=None,
-                error_type=type(last_error).__name__,
-                message=str(last_error),
-            )
-        raise GeniusSportsBoxscoreError(match_id=match_id, url=last_url)
+        last_failure = None
+        for url in cls._get_match_boxscore_url_templates(match_id, competition_id):
+            result = transport.fetch(Request("boxscore", url, (), False))
+            if result.failure is None and isinstance(result.payload, str):
+                return result.payload, url
+            last_failure = result.failure
+            if log_fn is not None and last_failure is not None:
+                log_fn(last_failure.message)
+        raise GeniusSportsBoxscoreError(
+            match_id,
+            url=last_failure.url if last_failure else None,
+            status_code=last_failure.status_code if last_failure else None,
+            error_type=last_failure.kind if last_failure else None,
+            message=last_failure.message if last_failure else None,
+        )
 
     @classmethod
     def _get_match_boxscore_url_templates(
-        cls, match_id: str, competition_id: Optional[str] = None
-    ) -> List[str]:
-        competition_id = competition_id or "12345"
+        cls, match_id: str, competition_id: str | None = None
+    ) -> list[str]:
+        if not competition_id:
+            raise ValueError(
+                "Genius HTML requires a competition_id; use the LiveStats feed without one"
+            )
         return [
             f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/match/{match_id}/boxscore",
             f"https://hosted.dcd.shared.geniussports.com/FBAA/fi/competition/{competition_id}/match/{match_id}/boxscore",
@@ -193,9 +144,12 @@ class GeniusSportsAPI:
 
     @classmethod
     def build_match_boxscore_url(
-        cls, match_id: str, competition_id: Optional[str] = None, language: str = "en"
+        cls, match_id: str, competition_id: str | None = None, language: str = "en"
     ) -> str:
-        competition_id = competition_id or "12345"
+        if not competition_id:
+            raise ValueError(
+                "Genius HTML requires a competition_id; use the LiveStats feed without one"
+            )
         return (
             "https://hosted.dcd.shared.geniussports.com/FBAA/"
             f"{language}/competition/{competition_id}/match/{match_id}/boxscore"
@@ -205,11 +159,11 @@ class GeniusSportsAPI:
     def get_match_playbyplay(
         cls,
         match_id: str,
-        competition_id: str = "42145",
+        competition_id: str | None = None,
         retries: int = 3,
         backoff_seconds: float = 0.6,
         timeout_seconds: float = 30.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch and parse play-by-play data from the Genius Sports hosted page.
 
@@ -219,49 +173,38 @@ class GeniusSportsAPI:
         Returns:
             Dictionary containing parsed play-by-play data with match info and events
         """
+        if is_sportradar_id(match_id):
+            return dict(
+                parse_sportradar_playbyplay(
+                    fetch_fixture(match_id, "pbp", timeout=timeout_seconds)
+                )
+            )
+        if not competition_id:
+            return cls.get_match_playbyplay_livestats(
+                match_id,
+                retries=retries,
+                backoff_seconds=backoff_seconds,
+                timeout_seconds=timeout_seconds,
+            )
         url = (
             "https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/"
             f"{competition_id}/match/{match_id}/playbyplay"
         )
-        last_error: Optional[Exception] = None
-        for attempt in range(1, retries + 2):
-            try:
-                response = requests.get(
-                    url,
-                    timeout=timeout_seconds,
-                    headers=cls._DEFAULT_HEADERS,
-                )
-                if response.status_code >= 500 and attempt <= retries:
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                response.raise_for_status()
-                return GeniusSportsParser.parse_playbyplay_html(response.text)
-            except requests.exceptions.ReadTimeout as exc:
-                last_error = exc
-                if attempt <= retries:
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                break
-            except requests.exceptions.HTTPError as exc:
-                last_error = exc
-                if (
-                    exc.response is not None
-                    and exc.response.status_code >= 500
-                    and attempt <= retries
-                ):
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                break
-            except requests.exceptions.RequestException as exc:
-                last_error = exc
-                if attempt <= retries:
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                break
+        from .pipeline.transport import RequestsTransport, RetryPolicy
+        from .pipeline.types import Request
 
-        if last_error:
-            raise last_error
-        raise RuntimeError(f"Failed to fetch play-by-play for match {match_id}")
+        result = RequestsTransport(
+            requests, RetryPolicy(retries, timeout_seconds, backoff_seconds)
+        ).fetch(Request("playbyplay", url, (), False))
+        if result.failure is not None:
+            raise GeniusSportsBoxscoreError(
+                match_id,
+                url=result.failure.url,
+                status_code=result.failure.status_code,
+                error_type=result.failure.kind,
+                message=result.failure.message,
+            )
+        return GeniusSportsParser.parse_playbyplay_html(str(result.payload))
 
     @classmethod
     def fetch_match_data_json(
@@ -270,7 +213,7 @@ class GeniusSportsAPI:
         retries: int = 3,
         backoff_seconds: float = 0.6,
         timeout_seconds: float = 30.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Fetch the FIBA LiveStats ``data.json`` feed for a match.
 
         Unlike the hosted ``competition/{id}/...`` HTML pages, this feed is keyed
@@ -278,45 +221,33 @@ class GeniusSportsAPI:
         it is the reliable source for box score and play-by-play data.
         """
         url = f"https://fibalivestats.dcd.shared.geniussports.com/data/{match_id}/data.json"
-        last_error: Optional[Exception] = None
-        for attempt in range(1, retries + 2):
-            try:
-                response = requests.get(
-                    url,
-                    timeout=timeout_seconds,
-                    headers=cls._DEFAULT_HEADERS,
-                )
-                if response.status_code >= 500 and attempt <= retries:
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                response.raise_for_status()
-                return cast(Dict[str, Any], response.json())
-            except requests.exceptions.ReadTimeout as exc:
-                last_error = exc
-                if attempt <= retries:
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                break
-            except requests.exceptions.RequestException as exc:
-                last_error = exc
-                if attempt <= retries:
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                break
+        from .pipeline.transport import RequestsTransport, RetryPolicy
+        from .pipeline.types import Request
 
-        if last_error:
-            raise last_error
-        raise RuntimeError(f"Failed to fetch data.json for match {match_id}")
+        result = RequestsTransport(
+            requests, RetryPolicy(retries, timeout_seconds, backoff_seconds)
+        ).fetch(Request("livestats", url, ()))
+        if result.failure is not None:
+            raise GeniusSportsBoxscoreError(
+                match_id,
+                url=result.failure.url,
+                status_code=result.failure.status_code,
+                error_type=result.failure.kind,
+                message=result.failure.message,
+            )
+        if not isinstance(result.payload, dict):
+            raise TypeError("LiveStats response must be an object")
+        return cast(dict[str, Any], result.payload)
 
     @classmethod
     def get_match_boxscore_livestats(
         cls,
         match_id: str,
-        data: Optional[Dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
         retries: int = 3,
         backoff_seconds: float = 0.6,
         timeout_seconds: float = 30.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Box score from the FIBA LiveStats feed (genius intermediate shape)."""
         from .genius_livestats_parser import parse_boxscore
 
@@ -327,17 +258,17 @@ class GeniusSportsAPI:
                 backoff_seconds=backoff_seconds,
                 timeout_seconds=timeout_seconds,
             )
-        return parse_boxscore(data)
+        return dict(parse_boxscore(data))
 
     @classmethod
     def get_match_playbyplay_livestats(
         cls,
         match_id: str,
-        data: Optional[Dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
         retries: int = 3,
         backoff_seconds: float = 0.6,
         timeout_seconds: float = 30.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Play-by-play from the FIBA LiveStats feed (with possessions)."""
         from .genius_livestats_parser import parse_playbyplay
 
@@ -348,7 +279,7 @@ class GeniusSportsAPI:
                 backoff_seconds=backoff_seconds,
                 timeout_seconds=timeout_seconds,
             )
-        return parse_playbyplay(data)
+        return dict(parse_playbyplay(data))
 
     @classmethod
     def get_match_shot_chart(
@@ -357,7 +288,7 @@ class GeniusSportsAPI:
         retries: int = 3,
         backoff_seconds: float = 0.6,
         timeout_seconds: float = 30.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch shot chart coordinates from Genius Sports live data.json feed.
 
@@ -367,102 +298,37 @@ class GeniusSportsAPI:
         Returns:
             Dictionary containing shot list with x/y coordinates and metadata
         """
-        url = f"https://fibalivestats.dcd.shared.geniussports.com/data/{match_id}/data.json"
-        last_error: Optional[Exception] = None
-        for attempt in range(1, retries + 2):
-            try:
-                response = requests.get(
-                    url,
-                    timeout=timeout_seconds,
-                    headers=cls._DEFAULT_HEADERS,
-                )
-                if response.status_code >= 500 and attempt <= retries:
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                response.raise_for_status()
-                live_data = cast(Dict[str, Any], response.json())
-                return cls._parse_match_shot_chart(match_id, live_data)
-            except requests.exceptions.ReadTimeout as exc:
-                last_error = exc
-                if attempt <= retries:
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                break
-            except requests.exceptions.HTTPError as exc:
-                last_error = exc
-                if (
-                    exc.response is not None
-                    and exc.response.status_code >= 500
-                    and attempt <= retries
-                ):
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                break
-            except requests.exceptions.RequestException as exc:
-                last_error = exc
-                if attempt <= retries:
-                    time.sleep(backoff_seconds * attempt)
-                    continue
-                break
+        if is_sportradar_id(match_id):
+            from .pipeline.games import legacy_components
+            from .pipeline.planning import plan_requests, resolve_reference
+            from .pipeline.transport import RequestsTransport, RetryPolicy
+            from .pipeline.types import Component
 
-        if last_error:
-            raise last_error
-        raise RuntimeError(f"Failed to fetch shot chart for match {match_id}")
+            reference = resolve_reference(match_id)
+            request = plan_requests(reference, (Component.SHOTS,))[0]
+            result = RequestsTransport(
+                requests, RetryPolicy(retries, timeout_seconds, backoff_seconds)
+            ).fetch(request)
+            if result.failure is not None:
+                raise ValueError(result.failure.message)
+            return dict(fields(legacy_components(reference, (result,))["shot_chart"]))
+        return cls._parse_match_shot_chart(
+            match_id,
+            cls.fetch_match_data_json(
+                match_id, retries, backoff_seconds, timeout_seconds
+            ),
+        )
 
     @classmethod
     def _parse_match_shot_chart(
-        cls, match_id: str, live_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        teams_raw = live_data.get("tm")
-        if not isinstance(teams_raw, dict):
-            raise ValueError(f"Invalid shot chart payload for match {match_id}: missing tm")
+        cls, match_id: str, live_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        from .genius_livestats_parser import parse_shot_chart
 
-        teams: Dict[str, Optional[str]] = {}
-        shots: List[Dict[str, Any]] = []
-
-        for team_no, team_data in teams_raw.items():
-            if not isinstance(team_data, dict):
-                continue
-            team_no_str = str(team_no)
-            team_name = team_data.get("name")
-            teams[team_no_str] = str(team_name) if team_name is not None else None
-
-            team_shots = team_data.get("shot")
-            if not isinstance(team_shots, list):
-                continue
-
-            for shot in team_shots:
-                if not isinstance(shot, dict):
-                    continue
-                shots.append(
-                    {
-                        "team_no": team_no_str,
-                        "team_name": teams[team_no_str],
-                        "player_id": shot.get("p"),
-                        "player_number": shot.get("pno"),
-                        "player": shot.get("player"),
-                        "shirt_number": shot.get("shirtNumber"),
-                        "period": shot.get("per"),
-                        "period_type": shot.get("perType"),
-                        "action_type": shot.get("actionType"),
-                        "shot_type": shot.get("subType"),
-                        "made": shot.get("r"),
-                        "x": shot.get("x"),
-                        "y": shot.get("y"),
-                        "action_number": shot.get("actionNumber"),
-                        "previous_action": shot.get("previousAction"),
-                    }
-                )
-
-        return {
-            "source": "fibalivestats",
-            "match_id": str(match_id),
-            "teams": teams,
-            "shots": shots,
-        }
+        return dict(parse_shot_chart(match_id, live_data))
 
     @classmethod
-    def get_genius_teams(cls, competition_id: str) -> List[Dict[str, Any]]:
+    def get_genius_teams(cls, competition_id: str) -> list[dict[str, Any]]:
         """
         Fetch teams from Genius Sports teams page for a specific competition.
 
@@ -473,15 +339,15 @@ class GeniusSportsAPI:
             List of dictionaries containing team data (id, name)
         """
         url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/teams"
-        response = requests.get(url)
+        response = requests.get(url, timeout=30.0)
         response.raise_for_status()
 
         return GeniusSportsParser.parse_teams_page(response.text)
 
     @classmethod
     def get_genius_players(
-        cls, competition_id: str, output_file: Optional[str] = None
-    ) -> Dict[str, Any]:
+        cls, competition_id: str, output_file: str | None = None
+    ) -> dict[str, Any]:
         """
         Fetch all players and their gamelogs from Genius Sports for a specific competition.
 
@@ -501,14 +367,14 @@ class GeniusSportsAPI:
         # Fetch the players list page
         print("Fetching players list...")
         players_url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/players"
-        response = requests.get(players_url)
+        response = requests.get(players_url, timeout=30.0)
         response.raise_for_status()
 
         # Parse player links from the page
         player_links_html = GeniusSportsParser.parse_players_page(response.text)
         print(f"Found {len(player_links_html)} players")
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "competition_id": competition_id,
             "teams": teams,
             "players": [],
@@ -524,7 +390,7 @@ class GeniusSportsAPI:
             gamelog_url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/person/{player_id}/gamelog"
 
             try:
-                gamelog_response = requests.get(gamelog_url)
+                gamelog_response = requests.get(gamelog_url, timeout=30.0)
                 gamelog_response.raise_for_status()
 
                 # Parse gamelog
@@ -543,6 +409,9 @@ class GeniusSportsAPI:
                 result["players"].append(player_data)
 
             except Exception as e:
+                logging.getLogger(__name__).debug(
+                    "genius_api: operation failed", exc_info=True
+                )
                 print(f"  Error fetching gamelog for {player_name}: {e}")
                 # Add player anyway, but without gamelog data
                 result["players"].append(
@@ -570,8 +439,8 @@ class GeniusSportsAPI:
         cls,
         competition_id: str,
         team_id: str,
-        output_file: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_file: str | None = None,
+    ) -> dict[str, Any]:
         """
         Fetch players and their gamelogs for a specific team from Genius Sports.
 
@@ -594,7 +463,7 @@ class GeniusSportsAPI:
 
         # Fetch the team roster page
         team_url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/team/{team_id}"
-        response = requests.get(team_url)
+        response = requests.get(team_url, timeout=30.0)
         response.raise_for_status()
 
         # Parse player links from the roster page
@@ -607,7 +476,7 @@ class GeniusSportsAPI:
             print(f"  {idx}. {player['name']} (ID: {player['id']})")
         print()
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "competition_id": competition_id,
             "team_id": team_id,
             "team_name": team_name,
@@ -628,7 +497,7 @@ class GeniusSportsAPI:
             gamelog_url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/person/{player_id}/gamelog"
 
             try:
-                gamelog_response = requests.get(gamelog_url)
+                gamelog_response = requests.get(gamelog_url, timeout=30.0)
                 gamelog_response.raise_for_status()
 
                 # Parse gamelog
@@ -648,6 +517,9 @@ class GeniusSportsAPI:
                 print(f"  ✓ Found {len(gamelog_data.get('games', []))} games")
 
             except Exception as e:
+                logging.getLogger(__name__).debug(
+                    "genius_api: operation failed", exc_info=True
+                )
                 print(f"  ✗ Error: {e}")
                 # Add player anyway, but without gamelog data
                 result["players"].append(
@@ -677,8 +549,8 @@ class GeniusSportsAPI:
         cls,
         competition_id: str,
         team_id: str,
-        output_file: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_file: str | None = None,
+    ) -> dict[str, Any]:
         """
         Fetch team player statistics from Genius Sports.
 
@@ -696,13 +568,13 @@ class GeniusSportsAPI:
 
         # Fetch the team statistics page
         url = f"https://hosted.dcd.shared.geniussports.com/FBAA/en/competition/{competition_id}/team/{team_id}/statistics"
-        response = requests.get(url)
+        response = requests.get(url, timeout=30.0)
         response.raise_for_status()
 
         # Parse the statistics
         stats = GeniusSportsParser.parse_team_statistics_page(response.text)
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "competition_id": competition_id,
             "team_id": team_id,
             **stats,

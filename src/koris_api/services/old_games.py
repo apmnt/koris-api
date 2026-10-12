@@ -1,7 +1,8 @@
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
 
 from tqdm import tqdm
 
@@ -12,9 +13,9 @@ def download_old_game(
     game_id: str,
     season_id: str = "121333",
     league_id: str = "2",
-    output_file: Optional[str] = None,
+    output_file: str | None = None,
     verbose: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Download game data from BasketHotel API (for older games not available in main API).
 
@@ -71,8 +72,9 @@ def download_old_game(
         return game_data
 
     except Exception as e:
+        logging.getLogger(__name__).debug("old_games: operation failed", exc_info=True)
         if verbose:
-            print(f"Error downloading old game: {str(e)}")
+            print(f"Error downloading old game: {e!s}")
         raise
 
 
@@ -80,7 +82,7 @@ def download_old_games_bulk(
     game_ids: list[str],
     season_id: str = "121333",
     league_id: str = "2",
-    output_file: Optional[str] = None,
+    output_file: str | None = None,
     max_workers: int = 5,
     verbose: bool = True,
 ) -> None:
@@ -107,12 +109,15 @@ def download_old_games_bulk(
     games_successful = 0
     games_failed = 0
 
-    def fetch_game(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    def fetch_game(game_id: str) -> tuple[dict[str, Any] | None, str | None]:
         """Fetch a single game. Returns (game_data, error_msg)."""
         try:
             data = client.fetch_game_data(game_id, season_id, league_id)
             return (data, None)
         except Exception as e:
+            logging.getLogger(__name__).debug(
+                "old_games: operation failed", exc_info=True
+            )
             return (None, str(e))
 
     # Use ThreadPoolExecutor for concurrent fetching
@@ -177,7 +182,7 @@ def download_old_games_from_file(
     input_file: str,
     season_id: str = "121333",
     league_id: str = "2",
-    output_file: Optional[str] = None,
+    output_file: str | None = None,
     max_workers: int = 5,
     verbose: bool = True,
 ) -> None:

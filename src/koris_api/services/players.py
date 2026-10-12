@@ -1,3 +1,5 @@
+import logging
+
 from ..genius_api import GeniusSportsAPI
 
 
@@ -37,7 +39,8 @@ def download_players_season(
             print(f"{'=' * 60}")
 
     except Exception as e:
-        print(f"Error downloading players: {str(e)}")
+        logging.getLogger(__name__).debug("players: operation failed", exc_info=True)
+        print(f"Error downloading players: {e!s}")
         raise
 
 
@@ -73,5 +76,6 @@ def download_players_by_team(
             print(f"{'=' * 60}")
 
     except Exception as e:
-        print(f"Error downloading players: {str(e)}")
+        logging.getLogger(__name__).debug("players: operation failed", exc_info=True)
+        print(f"Error downloading players: {e!s}")
         raise

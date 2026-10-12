@@ -1,9 +1,10 @@
 import asyncio
 import json
+import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 import httpx
 from tqdm import tqdm
@@ -11,19 +12,19 @@ from tqdm import tqdm
 from ..basketfi_api import BasketFiAPI
 from ..basketfi_parser import BasketFiParser
 from ..baskethotel_api import BasketHotelAPI
+from ..data import text
 from ..genius_api import GeniusSportsAPI
 from .common import (
     _augment_seasons_with_baskethotel,
+    _fetch_baskethotel_schedule_game_ids,
     _get_baskethotel_league_id,
     _get_genius_session,
-    _fetch_baskethotel_schedule_game_ids,
     _is_historical_season,
     _resolve_baskethotel_season_id,
-    resolve_genius_competition_id,
     _stat_value,
     _summarize_baskethotel_boxscore,
     _summarize_boxscore,
-    _BASKETHOTEL_DEFAULT_SEASON_ID,
+    resolve_genius_competition_id,
 )
 
 
@@ -32,7 +33,7 @@ def download_season_advanced_averages(
     season_id: str,
     output_file: str,
     all_seasons: bool = False,
-    cache_file: Optional[str] = None,
+    cache_file: str | None = None,
     max_workers: int = 5,
     verbose: bool = True,
 ) -> None:
@@ -44,17 +45,20 @@ def download_season_advanced_averages(
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    cache: Dict[str, Dict[str, float]] = {}
+    cache: dict[str, dict[str, float]] = {}
     cache_path = Path(cache_file) if cache_file else None
     if cache_path and cache_path.exists():
         try:
             with open(cache_path, "r", encoding="utf-8") as f:
                 cache = json.load(f)
         except Exception:
+            logging.getLogger(__name__).debug(
+                "season_advanced_averages: operation failed", exc_info=True
+            )
             cache = {}
 
-    season_entries: List[Dict[str, Any]] = []
-    season_ids: List[Dict[str, str]] = [{"season_id": season_id, "season_name": ""}]
+    season_entries: list[dict[str, Any]] = []
+    season_ids: list[dict[str, str]] = [{"season_id": season_id, "season_name": ""}]
 
     if all_seasons:
         try:
@@ -72,6 +76,9 @@ def download_season_advanced_averages(
                         }
                     )
         except Exception:
+            logging.getLogger(__name__).debug(
+                "season_advanced_averages: operation failed", exc_info=True
+            )
             season_ids = [{"season_id": season_id, "season_name": season_id}]
     elif not season_ids[0]["season_name"]:
         season_ids[0]["season_name"] = season_id
@@ -84,7 +91,8 @@ def download_season_advanced_averages(
             {"season_name": current_season_name, "season_start_date": None}
         )
 
-        match_ids: List[str] = []
+        match_entries: list[dict[str, Any]] = []
+        match_ids: list[str] = []
         resolved_season_id = None
         league_id = None
 
@@ -93,7 +101,6 @@ def download_season_advanced_averages(
             resolved_season_id = (
                 _resolve_baskethotel_season_id(current_season_name, league_id)
                 or current_season_id
-                or _BASKETHOTEL_DEFAULT_SEASON_ID
             )
             if verbose:
                 print(
@@ -119,7 +126,9 @@ def download_season_advanced_averages(
                     "competition_id": resolve_genius_competition_id(
                         category_id=category_id,
                         season_id=current_season_name,
-                        match_category_external_id=match.get("category_external_id"),
+                        match_category_external_id=text(
+                            match.get("category_external_id")
+                        ),
                     ),
                 }
                 for match in processed_matches
@@ -128,7 +137,7 @@ def download_season_advanced_averages(
 
         totals = {"rebounds": 0.0, "assists": 0.0, "steals": 0.0}
         games_with_stats = 0
-        matches_to_fetch: List[Any] = []
+        matches_to_fetch: list[Any] = []
 
         if is_historical:
             for match_id in match_ids:
@@ -161,11 +170,9 @@ def download_season_advanced_averages(
                 )
 
             def fetch_boxscore_totals(
-                match_entry: Dict[str, Any],
-            ) -> tuple[str, Optional[Dict[str, float]], Optional[str]]:
+                match_entry: dict[str, Any],
+            ) -> tuple[str, dict[str, float] | None, str | None]:
                 try:
-                    if is_historical:
-                        raise RuntimeError("Historical matches use async fetching.")
                     session = _get_genius_session(max_workers)
                     boxscore = GeniusSportsAPI.get_match_boxscore(
                         match_entry["match_id"],
@@ -175,37 +182,44 @@ def download_season_advanced_averages(
                     )
                     return match_entry["match_id"], _summarize_boxscore(boxscore), None
                 except Exception as exc:
+                    logging.getLogger(__name__).debug(
+                        "season_advanced_averages: operation failed", exc_info=True
+                    )
                     return match_entry["match_id"], None, str(exc)
 
             if is_historical:
 
                 async def fetch_boxscores_async(
-                    match_ids: List[str],
-                ) -> List[tuple[str, Optional[Dict[str, float]], Optional[str]]]:
+                    match_ids: list[str],
+                    season_context: str,
+                    league_context: str,
+                ) -> list[tuple[str, dict[str, float] | None, str | None]]:
                     client = BasketHotelAPI()
                     semaphore = asyncio.Semaphore(max_workers)
-                    results: List[
-                        tuple[str, Optional[Dict[str, float]], Optional[str]]
-                    ] = []
+                    results: list[tuple[str, dict[str, float] | None, str | None]] = []
 
                     async with httpx.AsyncClient() as session:
 
-                        async def fetch_one(match_id: str):
+                        async def fetch_one(async_game_id: str):
                             async with semaphore:
                                 try:
                                     boxscore = await client.fetch_boxscore_data_async(
-                                        match_id,
-                                        season_id=str(resolved_season_id),
-                                        league_id=str(league_id),
+                                        async_game_id,
+                                        season_id=season_context,
+                                        league_id=league_context,
                                         client=session,
                                     )
                                     return (
-                                        match_id,
+                                        async_game_id,
                                         _summarize_baskethotel_boxscore(boxscore),
                                         None,
                                     )
                                 except Exception as exc:
-                                    return match_id, None, str(exc)
+                                    logging.getLogger(__name__).debug(
+                                        "season_advanced_averages: operation failed",
+                                        exc_info=True,
+                                    )
+                                    return async_game_id, None, str(exc)
 
                         tasks = [
                             asyncio.create_task(fetch_one(mid)) for mid in match_ids
@@ -224,7 +238,11 @@ def download_season_advanced_averages(
 
                     return results
 
-                results = asyncio.run(fetch_boxscores_async(matches_to_fetch))
+                results = asyncio.run(
+                    fetch_boxscores_async(
+                        matches_to_fetch, str(resolved_season_id), str(league_id)
+                    )
+                )
                 for match_id, stats, error in results:
                     if stats:
                         cache_key = f"baskethotel:{match_id}"

@@ -1,36 +1,32 @@
 import json
+import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional, Dict, Any
-
-import requests
-from tqdm import tqdm
+from typing import Any
 
 from ..basketfi_api import BasketFiAPI
 from ..basketfi_parser import BasketFiParser
-from ..boxscore_normalizer import normalize_boxscore
-from ..genius_api import GeniusSportsAPI
+from ..pipeline.types import BatchReport, Component, GameOutcome
+from ..seasons import current_season_id
 from .baskethotel_season_boxscores import download_baskethotel_season_boxscores
 from .common import (
     _augment_seasons_with_baskethotel,
     _extract_season_start_year,
     _fetch_historical_matches,
-    _get_genius_session,
     _is_historical_season,
-    resolve_genius_competition_id,
 )
-from .season_comprehensive import download_season_comprehensive
+from .game_exports import enrich_matches, season_reference
 from .season_boxscores import download_matches_with_boxscores
+from .season_comprehensive import download_season_comprehensive
 
 
 def download_league_boxscores_all_seasons(
     category_id: str,
     output_dir: str,
     start_year: int = 2010,
-    limit_seasons: Optional[int] = None,
+    limit_seasons: int | None = None,
     combine_output: bool = False,
-    combined_file: Optional[str] = None,
+    combined_file: str | None = None,
     max_workers: int = 5,
     verbose: bool = True,
 ) -> None:
@@ -53,8 +49,11 @@ def download_league_boxscores_all_seasons(
         print(f"{'=' * 80}\n")
 
     try:
-        category_data = BasketFiAPI.get_category("huki2526", category_id)
+        category_data = BasketFiAPI.get_category(current_season_id(), category_id)
     except Exception as e:
+        logging.getLogger(__name__).debug(
+            "league_boxscores: operation failed", exc_info=True
+        )
         print(f"Error: Failed to fetch category info: {e}")
         return
 
@@ -89,7 +88,7 @@ def download_league_boxscores_all_seasons(
     if verbose:
         print(f"Found {len(filtered)} seasons to download.")
 
-    combined_payload = {
+    combined_payload: dict[str, Any] = {
         "metadata": {
             "category_id": category_id,
             "category_name": category_name,
@@ -133,6 +132,9 @@ def download_league_boxscores_all_seasons(
                         output_file.read_text(encoding="utf-8")
                     )
                 except Exception:
+                    logging.getLogger(__name__).debug(
+                        "league_boxscores: operation failed", exc_info=True
+                    )
                     existing_payload = None
             download_baskethotel_season_boxscores(
                 category_id=category_id,
@@ -155,6 +157,9 @@ def download_league_boxscores_all_seasons(
                         output_file.read_text(encoding="utf-8")
                     )
                 except Exception:
+                    logging.getLogger(__name__).debug(
+                        "league_boxscores: operation failed", exc_info=True
+                    )
                     existing_payload = None
             download_season_comprehensive(
                 category_id=category_id,
@@ -191,7 +196,9 @@ def download_league_boxscores_all_seasons(
                 0, current_boxscore_count - existing_boxscore_count
             )
         except Exception:
-            pass
+            logging.getLogger(__name__).debug(
+                "league_boxscores: operation failed", exc_info=True
+            )
 
         if combine_output:
             try:
@@ -227,13 +234,13 @@ def download_league_boxscores_playbyplay_all_seasons(
     category_id: str,
     output_dir: str,
     start_year: int = 2010,
-    limit_seasons: Optional[int] = None,
+    limit_seasons: int | None = None,
     include_playbyplay: bool = False,
     include_advanced: bool = False,
     include_shot_chart: bool = False,
     max_workers: int = 5,
     verbose: bool = True,
-) -> None:
+) -> BatchReport:
     """
     Download season boxscores (and optional play-by-play) for all seasons.
 
@@ -252,15 +259,10 @@ def download_league_boxscores_playbyplay_all_seasons(
         print(f"Output directory: {output_path.absolute()}")
         print(f"{'=' * 80}\n")
 
-    try:
-        category_data = BasketFiAPI.get_category("huki2526", category_id)
-    except Exception as e:
-        print(f"Error: Failed to fetch category info: {e}")
-        return
+    category_data = BasketFiAPI.get_category(current_season_id(), category_id)
 
     if "category" not in category_data or "seasons" not in category_data["category"]:
-        print(f"Error: Could not retrieve seasons for category-id ({category_id}).")
-        return
+        raise ValueError(f"Could not retrieve seasons for category {category_id}")
 
     category = category_data["category"]
     category_name = category.get("category_name", str(category_id))
@@ -281,7 +283,7 @@ def download_league_boxscores_playbyplay_all_seasons(
 
     if not filtered:
         print("No seasons found for the requested year range.")
-        return
+        return BatchReport(())
 
     if limit_seasons is not None:
         filtered = filtered[:limit_seasons]
@@ -289,6 +291,7 @@ def download_league_boxscores_playbyplay_all_seasons(
     if verbose:
         print(f"Found {len(filtered)} seasons to download.")
 
+    outcomes: list[GameOutcome] = []
     for idx, season in enumerate(filtered, 1):
         season_name = season.get("season_name") or season.get("competition_id")
         competition_id = season.get("competition_id") or season.get("season_id")
@@ -301,23 +304,22 @@ def download_league_boxscores_playbyplay_all_seasons(
             print(f"\n[{idx}/{len(filtered)}] Processing season {season_name}")
 
         if is_historical:
-            output_file = output_path / f"{safe_category}_{season_name}_baskethotel.json"
-            if include_shot_chart and verbose:
-                print(
-                    "  - Shot chart skipped (not supported for historical BasketHotel seasons)"
-                )
-            download_baskethotel_season_boxscores(
+            output_file = (
+                output_path / f"{safe_category}_{season_name}_baskethotel.json"
+            )
+            report = download_baskethotel_season_boxscores(
                 category_id=category_id,
                 season_id=season_name or str(competition_id),
                 output_file=str(output_file),
                 max_workers=max_workers,
                 include_playbyplay=include_playbyplay,
+                include_shot_chart=include_shot_chart,
                 show_header=False,
                 verbose=verbose,
             )
         else:
             output_file = output_path / f"{safe_category}_{season_name}_genius.json"
-            download_matches_with_boxscores(
+            report = download_matches_with_boxscores(
                 season_id=str(competition_id or season_name),
                 category_id=category_id,
                 output_file=str(output_file),
@@ -328,22 +330,28 @@ def download_league_boxscores_playbyplay_all_seasons(
                 verbose=verbose,
             )
 
+        outcomes.extend(report.outcomes)
+    return BatchReport(tuple(outcomes))
+
 
 def download_league_all_seasons(
     category_id: str,
     output_file: str,
-    season_id: str = "huki2526",
+    season_id: str | None = None,
     include_advanced: bool = False,
     max_workers: int = 5,
     verbose: bool = True,
 ) -> None:
     """Download all matches from all seasons for a specific league/category."""
+    output_path = Path(output_file)
 
     if verbose:
         print(f"Fetching category information for category {category_id}...")
 
     # First, get category info to find all available seasons
-    category_data = BasketFiAPI.get_category(season_id, category_id)
+    category_data = BasketFiAPI.get_category(
+        season_id or current_season_id(), category_id
+    )
 
     if "category" not in category_data or "seasons" not in category_data["category"]:
         print("Error: Could not retrieve seasons for this category.")
@@ -363,7 +371,7 @@ def download_league_all_seasons(
         print(f"{'=' * 60}\n")
 
     # Collect all matches from all seasons
-    all_matches: list[Dict[str, Any]] = []
+    all_matches: list[dict[str, Any]] = []
     total_matches_found = 0
     total_played_matches = 0
     total_advanced_stats = 0
@@ -413,127 +421,25 @@ def download_league_all_seasons(
                 match_data_with_season = {**match_data, "season_id": season_data_id}
                 processed_matches.append(match_data_with_season)
 
-            matches_to_fetch_advanced = []
-
-            # Check if we should fetch advanced stats
             if include_advanced:
-                for idx, match_data in enumerate(processed_matches):
-                    external_id = match_data.get("match_external_id")
-                    if external_id:
-                        matches_to_fetch_advanced.append(
-                            {
-                                "index": len(all_matches) + idx,
-                                "external_id": external_id,
-                                "competition_id": resolve_genius_competition_id(
-                                    category_id=category_id,
-                                    season_id=season_name,
-                                    match_category_external_id=match_data.get(
-                                        "category_external_id"
-                                    ),
-                                ),
-                                "home_team": match_data["home_team"],
-                                "away_team": match_data["away_team"],
-                            }
-                        )
-
+                processed_matches, _report = enrich_matches(
+                    processed_matches,
+                    (Component.BOXSCORE,),
+                    season_reference(
+                        category_id, season_name, historical=is_historical
+                    ),
+                    max_workers=max_workers,
+                    cache_dir=output_path.parent
+                    / ".cache"
+                    / str(season_competition_id),
+                )
+                season_advanced = sum(
+                    bool(row.get("boxscore")) for row in processed_matches
+                )
+                total_advanced_stats += season_advanced
+                total_failed += len(processed_matches) - season_advanced
             total_played_matches += len(processed_matches)
             all_matches.extend(processed_matches)
-
-            if verbose:
-                if is_historical:
-                    print(f"  ✓ Found {len(processed_matches)} played matches")
-                else:
-                    print(
-                        f"  ✓ Found {len(matches)} matches, {len(processed_matches)} played"
-                    )
-
-            # Fetch advanced stats for this season if requested
-            if include_advanced and matches_to_fetch_advanced:
-                season_advanced = 0
-                season_failed = 0
-
-                def fetch_boxscore(
-                    match_info: Dict[str, Any],
-                ) -> tuple[int, Optional[Dict[str, Any]], Optional[str], Optional[str]]:
-                    """Fetch box score for a single match. Returns (index, boxscore_data, error_msg, error_type)."""
-                    try:
-                        session = _get_genius_session(max_workers)
-                        boxscore = GeniusSportsAPI.get_match_boxscore(
-                            str(match_info["external_id"]),
-                            competition_id=match_info.get("competition_id"),
-                            session=session,
-                            log_fn=tqdm.write if verbose else None,
-                        )
-                        return (match_info["index"], boxscore, None, None)
-                    except requests.exceptions.HTTPError as e:
-                        error_type = (
-                            f"HTTP {e.response.status_code}"
-                            if e.response
-                            else "HTTP Error"
-                        )
-                        return (match_info["index"], None, str(e), error_type)
-                    except ValueError as e:
-                        # Parsing errors (like the int() conversion error)
-                        return (match_info["index"], None, str(e), "Parse Error")
-                    except Exception as e:
-                        error_type = type(e).__name__
-                        return (match_info["index"], None, str(e), error_type)
-
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    futures = {
-                        executor.submit(fetch_boxscore, match_info): match_info
-                        for match_info in matches_to_fetch_advanced
-                    }
-
-                    with tqdm(
-                        total=len(matches_to_fetch_advanced),
-                        desc=f"  Fetching advanced stats ({season_name})",
-                        disable=not verbose,
-                    ) as pbar:
-                        for future in as_completed(futures):
-                            match_info = futures[future]
-                            index, boxscore, error, error_type = future.result()
-
-                            if boxscore:
-                                all_matches[index]["boxscore"] = normalize_boxscore(
-                                    boxscore, source="genius"
-                                )
-                                season_advanced += 1
-                                total_advanced_stats += 1
-                            else:
-                                season_failed += 1
-                                total_failed += 1
-                                # Add error information to match data for debugging
-                                if error:
-                                    all_matches[index]["advanced_boxscore_error"] = {
-                                        "error_type": error_type or "Unknown",
-                                        "error_message": error,
-                                    }
-                                if verbose and error:
-                                    # Show abbreviated error for common issues
-                                    if error_type == "Parse Error":
-                                        error_display = "Data parsing failed"
-                                    elif error_type and error_type.startswith("HTTP"):
-                                        error_display = error_type
-                                    else:
-                                        # For other errors, show type and short message
-                                        error_display = (
-                                            f"{error_type}: {error[:35]}"
-                                            if error_type
-                                            else error[:45]
-                                        )
-
-                                    tqdm.write(
-                                        f"    ✗ {match_info['home_team']} vs {match_info['away_team']}: {error_display}"
-                                    )
-
-                            pbar.update(1)
-
-                if verbose:
-                    stats_msg = f"  ✓ Advanced stats: {season_advanced}/{len(matches_to_fetch_advanced)}"
-                    if season_failed > 0:
-                        stats_msg += f" ({season_failed} failed)"
-                    print(stats_msg)
 
             seasons_processed.append(
                 {
@@ -548,8 +454,11 @@ def download_league_all_seasons(
             )
 
         except Exception as e:
+            logging.getLogger(__name__).debug(
+                "league_boxscores: operation failed", exc_info=True
+            )
             if verbose:
-                print(f"  ✗ Error processing season {season_name}: {str(e)}")
+                print(f"  ✗ Error processing season {season_name}: {e!s}")
             continue
 
     # Save all matches to file
@@ -589,7 +498,7 @@ def download_league_all_seasons(
             if total_failed > 0:
                 print(f"  - Failed: {total_failed}")
                 # Count error types
-                error_types: Dict[str, int] = {}
+                error_types: dict[str, int] = {}
                 for match in all_matches:
                     if "advanced_boxscore_error" in match:
                         err_type = match["advanced_boxscore_error"].get(

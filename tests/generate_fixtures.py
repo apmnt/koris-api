@@ -1,6 +1,7 @@
 """Generate test fixtures by calling the actual APIs."""
 
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -9,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from koris_api.basketfi_api import BasketFiAPI
 from koris_api.genius_api import GeniusSportsAPI
-from koris_api.genius_parser import GeniusSportsParser
 
 
 def generate_basketfi_fixtures():
@@ -40,7 +40,7 @@ def generate_basketfi_fixtures():
 
         with open(fixtures_dir / "match_detail.json", "w", encoding="utf-8") as f:
             json.dump(match_data, f, indent=2, ensure_ascii=False)
-        print(f"    Saved match detail")
+        print("    Saved match detail")
 
     # 3. Get team data
     if matches_data.get("matches"):
@@ -51,7 +51,7 @@ def generate_basketfi_fixtures():
 
             with open(fixtures_dir / "team.json", "w", encoding="utf-8") as f:
                 json.dump(team_data, f, indent=2, ensure_ascii=False)
-            print(f"    Saved team data")
+            print("    Saved team data")
 
     # 4. Get category data
     print("  Fetching category data...")
@@ -59,7 +59,7 @@ def generate_basketfi_fixtures():
 
     with open(fixtures_dir / "category.json", "w", encoding="utf-8") as f:
         json.dump(category_data, f, indent=2, ensure_ascii=False)
-    print(f"    Saved category data")
+    print("    Saved category data")
 
     print("✓ Basket.fi fixtures generated\n")
     return played_matches[0] if played_matches else None
@@ -80,8 +80,11 @@ def generate_genius_sports_fixtures(played_match=None):
 
             with open(fixtures_dir / "boxscore.json", "w", encoding="utf-8") as f:
                 json.dump(boxscore_data, f, indent=2, ensure_ascii=False)
-            print(f"    Saved box score")
+            print("    Saved box score")
         except Exception as e:
+            logging.getLogger(__name__).debug(
+                "generate_fixtures: operation failed", exc_info=True
+            )
             print(f"    Error fetching box score: {e}")
 
     # Get a minimal set of teams for a competition
@@ -107,6 +110,9 @@ def generate_genius_sports_fixtures(played_match=None):
             print("    Using existing example_responses instead")
 
     except Exception as e:
+        logging.getLogger(__name__).debug(
+            "generate_fixtures: operation failed", exc_info=True
+        )
         print(f"    Error fetching teams: {e}")
 
     print("✓ Genius Sports fixtures generated\n")

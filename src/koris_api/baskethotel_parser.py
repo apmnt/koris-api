@@ -1,7 +1,8 @@
 """Parser for BasketHotel HTML responses."""
 
-from typing import Dict, Any
 import re
+from typing import Any
+
 from bs4 import BeautifulSoup, Tag
 
 
@@ -74,7 +75,7 @@ class BasketHotelParser:
         return "\n".join(html_parts) if html_parts else js_response
 
     @staticmethod
-    def parse_game_html(html: str) -> Dict[str, Any]:
+    def parse_game_html(html: str) -> dict[str, Any]:
         """
         Parse HTML to extract structured game data.
 
@@ -86,7 +87,7 @@ class BasketHotelParser:
         """
         soup = BeautifulSoup(html, "html.parser")
 
-        game_data: Dict[str, Any] = {
+        game_data: dict[str, Any] = {
             "teams": {"home": {}, "away": {}},
             "score": {},
             "quarter_scores": [],
@@ -98,7 +99,16 @@ class BasketHotelParser:
 
         # Extract team names from header
         header = soup.find("div", class_="mbt-v2-header")
-        if header:
+        if isinstance(header, Tag):
+            direct_text = " ".join(
+                header.find_all(string=True, recursive=False)
+            ).strip()
+            summary = re.fullmatch(r"(.+?)\s+(\d+)\s*[-:]\s*(\d+)\s+(.+)", direct_text)
+            if summary:
+                home, home_score, away_score, away = summary.groups()
+                game_data["teams"]["home"]["name"] = home.strip()
+                game_data["teams"]["away"]["name"] = away.strip()
+                game_data["score"] = {"home": int(home_score), "away": int(away_score)}
             # Find team names in the header text
             text = header.get_text()
             # Pattern: TeamName1 Score1 - Score2 TeamName2
@@ -107,7 +117,7 @@ class BasketHotelParser:
                 for line in text.split("\n")
                 if line.strip() and not line.strip().isdigit() and line.strip() != "-"
             ]
-            if len(lines) >= 2:
+            if not summary and len(lines) >= 2:
                 game_data["teams"]["home"]["name"] = lines[0]
                 game_data["teams"]["away"]["name"] = lines[1]
 
@@ -256,7 +266,7 @@ class BasketHotelParser:
         return game_data
 
     @staticmethod
-    def parse_boxscore_html(html: str) -> Dict[str, Any]:
+    def parse_boxscore_html(html: str) -> dict[str, Any]:
         """
         Parse BasketHotel boxscore HTML to extract team totals.
 
@@ -264,16 +274,33 @@ class BasketHotelParser:
             Dictionary containing team totals and player rows.
         """
         soup = BeautifulSoup(html, "html.parser")
-        table = soup.find("table")
+        table = next(
+            (
+                table
+                for table in soup.find_all("table")
+                if any(
+                    "MIN"
+                    in (
+                        values := [
+                            cell.get_text(strip=True)
+                            for cell in row.find_all(["th", "td"])
+                        ]
+                    )
+                    and "PIST" in values
+                    for row in table.find_all("tr")
+                )
+            ),
+            None,
+        )
         if not table or not isinstance(table, Tag):
             return {"teams": []}
 
-        teams: list[Dict[str, Any]] = []
+        teams: list[dict[str, Any]] = []
         current_team: str | None = None
-        current_team_players: list[Dict[str, Any]] = []
+        current_team_players: list[dict[str, Any]] = []
         current_team_has_totals = False
         headers: list[str] | None = None
-        header_indexes: dict[str, int] = {}
+        header_indexes: dict[str, int | None] = {}
 
         def _header_index(name: str) -> int | None:
             indices = [i for i, h in enumerate(headers or []) if h.upper() == name]
@@ -293,7 +320,11 @@ class BasketHotelParser:
                 continue
 
             if "MIN" in values:
-                if current_team and current_team_players and not current_team_has_totals:
+                if (
+                    current_team
+                    and current_team_players
+                    and not current_team_has_totals
+                ):
                     teams.append(
                         {
                             "team_name": current_team,
@@ -330,7 +361,15 @@ class BasketHotelParser:
                     continue
                 if len(values) == len(headers) - 1:
                     values = [""] + values
-                totals: Dict[str, Any] = {"team_name": current_team}
+                totals: dict[str, Any] = {"team_name": current_team}
+                # Preserve every reported cell before legacy numeric defaults.
+                totals.update(
+                    {
+                        header: values[idx]
+                        for idx, header in enumerate(headers)
+                        if idx < len(values)
+                    }
+                )
                 for key, header_name in (
                     ("rebounds", "LEV"),
                     ("assists", "S"),
@@ -385,7 +424,7 @@ class BasketHotelParser:
         return {"teams": teams}
 
     @staticmethod
-    def parse_playbyplay_html(html: str) -> Dict[str, Any]:
+    def parse_playbyplay_html(html: str) -> dict[str, Any]:
         """
         Parse BasketHotel play-by-play HTML to extract game events.
 
@@ -393,20 +432,17 @@ class BasketHotelParser:
             Dictionary containing parsed play-by-play data.
         """
         soup = BeautifulSoup(html, "html.parser")
-        result: Dict[str, Any] = {"events": [], "teams": {}}
+        result: dict[str, Any] = {"events": [], "teams": {}}
         current_period: str | None = "P1"
         inferred_elapsed_clock = False
         max_minutes_seen = 0
 
         header = soup.find("div", class_="mbt-v2-header")
         if header and isinstance(header, Tag):
-            text = header.get_text(separator="\n", strip=True)
-            lines = [line for line in text.split("\n") if line]
-            if len(lines) >= 2:
-                result["teams"]["home"] = lines[0]
-                result["teams"]["away"] = lines[1]
+            teams = BasketHotelParser.parse_game_html(html)["teams"]
+            result["teams"] = {side: team.get("name") for side, team in teams.items()}
 
-        table = soup.find("table", class_=re.compile(r"play-by-play", re.I))
+        table = soup.find("table", class_=re.compile(r"play-by-play", re.IGNORECASE))
         if not table or not isinstance(table, Tag):
             return result
 
@@ -430,7 +466,9 @@ class BasketHotelParser:
                 event_type = "game_action"
                 period = None
                 if "jakso" in action_text.lower():
-                    period_match = re.search(r"Jakso\s+(\d+)", action_text, re.I)
+                    period_match = re.search(
+                        r"Jakso\s+(\d+)", action_text, re.IGNORECASE
+                    )
                     if period_match:
                         period = period_match.group(1)
                         event_type = "period_end"
@@ -440,7 +478,9 @@ class BasketHotelParser:
                 result["events"].append(
                     {
                         "event_type": event_type,
-                        "period": current_period if event_type == "period_end" else None,
+                        "period": current_period
+                        if event_type == "period_end"
+                        else None,
                         "action": action_text,
                         "time": None,
                         "score": None,
@@ -483,8 +523,8 @@ class BasketHotelParser:
                 continue
 
             raw_action = action_cell.get_text(" ", strip=True)
-            players: list[Dict[str, Any]] = []
-            seen: set[tuple] = set()
+            players: list[dict[str, Any]] = []
+            seen: set[tuple[str, str, str | None]] = set()
 
             for link in action_cell.find_all("a"):
                 if not isinstance(link, Tag):
@@ -492,9 +532,9 @@ class BasketHotelParser:
                 player_name = link.get_text(strip=True) or None
                 if not player_name:
                     continue
-                player_id = link.get("player_id") or None
-                season_id = link.get("season_id") or None
-                href = link.get("href") or ""
+                player_id = str(link["player_id"]) if link.get("player_id") else None
+                season_id = str(link["season_id"]) if link.get("season_id") else None
+                href = str(link.get("href") or "")
                 league_id_match = re.search(r"league_id=(\d+)", href)
                 league_id = league_id_match.group(1) if league_id_match else None
 
@@ -540,7 +580,7 @@ class BasketHotelParser:
                     cleaned_name = " ".join(name.split()).strip()
                     if cleaned_name:
                         cleaned_name = re.split(
-                            r"\b(tuli|meni|onnistui|epäonnistui|otti|antoi|teki|riisti|torjui|hyökkäyslevypallo|puolustuslevypallo)\b",
+                            r"\b(tuli|meni|menetti|onnistui|epäonnistui|otti|antoi|teki|riisti|torjui|torjuttiin|hyökkäyslevypallo|puolustuslevypallo)\b",
                             cleaned_name,
                             1,
                             flags=re.IGNORECASE,
@@ -575,16 +615,30 @@ class BasketHotelParser:
                 event_type = "sub_in"
             elif "meni" in lowered and "vaihtoon" in lowered:
                 event_type = "sub_out"
-            elif "onnistui" in lowered and "pisteen" in lowered:
-                event_type = "shot_made"
             elif "epäonnistui" in lowered and "pisteen" in lowered:
                 event_type = "shot_missed"
+            elif "onnistui" in lowered and "pisteen" in lowered:
+                event_type = "shot_made"
             elif "syötön" in lowered:
                 event_type = "assist"
             elif "puolustuslevypallon" in lowered:
                 event_type = "def_rebound"
             elif "hyökkäyslevypallon" in lowered:
                 event_type = "off_rebound"
+            elif "vapaaheitto" in lowered:
+                event_type = "freethrow"
+            elif (
+                "menetti" in lowered
+                or "hyökkääjän virhe" in lowered
+                or "huonon syötön" in lowered
+            ):
+                event_type = "turnover"
+            elif "riisti" in lowered:
+                event_type = "steal"
+            elif "torjui" in lowered:
+                event_type = "block"
+            elif "virhe" in lowered:
+                event_type = "foul"
 
             period_value = current_period
             if inferred_elapsed_clock and time_text and ":" in time_text:
@@ -611,9 +665,11 @@ class BasketHotelParser:
 
     @staticmethod
     def normalize_playbyplay_to_genius_format(
-        playbyplay: Dict[str, Any],
-        team_map: Dict[str, str] | None = None,
-    ) -> Dict[str, Any]:
+        playbyplay: dict[str, Any],
+        team_map: dict[str, str] | None = None,
+        *,
+        include_analysis: bool = True,
+    ) -> dict[str, Any]:
         """
         Normalize BasketHotel play-by-play to match Genius Sports format.
 
@@ -623,8 +679,8 @@ class BasketHotelParser:
         team_map = team_map or {}
         from .genius_parser import GeniusSportsParser
 
-        players: list[Dict[str, Any]] = []
-        player_index: Dict[tuple, int] = {}
+        players: list[dict[str, Any]] = []
+        player_index: dict[tuple[str, str, str], int] = {}
 
         def _team_id(team_name: str | None) -> str | None:
             if not team_name:
@@ -693,7 +749,7 @@ class BasketHotelParser:
                 return f"{player_name}: {detail}"
             return detail
 
-        events: list[Dict[str, Any]] = []
+        events: list[dict[str, Any]] = []
         current_score = "0-0"
         for event in playbyplay.get("events", []):
             if not isinstance(event, dict):
@@ -719,10 +775,10 @@ class BasketHotelParser:
             detail = None
             lowered = action_raw.lower()
             if event_type in {"2pt", "3pt", "freethrow"}:
-                if "onnistui" in lowered:
-                    detail = "shot_made"
-                elif "epäonnistui" in lowered:
+                if "epäonnistui" in lowered:
                     detail = "shot_missed"
+                elif "onnistui" in lowered:
+                    detail = "shot_made"
                 else:
                     detail = "shot_taken"
             elif event_type == "rebound":
@@ -760,12 +816,8 @@ class BasketHotelParser:
             )
 
         match_info = {
-            "home_team": playbyplay.get("game_teams", {})
-            .get("home", {})
-            .get("name"),
-            "away_team": playbyplay.get("game_teams", {})
-            .get("away", {})
-            .get("name"),
+            "home_team": playbyplay.get("game_teams", {}).get("home", {}).get("name"),
+            "away_team": playbyplay.get("game_teams", {}).get("away", {}).get("name"),
             "home_score": playbyplay.get("score", {}).get("home"),
             "away_score": playbyplay.get("score", {}).get("away"),
             "status": None,
@@ -803,8 +855,12 @@ class BasketHotelParser:
                 },
             )
 
-        GeniusSportsParser._populate_running_score(events)
-        possessions = GeniusSportsParser._calculate_possessions(events)
+        possessions = None
+        if include_analysis:
+            from .analysis.possessions import enrich_possessions
+
+            GeniusSportsParser._populate_running_score(events)
+            events, possessions = enrich_possessions(events)
 
         return {
             "match_info": match_info,

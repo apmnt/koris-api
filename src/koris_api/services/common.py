@@ -1,24 +1,23 @@
 import json
+import logging
 import re
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 from urllib.parse import urlencode
 
 import requests
-import sys
+from requests.adapters import HTTPAdapter
 from tqdm import tqdm
 
 from ..basketfi_api import BasketFiAPI
 from ..baskethotel_api import BasketHotelAPI
 from ..baskethotel_parser import BasketHotelParser
+from ..pipeline.games import run_batch
 
 
-def load_genius_ids(
-    category_id: str, competition_id: Optional[str] = None
-) -> List[str]:
+def load_genius_ids(category_id: str, competition_id: str | None = None) -> list[str]:
     """
     Load Genius Sports competition IDs from genius_ids.json file.
 
@@ -34,52 +33,36 @@ def load_genius_ids(
     Returns:
         List of Genius Sports competition IDs, empty list if none found
     """
-    genius_ids = []
-
-    # Try to load from genius_ids.json file
-    genius_ids_path = Path(__file__).parent.parent.parent / "genius_ids.json"
-    if genius_ids_path.exists():
-        try:
-            with open(genius_ids_path, "r", encoding="utf-8") as f:
-                genius_ids_data = json.load(f)
-
-            if category_id in genius_ids_data:
-                category_data = genius_ids_data[category_id]
-
-                # Try competition_id first
-                if competition_id and competition_id in category_data:
-                    ids = category_data[competition_id]
-                    if isinstance(ids, list):
-                        genius_ids.extend([str(id) for id in ids if id])
-
-                # Also try to extract from category_external_id in API if available
-                if not genius_ids and competition_id:
-                    try:
-                        category_response = BasketFiAPI.get_category(
-                            competition_id, category_id
-                        )
-                        if "category" in category_response:
-                            external_id = category_response["category"].get(
-                                "category_external_id"
-                            )
-                            if external_id and external_id.strip():
-                                genius_ids.append(external_id.strip())
-                    except Exception:
-                        pass  # Ignore API errors, just use file lookup
-
-        except Exception:
-            pass  # If file doesn't exist or has errors, continue
-
-    # Remove duplicates and empty strings
-    return list(dict.fromkeys([id for id in genius_ids if id]))
+    genius_ids: list[str] = []
+    genius_ids_path = (
+        Path(__file__).resolve().parents[1] / "catalogs" / "genius_ids.json"
+    )
+    try:
+        catalog = json.loads(genius_ids_path.read_text(encoding="utf-8"))
+        category = catalog.get(str(category_id), {})
+        lookup = str(competition_id)
+        year = _extract_season_start_year(competition_id)
+        if lookup not in category and year is not None:
+            lookup = f"{year}-{year + 1}"
+        ids = category.get(lookup, []) if competition_id else []
+        if isinstance(ids, list):
+            genius_ids = [str(value) for value in ids if value]
+    except (OSError, ValueError, AttributeError):
+        genius_ids = []
+    if not genius_ids and competition_id:
+        response = BasketFiAPI.get_category(competition_id, category_id)
+        external_id = response.get("category", {}).get("category_external_id")
+        if external_id and str(external_id).strip():
+            genius_ids.append(str(external_id).strip())
+    return list(dict.fromkeys(genius_ids))
 
 
 def resolve_genius_competition_id(
-    category_id: Optional[str],
-    season_id: Optional[str] = None,
-    match_category_external_id: Optional[str] = None,
-    fallback_id: str = "12345",
-) -> str:
+    category_id: str | None,
+    season_id: str | None = None,
+    match_category_external_id: str | None = None,
+    fallback_id: str | None = None,
+) -> str | None:
     if match_category_external_id and str(match_category_external_id).strip():
         return str(match_category_external_id).strip()
     if category_id and season_id:
@@ -93,29 +76,29 @@ def resolve_genius_competition_id(
     return fallback_id
 
 
-_BASKETHOTEL_DEFAULT_SEASON_ID = "121333"
-_BASKETHOTEL_DEFAULT_LEAGUE_ID = "2"
 _BASKETHOTEL_LEAGUE_ID_BY_CATEGORY = {
-    "4": "2",  # Korisliiga
+    "4": "4",  # Korisliiga (verified BasketHotel league selector)
+    "2": "2",  # Miesten I divisioona A
 }
-_BASKETHOTEL_SEASON_CACHE: Dict[str, Dict[str, str]] = {}
-_BASKETHOTEL_TEAM_CACHE: Dict[str, Dict[str, str]] = {}
 _BASKETHOTEL_MIN_YEAR = 2010
 _BASKETHOTEL_SESSION_LOCAL = threading.local()
 _GENIUS_SESSION_LOCAL = threading.local()
 
 
 def _get_baskethotel_league_id(category_id: str) -> str:
-    return _BASKETHOTEL_LEAGUE_ID_BY_CATEGORY.get(
-        str(category_id), _BASKETHOTEL_DEFAULT_LEAGUE_ID
-    )
+    league_id = _BASKETHOTEL_LEAGUE_ID_BY_CATEGORY.get(str(category_id))
+    if league_id is None:
+        raise ValueError(
+            f"BasketHotel league mapping is unavailable for category {category_id}"
+        )
+    return league_id
 
 
 def _get_baskethotel_session() -> requests.Session:
     session = getattr(_BASKETHOTEL_SESSION_LOCAL, "session", None)
     if session is None:
         session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(pool_connections=64, pool_maxsize=64)
+        adapter = HTTPAdapter(pool_connections=64, pool_maxsize=64)
         session.mount("https://", adapter)
         session.mount("http://", adapter)
         _BASKETHOTEL_SESSION_LOCAL.session = session
@@ -133,16 +116,14 @@ def _get_genius_session(pool_size: int = 64) -> requests.Session:
                 "Accept-Language": "en-US,en;q=0.9,fi;q=0.8",
             }
         )
-        adapter = requests.adapters.HTTPAdapter(
-            pool_connections=pool_size, pool_maxsize=pool_size
-        )
+        adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size)
         session.mount("https://", adapter)
         session.mount("http://", adapter)
         _GENIUS_SESSION_LOCAL.session = session
     return session
 
 
-def _extract_season_start_year(season_name: Optional[str]) -> Optional[int]:
+def _extract_season_start_year(season_name: str | None) -> int | None:
     if not season_name:
         return None
     if "-" in season_name:
@@ -153,7 +134,7 @@ def _extract_season_start_year(season_name: Optional[str]) -> Optional[int]:
     return None
 
 
-def _is_historical_season(season: Dict[str, Any]) -> bool:
+def _is_historical_season(season: dict[str, Any]) -> bool:
     season_year = _extract_season_start_year(season.get("season_name"))
     if season_year is not None:
         return season_year <= 2023
@@ -166,7 +147,7 @@ def _is_historical_season(season: Dict[str, Any]) -> bool:
     return False
 
 
-def _parse_baskethotel_date(date_text: Optional[str]) -> Optional[str]:
+def _parse_baskethotel_date(date_text: str | None) -> str | None:
     if not date_text:
         return None
     try:
@@ -175,7 +156,7 @@ def _parse_baskethotel_date(date_text: Optional[str]) -> Optional[str]:
         return None
 
 
-def _parse_baskethotel_time(time_text: Optional[str]) -> Optional[str]:
+def _parse_baskethotel_time(time_text: str | None) -> str | None:
     if not time_text:
         return None
     cleaned = time_text.strip()
@@ -186,15 +167,9 @@ def _parse_baskethotel_time(time_text: Optional[str]) -> Optional[str]:
     return None
 
 
-def _fetch_baskethotel_seasons(league_id: str) -> Dict[str, str]:
-    if league_id in _BASKETHOTEL_SEASON_CACHE:
-        return _BASKETHOTEL_SEASON_CACHE[league_id]
+def _fetch_baskethotel_seasons(league_id: str) -> dict[str, str]:
 
     requests_client = requests
-    maybe_public = sys.modules.get("koris_api")
-    if maybe_public and hasattr(maybe_public, "requests"):
-        requests_client = getattr(maybe_public, "requests")
-
     params = {
         "api": "b9680714b4026e011e13a43ccb7dfa201932958c",
         "lang": "fi",
@@ -208,22 +183,23 @@ def _fetch_baskethotel_seasons(league_id: str) -> Dict[str, str]:
         "request[0][param][template]": "v1",
     }
     url = f"https://widgets.baskethotel.com/widget-service/show?{urlencode(params)}"
-    response = requests_client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response = requests_client.get(
+        url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30.0
+    )
     response.raise_for_status()
     html = BasketHotelParser.extract_html_from_response(response.text)
 
-    season_map: Dict[str, str] = {}
+    season_map: dict[str, str] = {}
     for match in re.findall(r'value="(\d+)"[^>]*>([^<]+)<', html):
         season_id, season_name = match
         season_map[season_name.strip()] = season_id
 
-    _BASKETHOTEL_SEASON_CACHE[league_id] = season_map
     return season_map
 
 
 def _resolve_baskethotel_season_id(
-    season_name: Optional[str], league_id: str
-) -> Optional[str]:
+    season_name: str | None, league_id: str
+) -> str | None:
     if not season_name:
         return None
     season_map = _fetch_baskethotel_seasons(league_id)
@@ -231,10 +207,12 @@ def _resolve_baskethotel_season_id(
 
 
 def _augment_seasons_with_baskethotel(
-    seasons: List[Dict[str, Any]], category_id: str
-) -> List[Dict[str, Any]]:
-    league_id = _get_baskethotel_league_id(category_id)
-    if not league_id:
+    seasons: list[dict[str, Any]], category_id: str
+) -> list[dict[str, Any]]:
+    seasons = [dict(season) for season in seasons]
+    try:
+        league_id = _get_baskethotel_league_id(category_id)
+    except ValueError:
         return seasons
 
     season_map = _fetch_baskethotel_seasons(league_id)
@@ -279,15 +257,12 @@ def _fetch_baskethotel_schedule_page_html(
         "request[0][param][page]": str(page),
     }
     url = f"https://widgets.baskethotel.com/widget-service/show?{urlencode(params)}"
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30.0)
     response.raise_for_status()
     return BasketHotelParser.extract_html_from_response(response.text)
 
 
-def _fetch_baskethotel_team_map(season_id: str, league_id: str) -> Dict[str, str]:
-    cache_key = f"{league_id}:{season_id}"
-    if cache_key in _BASKETHOTEL_TEAM_CACHE:
-        return _BASKETHOTEL_TEAM_CACHE[cache_key]
+def _fetch_baskethotel_team_map(season_id: str, league_id: str) -> dict[str, str]:
 
     params = {
         "api": "b9680714b4026e011e13a43ccb7dfa201932958c",
@@ -303,11 +278,11 @@ def _fetch_baskethotel_team_map(season_id: str, league_id: str) -> Dict[str, str
         "request[0][param][template]": "v2",
     }
     url = f"https://widgets.baskethotel.com/widget-service/show?{urlencode(params)}"
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30.0)
     response.raise_for_status()
     html = BasketHotelParser.extract_html_from_response(response.text)
 
-    team_map: Dict[str, str] = {}
+    team_map: dict[str, str] = {}
     select_start = html.find('id="2-303-filter-team"')
     if select_start != -1:
         segment = html[select_start : select_start + 5000]
@@ -320,11 +295,10 @@ def _fetch_baskethotel_team_map(season_id: str, league_id: str) -> Dict[str, str
             if cleaned_name:
                 team_map[cleaned_name] = team_id
 
-    _BASKETHOTEL_TEAM_CACHE[cache_key] = team_map
     return team_map
 
 
-def _extract_baskethotel_game_ids(html: str) -> List[str]:
+def _extract_baskethotel_game_ids(html: str) -> list[str]:
     return re.findall(r"schedule-line-container-(\d+)", html)
 
 
@@ -335,7 +309,7 @@ def _extract_baskethotel_schedule_page_count(html: str) -> int:
 
 def _fetch_baskethotel_schedule_game_ids(
     season_id: str, league_id: str, verbose: bool
-) -> List[str]:
+) -> list[str]:
     first_html = _fetch_baskethotel_schedule_page_html(season_id, league_id, page=1)
     game_ids = set(_extract_baskethotel_game_ids(first_html))
     total_pages = _extract_baskethotel_schedule_page_count(first_html)
@@ -351,8 +325,8 @@ def _fetch_baskethotel_schedule_game_ids(
 
 
 def _merge_baskethotel_match(
-    base_match: Dict[str, Any], game_data: Dict[str, Any]
-) -> Dict[str, Any]:
+    base_match: dict[str, Any], game_data: dict[str, Any]
+) -> dict[str, Any]:
     merged = dict(base_match)
     game_info = game_data.get("game_info", {})
     date_value = _parse_baskethotel_date(game_info.get("date"))
@@ -385,55 +359,38 @@ def _merge_baskethotel_match(
 
 
 def _fetch_historical_matches(
-    matches: List[Dict[str, Any]],
+    matches: list[dict[str, Any]],
     season_name: str,
-    season_id: Optional[str],
+    season_id: str | None,
     category_id: str,
-    category_name: Optional[str],
+    category_name: str | None,
     max_workers: int,
     verbose: bool,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     client = BasketHotelAPI()
     league_id = _get_baskethotel_league_id(category_id)
-    maybe_public = sys.modules.get("koris_api")
-    resolve_season_id = (
-        getattr(maybe_public, "_resolve_baskethotel_season_id", None)
-        if maybe_public
-        else None
-    ) or _resolve_baskethotel_season_id
-    fetch_team_map = (
-        getattr(maybe_public, "_fetch_baskethotel_team_map", None)
-        if maybe_public
-        else None
-    ) or _fetch_baskethotel_team_map
-    fetch_schedule_ids = (
-        getattr(maybe_public, "_fetch_baskethotel_schedule_game_ids", None)
-        if maybe_public
-        else None
-    ) or _fetch_baskethotel_schedule_game_ids
+    resolve_season_id = _resolve_baskethotel_season_id
+    fetch_team_map = _fetch_baskethotel_team_map
+    fetch_schedule_ids = _fetch_baskethotel_schedule_game_ids
 
-    resolved_season_id = (
-        resolve_season_id(season_name, league_id)
-        or season_id
-        or _BASKETHOTEL_DEFAULT_SEASON_ID
-    )
+    resolved_season_id = resolve_season_id(season_name, league_id) or season_id
+    if not resolved_season_id:
+        raise ValueError("An explicit historical season is required")
     team_map = fetch_team_map(resolved_season_id, league_id)
 
-    game_ids = fetch_schedule_ids(
-        resolved_season_id, league_id, verbose
-    )
+    game_ids = fetch_schedule_ids(resolved_season_id, league_id, verbose)
     if not game_ids:
         return []
 
-    def fetch_game(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    def fetch_game(game_id: str) -> tuple[dict[str, Any] | None, str | None]:
         try:
-            session = _get_baskethotel_session()
-            game_data = client.fetch_game_data(
-                str(game_id),
-                season_id=resolved_season_id,
-                league_id=league_id,
-                session=session,
-            )
+            with requests.Session() as session:
+                game_data = client.fetch_game_data(
+                    str(game_id),
+                    season_id=resolved_season_id,
+                    league_id=league_id,
+                    session=session,
+                )
             base_match = {
                 "match_id": str(game_id),
                 "match_external_id": None,
@@ -462,31 +419,36 @@ def _fetch_historical_matches(
                 merged["away_team_id"] = team_map.get(away_name)
             return (merged, None)
         except Exception as exc:
+            logging.getLogger(__name__).debug("common: operation failed", exc_info=True)
             return (None, str(exc))
 
-    processed_matches: list[Dict[str, Any]] = []
+    processed_matches: list[dict[str, Any]] = []
     games_failed = 0
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(fetch_game, game_id): game_id for game_id in game_ids
-        }
+    with tqdm(
+        total=len(game_ids),
+        desc=f"    Fetching historical games ({season_name})",
+        disable=not verbose,
+    ) as pbar:
 
-        with tqdm(
-            total=len(matches),
-            desc=f"    Fetching historical games ({season_name})",
-            disable=not verbose,
-        ) as pbar:
-            for future in as_completed(futures):
-                merged, error = future.result()
-                if merged and merged.get("home_score") and merged.get("away_score"):
-                    processed_matches.append(merged)
-                else:
-                    games_failed += 1
-                    if verbose and error:
-                        game_id = futures[future]
-                        tqdm.write(f"      ✗ Game {game_id}: {error}")
-                pbar.update(1)
+        def progress(_done: int, _total: int) -> None:
+            _ = pbar.update(1)
+
+        results = run_batch(
+            game_ids,
+            fetch_game,
+            max_workers=max_workers,
+            progress=progress,
+        )
+    for game_id, (merged, error) in zip(game_ids, results, strict=True):
+        if merged and all(
+            merged.get(key) not in (None, "") for key in ("home_score", "away_score")
+        ):
+            processed_matches.append(merged)
+        else:
+            games_failed += 1
+            if verbose and error:
+                tqdm.write(f"      ✗ Game {game_id}: {error}")
 
     if verbose:
         print(
@@ -522,7 +484,7 @@ def _clean_player_name(name: str) -> str:
     return cleaned
 
 
-def _extract_team_stat(team: Dict[str, Any], stat_name: str) -> float:
+def _extract_team_stat(team: dict[str, Any], stat_name: str) -> float:
     totals = team.get("totals", {})
     total_value = totals.get(stat_name)
     if total_value not in (None, ""):
@@ -534,7 +496,7 @@ def _extract_team_stat(team: Dict[str, Any], stat_name: str) -> float:
     return total
 
 
-def _summarize_boxscore(boxscore: Dict[str, Any]) -> Dict[str, float]:
+def _summarize_boxscore(boxscore: dict[str, Any]) -> dict[str, float]:
     totals = {"rebounds": 0.0, "assists": 0.0, "steals": 0.0}
     for team in boxscore.get("teams", []):
         totals["rebounds"] += _extract_team_stat(team, "Total Rebounds")
@@ -543,7 +505,7 @@ def _summarize_boxscore(boxscore: Dict[str, Any]) -> Dict[str, float]:
     return totals
 
 
-def _summarize_baskethotel_boxscore(boxscore: Dict[str, Any]) -> Dict[str, float]:
+def _summarize_baskethotel_boxscore(boxscore: dict[str, Any]) -> dict[str, float]:
     totals = {"rebounds": 0.0, "assists": 0.0, "steals": 0.0}
     for team in boxscore.get("teams", []):
         totals["rebounds"] += _stat_value(team.get("rebounds", 0))

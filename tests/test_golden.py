@@ -2,14 +2,14 @@
 
 import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from koris_api.basketfi_api import BasketFiAPI
 from koris_api.basketfi_parser import BasketFiParser
-from koris_api.baskethotel_parser import BasketHotelParser
 from koris_api.baskethotel_api import BasketHotelAPI
+from koris_api.baskethotel_parser import BasketHotelParser
 from koris_api.genius_api import GeniusSportsAPI
 from koris_api.genius_parser import GeniusSportsParser
 from koris_api.services.common import (
@@ -18,7 +18,6 @@ from koris_api.services.common import (
     _fetch_baskethotel_seasons,
     _fetch_historical_matches,
 )
-
 
 # =============================================================================
 # FIXTURES - Load test data from files
@@ -99,13 +98,17 @@ def baskethotel_fixtures_dir(fixtures_dir):
 
 @pytest.fixture
 def baskethotel_season_selector_js(baskethotel_fixtures_dir):
-    with open(baskethotel_fixtures_dir / "season_selector.js", "r", encoding="utf-8") as f:
+    with open(
+        baskethotel_fixtures_dir / "season_selector.js", "r", encoding="utf-8"
+    ) as f:
         return f.read()
 
 
 @pytest.fixture
 def baskethotel_schedule_page_js(baskethotel_fixtures_dir):
-    with open(baskethotel_fixtures_dir / "schedule_page_1.js", "r", encoding="utf-8") as f:
+    with open(
+        baskethotel_fixtures_dir / "schedule_page_1.js", "r", encoding="utf-8"
+    ) as f:
         return f.read()
 
 
@@ -303,13 +306,16 @@ def test_baskethotel_historical_matches_merge():
         "score": {"home": 80, "away": 75},
         "game_info": {"date": "07.10.2021", "time": "18:30", "venue": "Arena"},
     }
-    with patch("koris_api._fetch_baskethotel_schedule_game_ids") as mock_ids, patch(
-        "koris_api._fetch_baskethotel_team_map"
-    ) as mock_teams, patch(
-        "koris_api._resolve_baskethotel_season_id"
-    ) as mock_season, patch.object(
-        BasketHotelAPI, "fetch_game_data"
-    ) as mock_fetch:
+    with (
+        patch(
+            "koris_api.services.common._fetch_baskethotel_schedule_game_ids"
+        ) as mock_ids,
+        patch("koris_api.services.common._fetch_baskethotel_team_map") as mock_teams,
+        patch(
+            "koris_api.services.common._resolve_baskethotel_season_id"
+        ) as mock_season,
+        patch.object(BasketHotelAPI, "fetch_game_data") as mock_fetch,
+    ):
         mock_ids.return_value = ["1"]
         mock_teams.return_value = {"Home Team": "10", "Away Team": "20"}
         mock_season.return_value = "121333"
@@ -474,7 +480,7 @@ def test_genius_boxscore_mocked(genius_boxscore_html):
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        boxscore = GeniusSportsAPI.get_match_boxscore("123456")
+        boxscore = GeniusSportsAPI.get_match_boxscore("123456", competition_id="42145")
 
         # Verify structure
         assert "match_info" in boxscore

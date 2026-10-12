@@ -1,0 +1,1166 @@
+{
+  "fixture": {
+    "ageGroup": "SENIOR",
+    "attendance": 884,
+    "attendanceLabel": "Attendance",
+    "captains": {
+      "d31984cb-90a6-11f1-997e-e7d7c2463142": "61f2db99-90bb-11f1-bce6-27f2444e308f",
+      "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": "bbf4bb82-90b9-11f1-bbf0-7106e55498b7"
+    },
+    "competitionName": "Korisliiga",
+    "competitors": [
+      {
+        "code": "KAB",
+        "colors": {
+          "primary": "000000",
+          "secondary": "000000",
+          "tertiary": "000000"
+        },
+        "draw": false,
+        "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+        "isHome": true,
+        "link": null,
+        "logo": "https://images.dc.connect.sportradar.com/b1ebt/8e96253509044a3e8dae3e73dea90eb3?size=400",
+        "name": "Kataja Basket",
+        "resultPlace": 1,
+        "resultStatus": "CONFIRMED",
+        "score": "102",
+        "secondaryScore": null,
+        "shootOutAttempts": ""
+      },
+      {
+        "code": "SEA",
+        "colors": {
+          "primary": null,
+          "secondary": null,
+          "tertiary": null
+        },
+        "draw": false,
+        "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+        "isHome": false,
+        "link": null,
+        "logo": "https://images.dc.connect.sportradar.com/b1ebt/6af95347d4c941288180db470cdfbce5?size=400",
+        "name": "Helsinki Seagulls",
+        "resultPlace": 2,
+        "resultStatus": "CONFIRMED",
+        "score": "83",
+        "secondaryScore": null,
+        "shootOutAttempts": ""
+      }
+    ],
+    "discipline": null,
+    "externalId": "1005902",
+    "fixtureId": "44cfe520-a1e7-11f1-8d0e-4fe1f25b2942",
+    "fixtureType": "REGULAR",
+    "liveDataAvailable": false,
+    "liveVideoAvailable": true,
+    "name": null,
+    "profile": {
+      "efficiencyType": "EFFICIENCY",
+      "foulsAllowedTechnical": 2,
+      "foulsBeforeBonus": 4,
+      "foulsBeforeBonusOvertime": 0,
+      "halfTimeDuration": 15,
+      "maxFoulsPersonal": 5,
+      "maximumPlayersOnCourt": 5,
+      "maximumRosterSize": 14,
+      "midGameJumpBallAllowed": false,
+      "numberOfPeriods": 4,
+      "overtimeAllowed": true,
+      "overtimeLength": 5,
+      "periodBreakDuration": 2,
+      "periodLength": 10,
+      "periodLengthCustomized": {},
+      "pointsFourAllowed": false,
+      "resetFoulsAfterPeriods": [
+        1,
+        2,
+        3
+      ],
+      "resetTimeoutsAfterPeriods": [
+        2,
+        4,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "ruleSet": "FIBA",
+      "shotClock": 24,
+      "simpleTargetScoreEndingAllowed": false,
+      "switchPlayingDirection": [
+        2
+      ],
+      "usePeriodLengthCustomized": false
+    },
+    "seasonId": "12a43729-9bb6-11f1-9fef-97a68955b80f",
+    "series": null,
+    "startTimeLocal": "2026-09-29T18:30:00",
+    "startTimeUTC": "2026-09-29T15:30:00",
+    "status": "CONFIRMED",
+    "statusLabel": "Final",
+    "timesUnconfirmed": false,
+    "timezone": "Europe/Helsinki",
+    "updated": "2026-09-30T13:56:53",
+    "venue": "Motonet Areena",
+    "venueId": "b0b97686-90a6-11f1-adf3-6740da308c18"
+  },
+  "periodData": [
+    {
+      "durationMinutes": 10,
+      "elapsedMinutesBeforePeriod": 0,
+      "ended": true,
+      "events": [
+        {
+          "bib": "7",
+          "clock": "PT10M0S",
+          "desc": "Jumpball Won",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "f162ed81-bc1a-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "won",
+          "eventType": "jumpBall",
+          "name": "Josiah Harris",
+          "periodId": 1,
+          "personId": "fe07789e-a839-11f1-9e43-33a5e0826522",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 0,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 0
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "15",
+          "clock": "PT10M0S",
+          "desc": "Jumpball Lost",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "f1631490-bc1a-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "lost",
+          "eventType": "jumpBall",
+          "name": "Victor Iwuakor",
+          "periodId": 1,
+          "personId": "bd6db3e4-90bc-11f1-ae39-916f627ff7ec",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/6b807fb4f0d0410ea9f1b7bddf678147?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 0,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 0
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "2",
+          "clock": "PT9M50S",
+          "desc": "2pt Jump Shot",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "f70186c1-bc1a-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "2pt",
+          "name": "Stevie Strong",
+          "periodId": 1,
+          "personId": "00b8b2c2-a83a-11f1-ac95-dbfd521311a7",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 0,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 0
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 6.12,
+          "y": 60.88
+        },
+        {
+          "bib": "7",
+          "clock": "PT9M50S",
+          "desc": "Offensive Rebound",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "f9bed200-bc1a-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "offensive",
+          "eventType": "rebound",
+          "name": "Josiah Harris",
+          "periodId": 1,
+          "personId": "fe07789e-a839-11f1-9e43-33a5e0826522",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 0,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 0
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "7",
+          "clock": "PT9M44S",
+          "desc": "2pt Tip In",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "fae1a720-bc1a-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "tipIn",
+          "eventType": "2pt",
+          "name": "Josiah Harris",
+          "periodId": 1,
+          "personId": "fe07789e-a839-11f1-9e43-33a5e0826522",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 2,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 0
+          },
+          "success": true,
+          "successString": "made",
+          "x": 5,
+          "y": 50
+        },
+        {
+          "bib": "5",
+          "clock": "PT9M24S",
+          "desc": "Turnover",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "06430371-bc1b-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "badPass",
+          "eventType": "turnover",
+          "name": "Tyrese Williams",
+          "periodId": 1,
+          "personId": "d166d74d-abc9-11f1-9a84-ab2c6646cd34",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 2,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 0
+          },
+          "success": null,
+          "x": 67.12,
+          "y": 61.05
+        },
+        {
+          "bib": "5",
+          "clock": "PT9M24S",
+          "desc": "Steal",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "07ca66c0-bc1b-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": null,
+          "eventType": "steal",
+          "name": "Joonas Timonen",
+          "periodId": 1,
+          "personId": "037a0c46-90bd-11f1-ad46-e9a336bf1467",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/503ac765db384fa19bb7cae11494e27b?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 2,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 0
+          },
+          "success": null,
+          "x": 67.12,
+          "y": 61.05
+        },
+        {
+          "bib": "7",
+          "clock": "PT9M20S",
+          "desc": "2pt Layup",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "08e91d31-bc1b-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "layup",
+          "eventType": "2pt",
+          "name": "Josiah Harris",
+          "periodId": 1,
+          "personId": "fe07789e-a839-11f1-9e43-33a5e0826522",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 4,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 0
+          },
+          "success": true,
+          "successString": "made",
+          "x": 7.58,
+          "y": 52.72
+        },
+        {
+          "bib": "2",
+          "clock": "PT9M20S",
+          "desc": "Assist",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "0d510b30-bc1b-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": null,
+          "eventType": "assist",
+          "name": "Stevie Strong",
+          "periodId": 1,
+          "personId": "00b8b2c2-a83a-11f1-ac95-dbfd521311a7",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 4,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 0
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "31",
+          "clock": "PT0M7S",
+          "desc": "Substitution Out",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "13725712-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "out",
+          "eventType": "substitution",
+          "name": "Topias Palmi",
+          "periodId": 1,
+          "personId": "61f2db99-90bb-11f1-bce6-27f2444e308f",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "13",
+          "clock": "PT0M2S",
+          "desc": "3pt Jump Shot",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "1c8afbe1-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "3pt",
+          "name": "Lassi Nikkarinen",
+          "periodId": 1,
+          "personId": "0289786d-90bc-11f1-a8d5-797de5732515",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 69.5,
+          "y": 37.41
+        },
+        {
+          "bib": "3",
+          "clock": "PT0M2S",
+          "desc": "Defensive Rebound",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "1e49e9f0-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "defensive",
+          "eventType": "rebound",
+          "name": "Richie Springs",
+          "periodId": 1,
+          "personId": "00017500-a83a-11f1-8b00-41f92683b540",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        }
+      ],
+      "isOvertime": false,
+      "isShootout": false,
+      "labels": {
+        "end": "Period 1: End",
+        "shortLabel": "P1",
+        "start": "Period 1: Start"
+      },
+      "periodId": 1,
+      "started": true,
+      "teamScore": {
+        "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+        "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+      }
+    },
+    {
+      "durationMinutes": 10,
+      "elapsedMinutesBeforePeriod": 10,
+      "ended": true,
+      "events": [
+        {
+          "bib": "31",
+          "clock": "PT10M0S",
+          "desc": "Substitution In",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "6e3fe270-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "in",
+          "eventType": "substitution",
+          "name": "Topias Palmi",
+          "periodId": 2,
+          "personId": "61f2db99-90bb-11f1-bce6-27f2444e308f",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "10",
+          "clock": "PT10M0S",
+          "desc": "Substitution Out",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "6e3fbb60-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "out",
+          "eventType": "substitution",
+          "name": "TEEMU SUOKAS",
+          "periodId": 2,
+          "personId": "21838fb7-90bd-11f1-8f7a-ebd35007e794",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/0e2a366045b846109f158110c3673b42?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "5",
+          "clock": "PT10M0S",
+          "desc": "Substitution In",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "6e3f9450-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "in",
+          "eventType": "substitution",
+          "name": "Joonas Timonen",
+          "periodId": 2,
+          "personId": "037a0c46-90bd-11f1-ad46-e9a336bf1467",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/503ac765db384fa19bb7cae11494e27b?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "3",
+          "clock": "PT10M0S",
+          "desc": "Substitution Out",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "6e3f6d41-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "out",
+          "eventType": "substitution",
+          "name": "Richie Springs",
+          "periodId": 2,
+          "personId": "00017500-a83a-11f1-8b00-41f92683b540",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "3",
+          "clock": "PT10M0S",
+          "desc": "Substitution In",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "6e400981-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "in",
+          "eventType": "substitution",
+          "name": "Keonte Kennedy",
+          "periodId": 2,
+          "personId": "96191371-abc9-11f1-a344-798b3c09e270",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "11",
+          "clock": "PT10M0S",
+          "desc": "Substitution Out",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "6e403091-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "out",
+          "eventType": "substitution",
+          "name": "REMU RAITANEN",
+          "periodId": 2,
+          "personId": "1da7c9bb-90bc-11f1-97db-e9ae9e26fc7d",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "30",
+          "clock": "PT10M0S",
+          "desc": "Substitution Out",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "6e4057a0-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "out",
+          "eventType": "substitution",
+          "name": "Timi Puittinen",
+          "periodId": 2,
+          "personId": "6a27d731-90bb-11f1-b94b-e9ae9e26fc7d",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "4",
+          "clock": "PT10M0S",
+          "desc": "Substitution In",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "6e403090-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "in",
+          "eventType": "substitution",
+          "name": "Rene Rougeau",
+          "periodId": 2,
+          "personId": "bbf4bb82-90b9-11f1-bbf0-7106e55498b7",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/8d108ef1c7d249728ea55adafd0e4166?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "21",
+          "clock": "PT9M55S",
+          "desc": "Foul - Personal",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "7b1e41d1-bc1d-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "personal",
+          "eventType": "foul",
+          "name": "Teemu Knihtinen",
+          "periodId": 2,
+          "personId": "794bb8b2-90bc-11f1-84b6-4554ddfa8cbf",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/3edf9de7cdbc4176adabcd3f956e86b2?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 25,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 26
+          },
+          "success": null,
+          "x": 68.86,
+          "y": 62.07
+        },
+        {
+          "bib": "5",
+          "clock": "PT0M8S",
+          "desc": "2pt Jump Shot",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "966e6a71-bc20-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "2pt",
+          "name": "Joonas Timonen",
+          "periodId": 2,
+          "personId": "037a0c46-90bd-11f1-ad46-e9a336bf1467",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/503ac765db384fa19bb7cae11494e27b?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 21,
+          "y": 56.12
+        },
+        {
+          "bib": "15",
+          "clock": "PT0M8S",
+          "desc": "Defensive Rebound",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "98334bf0-bc20-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "defensive",
+          "eventType": "rebound",
+          "name": "Victor Iwuakor",
+          "periodId": 2,
+          "personId": "bd6db3e4-90bc-11f1-ae39-916f627ff7ec",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/6b807fb4f0d0410ea9f1b7bddf678147?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "13",
+          "clock": "PT0M0S",
+          "desc": "3pt Jump Shot",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "9b21e061-bc20-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "3pt",
+          "name": "Lassi Nikkarinen",
+          "periodId": 2,
+          "personId": "0289786d-90bc-11f1-a8d5-797de5732515",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 51.42,
+          "y": 30.61
+        }
+      ],
+      "isOvertime": false,
+      "isShootout": false,
+      "labels": {
+        "end": "Period 2: End",
+        "shortLabel": "P2",
+        "start": "Period 2: Start"
+      },
+      "periodId": 2,
+      "started": true,
+      "teamScore": {
+        "d31984cb-90a6-11f1-997e-e7d7c2463142": 31,
+        "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 24
+      }
+    },
+    {
+      "durationMinutes": 10,
+      "elapsedMinutesBeforePeriod": 20,
+      "ended": true,
+      "events": [
+        {
+          "bib": "2",
+          "clock": "PT9M42S",
+          "desc": "3pt Jump Shot",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "787421b1-bc23-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "3pt",
+          "name": "Stevie Strong",
+          "periodId": 3,
+          "personId": "00b8b2c2-a83a-11f1-ac95-dbfd521311a7",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 29.13,
+          "y": 70.07
+        },
+        {
+          "bib": "3",
+          "clock": "PT9M42S",
+          "desc": "Defensive Rebound",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "7a78a440-bc23-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "defensive",
+          "eventType": "rebound",
+          "name": "Keonte Kennedy",
+          "periodId": 3,
+          "personId": "96191371-abc9-11f1-a344-798b3c09e270",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "4",
+          "clock": "PT9M20S",
+          "desc": "2pt Layup",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "858ca3e1-bc23-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "layup",
+          "eventType": "2pt",
+          "name": "Rene Rougeau",
+          "periodId": 3,
+          "personId": "bbf4bb82-90b9-11f1-bbf0-7106e55498b7",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/8d108ef1c7d249728ea55adafd0e4166?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 94.52,
+          "y": 41.84
+        },
+        {
+          "bib": "7",
+          "clock": "PT9M20S",
+          "desc": "Defensive Rebound",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "876eaa50-bc23-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "defensive",
+          "eventType": "rebound",
+          "name": "Josiah Harris",
+          "periodId": 3,
+          "personId": "fe07789e-a839-11f1-9e43-33a5e0826522",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "7",
+          "clock": "PT9M4S",
+          "desc": "2pt Jump Shot",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "8f2cc831-bc23-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "2pt",
+          "name": "Josiah Harris",
+          "periodId": 3,
+          "personId": "fe07789e-a839-11f1-9e43-33a5e0826522",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 11.32,
+          "y": 28.74
+        },
+        {
+          "bib": "3",
+          "clock": "PT9M4S",
+          "desc": "Defensive Rebound",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "91290d60-bc23-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "defensive",
+          "eventType": "rebound",
+          "name": "Keonte Kennedy",
+          "periodId": 3,
+          "personId": "96191371-abc9-11f1-a344-798b3c09e270",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "3",
+          "clock": "PT8M50S",
+          "desc": "3pt Jump Shot",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "97918650-bc23-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "3pt",
+          "name": "Keonte Kennedy",
+          "periodId": 3,
+          "personId": "96191371-abc9-11f1-a344-798b3c09e270",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 76.35,
+          "y": 88.1
+        },
+        {
+          "bib": "7",
+          "clock": "PT8M50S",
+          "desc": "Defensive Rebound",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "9946b060-bc23-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "defensive",
+          "eventType": "rebound",
+          "name": "Josiah Harris",
+          "periodId": 3,
+          "personId": "fe07789e-a839-11f1-9e43-33a5e0826522",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "2",
+          "clock": "PT8M36S",
+          "desc": "2pt Jump Shot",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "9fba4ce0-bc23-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "2pt",
+          "name": "Stevie Strong",
+          "periodId": 3,
+          "personId": "00b8b2c2-a83a-11f1-ac95-dbfd521311a7",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 56,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 50
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 12.6,
+          "y": 26.87
+        },
+        {
+          "bib": "7",
+          "clock": "PT0M19S",
+          "desc": "2pt Jump Shot",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "f5dd7821-bc25-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "2pt",
+          "name": "Josiah Harris",
+          "periodId": 3,
+          "personId": "fe07789e-a839-11f1-9e43-33a5e0826522",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": true,
+          "successString": "made",
+          "x": 5.57,
+          "y": 52.04
+        },
+        {
+          "bib": "1",
+          "clock": "PT0M19S",
+          "desc": "Assist",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "f83fd220-bc25-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": null,
+          "eventType": "assist",
+          "name": "THOMAS RÖNNHOLM",
+          "periodId": 3,
+          "personId": "c416fd86-90bd-11f1-b262-7b525a68ccc9",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/fb3d74c83ce9401093632e6076b3598d?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "5",
+          "clock": "PT0M3S",
+          "desc": "3pt Jump Shot",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "ff038a71-bc25-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "3pt",
+          "name": "Tyrese Williams",
+          "periodId": 3,
+          "personId": "d166d74d-abc9-11f1-9a84-ab2c6646cd34",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 72.79,
+          "y": 21.09
+        }
+      ],
+      "isOvertime": false,
+      "isShootout": false,
+      "labels": {
+        "end": "Period 3: End",
+        "shortLabel": "P3",
+        "start": "Period 3: Start"
+      },
+      "periodId": 3,
+      "started": true,
+      "teamScore": {
+        "d31984cb-90a6-11f1-997e-e7d7c2463142": 23,
+        "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 16
+      }
+    },
+    {
+      "durationMinutes": 10,
+      "elapsedMinutesBeforePeriod": 30,
+      "ended": true,
+      "events": [
+        {
+          "bib": "4",
+          "clock": "PT10M0S",
+          "desc": "Substitution In",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "4fbecec0-bc26-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "in",
+          "eventType": "substitution",
+          "name": "Rene Rougeau",
+          "periodId": 4,
+          "personId": "bbf4bb82-90b9-11f1-bbf0-7106e55498b7",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/8d108ef1c7d249728ea55adafd0e4166?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "11",
+          "clock": "PT10M0S",
+          "desc": "Substitution Out",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "4fbef5d0-bc26-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "out",
+          "eventType": "substitution",
+          "name": "REMU RAITANEN",
+          "periodId": 4,
+          "personId": "1da7c9bb-90bc-11f1-97db-e9ae9e26fc7d",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "13",
+          "clock": "PT10M0S",
+          "desc": "Substitution In",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "4fbef5d1-bc26-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "in",
+          "eventType": "substitution",
+          "name": "Lassi Nikkarinen",
+          "periodId": 4,
+          "personId": "0289786d-90bc-11f1-a8d5-797de5732515",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "25",
+          "clock": "PT10M0S",
+          "desc": "Substitution Out",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "4fbef5d2-bc26-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "out",
+          "eventType": "substitution",
+          "name": "Lenni Hervola",
+          "periodId": 4,
+          "personId": "a977a6d2-90bd-11f1-92f4-83767142611d",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/fe1293407e4b41ff90e2a15317e9199c?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "3",
+          "clock": "PT10M0S",
+          "desc": "Substitution In",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "4fbea7b1-bc26-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "in",
+          "eventType": "substitution",
+          "name": "Keonte Kennedy",
+          "periodId": 4,
+          "personId": "96191371-abc9-11f1-a344-798b3c09e270",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "30",
+          "clock": "PT10M0S",
+          "desc": "Substitution Out",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "4fbf1ce0-bc26-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "out",
+          "eventType": "substitution",
+          "name": "Timi Puittinen",
+          "periodId": 4,
+          "personId": "6a27d731-90bb-11f1-b94b-e9ae9e26fc7d",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "1",
+          "clock": "PT10M0S",
+          "desc": "Substitution Out",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "4fbf1ce2-bc26-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "out",
+          "eventType": "substitution",
+          "name": "THOMAS RÖNNHOLM",
+          "periodId": 4,
+          "personId": "c416fd86-90bd-11f1-b262-7b525a68ccc9",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/fb3d74c83ce9401093632e6076b3598d?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "2",
+          "clock": "PT10M0S",
+          "desc": "Substitution In",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "4fbf43f0-bc26-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "in",
+          "eventType": "substitution",
+          "name": "Stevie Strong",
+          "periodId": 4,
+          "personId": "00b8b2c2-a83a-11f1-ac95-dbfd521311a7",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "31",
+          "clock": "PT10M0S",
+          "desc": "Substitution In",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "4fbf43f2-bc26-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "in",
+          "eventType": "substitution",
+          "name": "Topias Palmi",
+          "periodId": 4,
+          "personId": "61f2db99-90bb-11f1-bce6-27f2444e308f",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 79,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 66
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "2",
+          "clock": "PT0M26S",
+          "desc": "Assist",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "a95d48a0-bc29-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": null,
+          "eventType": "assist",
+          "name": "Stevie Strong",
+          "periodId": 4,
+          "personId": "00b8b2c2-a83a-11f1-ac95-dbfd521311a7",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 102,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 83
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        },
+        {
+          "bib": "25",
+          "clock": "PT0M15S",
+          "desc": "3pt Jump Shot",
+          "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+          "eventId": "acdc5d41-bc29-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "jumpShot",
+          "eventType": "3pt",
+          "name": "Lenni Hervola",
+          "periodId": 4,
+          "personId": "a977a6d2-90bd-11f1-92f4-83767142611d",
+          "personImage": "https://images.dc.connect.sportradar.com/b1ebt/fe1293407e4b41ff90e2a15317e9199c?size=400",
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 102,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 83
+          },
+          "success": false,
+          "successString": "missed",
+          "x": 67.85,
+          "y": 58.67
+        },
+        {
+          "bib": "31",
+          "clock": "PT0M15S",
+          "desc": "Defensive Rebound",
+          "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+          "eventId": "aea906f0-bc29-11f1-bd5c-73ac5b6f033b",
+          "eventSubType": "defensive",
+          "eventType": "rebound",
+          "name": "Topias Palmi",
+          "periodId": 4,
+          "personId": "61f2db99-90bb-11f1-bce6-27f2444e308f",
+          "personImage": null,
+          "scores": {
+            "d31984cb-90a6-11f1-997e-e7d7c2463142": 102,
+            "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 83
+          },
+          "success": null,
+          "x": null,
+          "y": null
+        }
+      ],
+      "isOvertime": false,
+      "isShootout": false,
+      "labels": {
+        "end": "Period 4: End",
+        "shortLabel": "P4",
+        "start": "Period 4: Start"
+      },
+      "periodId": 4,
+      "started": true,
+      "teamScore": {
+        "d31984cb-90a6-11f1-997e-e7d7c2463142": 23,
+        "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": 17
+      }
+    }
+  ]
+}

@@ -1,131 +1,75 @@
-from __future__ import annotations
+"""Compatibility export of historical play-by-play through shared acquisition."""
 
-import json
 import time
 from pathlib import Path
-from typing import Optional, Dict, Any
 
-from ..baskethotel_api import BasketHotelAPI
+from ..pipeline import BatchReport, Component, Provider
+from ..pipeline.export import write_json
 from .common import (
     _fetch_baskethotel_schedule_game_ids,
     _get_baskethotel_league_id,
-    _get_baskethotel_session,
     _resolve_baskethotel_season_id,
 )
+from .game_exports import enrich_matches, load_matches, season_reference
 
 
 def download_baskethotel_season_playbyplay(
     category_id: str,
     season_id: str,
     output_file: str,
-    limit_games: Optional[int] = None,
+    limit_games: int | None = None,
     max_workers: int = 5,
     show_header: bool = True,
     verbose: bool = True,
-) -> None:
-    """
-    Download BasketHotel play-by-play for every game in a season.
-
-    Args:
-        category_id: League category identifier (e.g., "4" for Korisliiga)
-        season_id: BasketHotel season name (e.g., "2015-2016") or season ID
-        output_file: Path where output file will be saved
-        max_workers: Number of concurrent workers for parallel downloads
-        verbose: Whether to show progress output
-    """
-    # NOTE: This is a minimal helper. Prefer season-boxscores with --playbyplay.
+) -> BatchReport:
+    """Keep the legacy JSON envelope; share fetching, resume, and error policy."""
     output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
     league_id = _get_baskethotel_league_id(category_id)
-    resolved_season_id = (
-        _resolve_baskethotel_season_id(season_id, league_id) or season_id
-    )
-
-    if verbose and show_header:
-        print(f"Fetching BasketHotel play-by-play for {season_id}...")
-        print(f"  League ID: {league_id}")
-        print(f"  Season ID: {resolved_season_id}")
-        print(f"  Concurrency: {max_workers} workers")
-        print(f"  Output: {output_path.absolute()}")
-        print(f"{'=' * 60}\n")
-
-    game_ids = _fetch_baskethotel_schedule_game_ids(
-        str(resolved_season_id), league_id, verbose
-    )
+    resolved = _resolve_baskethotel_season_id(season_id, league_id) or season_id
+    ids = _fetch_baskethotel_schedule_game_ids(resolved, league_id, verbose)
     if limit_games is not None:
-        game_ids = list(game_ids)[:limit_games]
-
-    if not game_ids:
-        print("No games found in BasketHotel schedule.")
-        return
-
-    client = BasketHotelAPI()
-    matches_data: list[Dict[str, Any]] = []
-    errors: list[Dict[str, Any]] = []
-
-    def fetch_game(game_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
-        try:
-            session = _get_baskethotel_session()
-            playbyplay = client.fetch_playbyplay_data(
-                game_id=str(game_id),
-                season_id=str(resolved_season_id),
-                league_id=str(league_id),
-                session=session,
-            )
-            return (playbyplay, None)
-        except Exception as exc:
-            return (None, str(exc))
-
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    from tqdm import tqdm
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(fetch_game, gid): gid for gid in game_ids}
-        with tqdm(
-            total=len(game_ids),
-            desc="Fetching BasketHotel play-by-play",
-            disable=not verbose,
-        ) as pbar:
-            for future in as_completed(futures):
-                game_id = futures[future]
-                playbyplay, error = future.result()
-                if playbyplay:
-                    matches_data.append(
-                        {
-                            "match_id": str(game_id),
-                            "playbyplay": playbyplay,
-                        }
-                    )
-                else:
-                    errors.append({"game_id": str(game_id), "error": error})
-                    if verbose and error:
-                        tqdm.write(f"  ✗ Game {game_id}: {error}")
-                pbar.update(1)
-
-    result = {
-        "metadata": {
-            "category_id": category_id,
-            "season_id": str(resolved_season_id),
-            "season_name": season_id,
-            "source": "baskethotel",
-            "league_id": str(league_id),
-            "total_games_requested": len(game_ids),
-            "matches_saved": len(matches_data),
-            "matches_failed": len(errors),
-            "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        if limit_games < 0:
+            raise ValueError("limit_games must be nonnegative")
+        ids = ids[:limit_games]
+    rows, report = enrich_matches(
+        [{"match_id": str(game_id)} for game_id in ids],
+        (Component.PLAYBYPLAY,),
+        season_reference(category_id, resolved, historical=True),
+        cached=load_matches(output_path),
+        cache_dir=output_path.parent / ".cache" / resolved,
+        max_workers=max_workers,
+    )
+    matches = [
+        {"match_id": row["match_id"], "playbyplay": row["playbyplay"]}
+        for row in rows
+        if row.get("playbyplay")
+    ]
+    errors = [
+        {"game_id": row["match_id"], "error": row.get("playbyplay_error")}
+        for row in rows
+        if not row.get("playbyplay")
+    ]
+    write_json(
+        output_path,
+        {
+            "metadata": {
+                "category_id": category_id,
+                "season_id": resolved,
+                "season_name": season_id,
+                "source": Provider.BASKETHOTEL.value,
+                "league_id": league_id,
+                "total_games_requested": len(ids),
+                "matches_saved": len(matches),
+                "matches_failed": len(errors),
+                "conversion_failures": report.failed,
+                "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            "matches": matches,
+            "errors": errors,
         },
-        "matches": matches_data,
-        "errors": errors,
-    }
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(result, f, indent=2, ensure_ascii=False)
-
+    )
     if verbose and show_header:
-        print(f"\n{'=' * 60}")
-        print(f"✓ Successfully fetched {len(matches_data)}/{len(game_ids)} games")
-        if errors:
-            print(f"  - Failed: {len(errors)}")
-        print(f"  - Saved to: {output_path}")
-        print(f"{'=' * 60}")
+        print(
+            f"Saved {len(matches)}/{len(ids)} historical play-by-play responses to {output_path}"
+        )
+    return report

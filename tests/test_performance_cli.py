@@ -17,7 +17,6 @@ import pytest
 
 from koris_api import main
 
-
 pytestmark = [pytest.mark.integration, pytest.mark.performance]
 
 
@@ -31,7 +30,7 @@ def _run_cli(args: list[str]) -> float:
     original_argv = sys.argv[:]
     try:
         sys.argv = ["koris-api", *args]
-        main()
+        assert main() == 0
     finally:
         sys.argv = original_argv
     return time.monotonic() - start
@@ -42,21 +41,22 @@ def _assert_max_duration(elapsed: float, env_key: str) -> None:
     if not limit:
         return
     max_seconds = float(limit)
-    assert elapsed <= max_seconds, f"{env_key} exceeded: {elapsed:.1f}s > {max_seconds:.1f}s"
+    assert elapsed <= max_seconds, (
+        f"{env_key} exceeded: {elapsed:.1f}s > {max_seconds:.1f}s"
+    )
 
 
 def test_baskethotel_season_2010_boxscores(tmp_path: Path) -> None:
     _require_perf_opt_in()
-    output_file = tmp_path / "season_2010_baskethotel.json"
+    output_file = tmp_path / "season_boxscores_2010-2011.json"
     elapsed = _run_cli(
         [
-            "season-baskethotel-boxscores",
-            "--category-id",
+            "season",
             "4",
-            "--season-id",
             "2010-2011",
-            "--output",
-            str(output_file),
+            "--box-score",
+            "--output-dir",
+            str(tmp_path),
         ]
     )
     _assert_max_duration(elapsed, "KORIS_PERF_MAX_SECONDS_2010")
@@ -69,17 +69,15 @@ def test_baskethotel_season_2010_boxscores(tmp_path: Path) -> None:
 
 def test_genius_season_2024_boxscores(tmp_path: Path) -> None:
     _require_perf_opt_in()
-    output_file = tmp_path / "season_2024_genius.json"
+    output_file = tmp_path / "season_boxscores_2024-2025.json"
     elapsed = _run_cli(
         [
-            "season-boxscores",
-            "--category-id",
+            "season",
             "4",
-            "--season-id",
             "2024-2025",
-            "--adv-players",
-            "--output",
-            str(output_file),
+            "--box-score",
+            "--output-dir",
+            str(tmp_path),
         ]
     )
     _assert_max_duration(elapsed, "KORIS_PERF_MAX_SECONDS_2024")

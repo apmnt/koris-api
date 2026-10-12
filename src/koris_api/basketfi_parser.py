@@ -1,13 +1,15 @@
 """Parser for BasketFi API JSON responses."""
 
-from typing import Dict, Any, List, Optional
+from collections.abc import Mapping, Sequence
+
+from .data import fields, records, text
 
 
 class BasketFiParser:
     """Parser for BasketFi API JSON responses."""
 
     @staticmethod
-    def extract_category_name(category_data: Dict[str, Any]) -> str:
+    def extract_category_name(category_data: Mapping[str, object]) -> str:
         """
         Extract category name from category API response.
 
@@ -18,11 +20,14 @@ class BasketFiParser:
             Category name, or "Unknown" if not found
         """
         if "category" in category_data:
-            return category_data["category"].get("category_name", "Unknown")
+            return (
+                text(fields(category_data["category"]).get("category_name"))
+                or "Unknown"
+            )
         return "Unknown"
 
     @staticmethod
-    def extract_team_name(team_data: Dict[str, Any]) -> str:
+    def extract_team_name(team_data: Mapping[str, object]) -> str:
         """
         Extract team name from team API response.
 
@@ -33,11 +38,11 @@ class BasketFiParser:
             Team name, or "Unknown" if not found
         """
         if "team" in team_data:
-            return team_data["team"].get("team_name", "Unknown")
+            return text(fields(team_data["team"]).get("team_name")) or "Unknown"
         return "Unknown"
 
     @staticmethod
-    def extract_matches(matches_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def extract_matches(matches_data: Mapping[str, object]) -> list[dict[str, object]]:
         """
         Extract matches list from matches API response.
 
@@ -50,20 +55,19 @@ class BasketFiParser:
         matches = matches_data.get("matches", [])
         if not isinstance(matches, list):
             return []
-        for match in matches:
+        result: list[dict[str, object]] = []
+        for raw_match in records(matches_data.get("matches")):
+            match = dict(raw_match)
             status = match.get("status")
             if status not in {"Played", "Fixture"}:
                 home_score = match.get("fs_A")
-                status = (
-                    "Played"
-                    if home_score not in (None, "")
-                    else "Fixture"
-                )
+                status = "Played" if home_score not in (None, "") else "Fixture"
                 match["status"] = status
-        return matches
+            result.append(match)
+        return result
 
     @staticmethod
-    def is_match_played(match: Dict[str, Any]) -> bool:
+    def is_match_played(match: Mapping[str, object]) -> bool:
         """
         Check if a match has been played (has scores).
 
@@ -83,7 +87,9 @@ class BasketFiParser:
         )
 
     @staticmethod
-    def parse_match(match: Dict[str, Any], season_name: Optional[str] = None) -> Dict[str, Any]:
+    def parse_match(
+        match: Mapping[str, object], season_name: str | None = None
+    ) -> dict[str, object]:
         """
         Parse and transform a match from BasketFi API format to a standardized format.
 
@@ -117,17 +123,19 @@ class BasketFiParser:
             "venue": match.get("venue_name"),
             "competition": match.get("competition_name"),
             "category": match.get("category_name"),
-            "season": season_name or match.get("season_id") or match.get("competition_id"),
+            "season": season_name
+            or match.get("season_id")
+            or match.get("competition_id"),
         }
 
         return match_data
 
     @staticmethod
     def parse_matches(
-        matches: List[Dict[str, Any]],
-        season_name: Optional[str] = None,
+        matches: Sequence[Mapping[str, object]],
+        season_name: str | None = None,
         only_played: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, object]]:
         """
         Parse a list of matches from BasketFi API format.
 
@@ -139,7 +147,7 @@ class BasketFiParser:
         Returns:
             List of parsed match dictionaries
         """
-        processed_matches = []
+        processed_matches: list[dict[str, object]] = []
 
         for match in matches:
             # Check if match has been played (has scores)
@@ -153,10 +161,10 @@ class BasketFiParser:
 
     @staticmethod
     def filter_matches_by_season(
-        matches: List[Dict[str, Any]],
+        matches: Sequence[Mapping[str, object]],
         competition_id: str,
-        category_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        category_id: str | None = None,
+    ) -> list[dict[str, object]]:
         """
         Filter matches by competition/season ID and optionally category ID.
 
@@ -168,7 +176,7 @@ class BasketFiParser:
         Returns:
             Filtered list of matches
         """
-        filtered = []
+        filtered: list[dict[str, object]] = []
         for match in matches:
             # Check if match belongs to the requested competition/season
             match_comp_id = match.get("competition_id")
@@ -176,13 +184,13 @@ class BasketFiParser:
             if match_comp_id == competition_id and (
                 not category_id or match_category_id == category_id
             ):
-                filtered.append(match)
+                filtered.append(dict(match))
         return filtered
 
     @staticmethod
     def extract_teams_from_matches(
-        matches: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        matches: Sequence[Mapping[str, object]],
+    ) -> list[dict[str, object]]:
         """
         Extract unique teams from a list of matches.
 
@@ -192,31 +200,19 @@ class BasketFiParser:
         Returns:
             List of unique team dictionaries with team_id and team_name
         """
-        teams_dict: Dict[str, Dict[str, Any]] = {}
+        teams: dict[str, dict[str, object]] = {}
         for match in matches:
-            home_id = match.get("home_team_id")
-            home_name = match.get("home_team")
-            away_id = match.get("away_team_id")
-            away_name = match.get("away_team")
-
-            if home_id and home_name:
-                if home_id not in teams_dict:
-                    teams_dict[home_id] = {
-                        "team_id": home_id,
-                        "team_name": home_name,
-                    }
-
-            if away_id and away_name:
-                if away_id not in teams_dict:
-                    teams_dict[away_id] = {
-                        "team_id": away_id,
-                        "team_name": away_name,
-                    }
-
-        return list(teams_dict.values())
+            for side in ("home", "away"):
+                team_id = match.get(f"{side}_team_id")
+                name = match.get(f"{side}_team")
+                if team_id and name:
+                    _ = teams.setdefault(
+                        str(team_id), {"team_id": team_id, "team_name": name}
+                    )
+        return list(teams.values())
 
     @staticmethod
-    def extract_category_external_id(category_data: Dict[str, Any]) -> Optional[str]:
+    def extract_category_external_id(category_data: Mapping[str, object]) -> str | None:
         """
         Extract category_external_id from category API response.
 
@@ -227,7 +223,9 @@ class BasketFiParser:
             External ID string if found, None otherwise
         """
         if "category" in category_data:
-            external_id = category_data["category"].get("category_external_id")
+            external_id = text(
+                fields(category_data["category"]).get("category_external_id")
+            )
             if external_id and external_id.strip():
                 return external_id.strip()
         return None

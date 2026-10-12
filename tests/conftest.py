@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -18,7 +19,7 @@ def pytest_configure(config):
 
 
 @pytest.fixture(scope="session")
-def playbyplay_2701971() -> dict:
+def playbyplay_2701971() -> dict[str, Any]:
     fixture = Path("tests/fixtures/genius_sports/playbyplay_2701971.html")
     html = fixture.read_text(encoding="utf-8")
     return GeniusSportsParser.parse_playbyplay_html(html)

@@ -1,15 +1,16 @@
 """Parser for Genius Sports HTML responses."""
 
-from typing import Dict, Any, List, Optional
-from bs4 import BeautifulSoup, NavigableString, Tag
 import re
+from typing import Any
+
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 
 class GeniusSportsParser:
     """Parser for Genius Sports HTML content."""
 
     @staticmethod
-    def _safe_int(value: Optional[str]) -> Optional[int]:
+    def _safe_int(value: str | None) -> int | None:
         if value is None:
             return None
         text = str(value).strip()
@@ -21,7 +22,7 @@ class GeniusSportsParser:
             return None
 
     @staticmethod
-    def parse_boxscore_html(html_content: str) -> Dict[str, Any]:
+    def parse_boxscore_html(html_content: str) -> dict[str, Any]:
         """
         Parse box score HTML content and extract player and team statistics.
 
@@ -33,7 +34,7 @@ class GeniusSportsParser:
         """
         soup = BeautifulSoup(html_content, "html.parser")
 
-        result: Dict[str, Any] = {"match_info": {}, "teams": []}
+        result: dict[str, Any] = {"match_info": {}, "teams": []}
 
         # Extract match info from header
         match_header: NavigableString | Tag | None = soup.find(
@@ -52,10 +53,8 @@ class GeniusSportsParser:
             result["match_info"]["home_team"] = (
                 home_name_elem.get_text(strip=True) if home_name_elem else None
             )
-            result["match_info"]["home_score"] = (
-                GeniusSportsParser._safe_int(
-                    home_score_elem.get_text(strip=True) if home_score_elem else None
-                )
+            result["match_info"]["home_score"] = GeniusSportsParser._safe_int(
+                home_score_elem.get_text(strip=True) if home_score_elem else None
             )
 
         if away_wrapper and isinstance(away_wrapper, Tag):
@@ -64,10 +63,8 @@ class GeniusSportsParser:
             result["match_info"]["away_team"] = (
                 away_name_elem.get_text(strip=True) if away_name_elem else None
             )
-            result["match_info"]["away_score"] = (
-                GeniusSportsParser._safe_int(
-                    away_score_elem.get_text(strip=True) if away_score_elem else None
-                )
+            result["match_info"]["away_score"] = GeniusSportsParser._safe_int(
+                away_score_elem.get_text(strip=True) if away_score_elem else None
             )
 
         # Get match status
@@ -99,7 +96,7 @@ class GeniusSportsParser:
         tables = soup.find_all("table", class_="tableClass")
 
         for table in tables:
-            team_data: Dict[str, Any] = {"players": [], "totals": {}, "coaches": {}}
+            team_data: dict[str, Any] = {"players": [], "totals": {}, "coaches": {}}
 
             # Get team name from preceding h4
             h4 = table.find_previous("h4")
@@ -124,7 +121,7 @@ class GeniusSportsParser:
                     if len(cells) < len(headers):
                         continue
 
-                    player_stat: Dict[str, Any] = {}
+                    player_stat: dict[str, Any] = {}
                     for i, cell in enumerate(cells):
                         if i >= len(headers):
                             break
@@ -207,7 +204,9 @@ class GeniusSportsParser:
         return result
 
     @staticmethod
-    def parse_playbyplay_html(html_content: str) -> Dict[str, Any]:
+    def parse_playbyplay_html(
+        html_content: str, *, include_analysis: bool = True
+    ) -> dict[str, Any]:
         """
         Parse play-by-play HTML content and extract game events.
 
@@ -219,12 +218,12 @@ class GeniusSportsParser:
         """
         soup = BeautifulSoup(html_content, "html.parser")
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "match_info": {},
             "events": [],
             "players": [],
         }
-        player_index: Dict[tuple, int] = {}
+        player_index: dict[tuple[str | None, ...], int] = {}
 
         # Extract match info from header
         match_header = soup.find("div", class_="match-header")
@@ -239,10 +238,8 @@ class GeniusSportsParser:
                 result["match_info"]["home_team"] = (
                     home_name_elem.get_text(strip=True) if home_name_elem else None
                 )
-                result["match_info"]["home_score"] = (
-                    GeniusSportsParser._safe_int(
-                        home_score_elem.get_text(strip=True) if home_score_elem else None
-                    )
+                result["match_info"]["home_score"] = GeniusSportsParser._safe_int(
+                    home_score_elem.get_text(strip=True) if home_score_elem else None
                 )
 
             if away_wrapper and isinstance(away_wrapper, Tag):
@@ -251,10 +248,8 @@ class GeniusSportsParser:
                 result["match_info"]["away_team"] = (
                     away_name_elem.get_text(strip=True) if away_name_elem else None
                 )
-                result["match_info"]["away_score"] = (
-                    GeniusSportsParser._safe_int(
-                        away_score_elem.get_text(strip=True) if away_score_elem else None
-                    )
+                result["match_info"]["away_score"] = GeniusSportsParser._safe_int(
+                    away_score_elem.get_text(strip=True) if away_score_elem else None
                 )
 
             # Get match status
@@ -367,9 +362,7 @@ class GeniusSportsParser:
 
                     # Fallback: parse from action text
                     if not player_name and "," in action:
-                        number_match = re.match(
-                            r"^\s*(\d+)\s*,\s*([^,]+)\s*,", action
-                        )
+                        number_match = re.match(r"^\s*(\d+)\s*,\s*([^,]+)\s*,", action)
                         if number_match:
                             player_number = number_match.group(1).strip()
                             player_name = number_match.group(2).strip()
@@ -414,23 +407,23 @@ class GeniusSportsParser:
 
                 result["events"].append(event)
 
-        # Populate running score for all events
-        GeniusSportsParser._populate_running_score(result["events"])
+        if include_analysis:
+            from .analysis.possessions import enrich_possessions
 
-        # Calculate possessions from events
-        result["possessions"] = GeniusSportsParser._calculate_possessions(
-            result["events"]
-        )
+            GeniusSportsParser._populate_running_score(result["events"])
+            result["events"], result["possessions"] = enrich_possessions(
+                result["events"]
+            )
 
         return result
 
     @staticmethod
     def _clean_action_text(
-        action: Optional[str],
-        player_name: Optional[str],
-        player_number: Optional[str],
-        event_type: Optional[str],
-    ) -> Optional[str]:
+        action: str | None,
+        player_name: str | None,
+        player_number: str | None,
+        event_type: str | None,
+    ) -> str | None:
         if not action:
             return None
 
@@ -499,7 +492,7 @@ class GeniusSportsParser:
         return detail
 
     @staticmethod
-    def _populate_running_score(events: List[Dict[str, Any]]) -> None:
+    def _populate_running_score(events: list[dict[str, Any]]) -> None:
         """
         Populate running score for all events based on scoring events.
 
@@ -519,384 +512,15 @@ class GeniusSportsParser:
                 event["score"] = current_score
 
     @staticmethod
-    def _calculate_possessions(events: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Calculate possessions from play-by-play events.
+    def _calculate_possessions(events: list[dict[str, Any]]) -> dict[str, Any]:
+        from .analysis.possessions import calculate_possessions
 
-        A possession is when one team has control of the ball. It ends when:
-        - The other team gains control
-        - The ball becomes dead after a made field goal or last free throw
-        - The period ends
-
-        Args:
-            events: List of play-by-play events
-
-        Returns:
-            Dictionary with possession statistics and detailed possession list
-        """
-        possessions: List[Dict[str, Any]] = []
-        current_possession: Dict[str, Any] | None = None
-
-        def parse_time(time_str: str | None) -> Optional[int]:
-            if time_str and ":" in time_str:
-                try:
-                    parts = time_str.split(":")
-                    if len(parts) >= 2:
-                        return int(parts[0]) * 60 + int(parts[1])
-                except (ValueError, IndexError):
-                    return None
-            return None
-
-        def period_start_clock(period_label: str | None) -> Optional[str]:
-            if not period_label:
-                return None
-            upper = period_label.upper()
-            if re.fullmatch(r"[PQ]\d+", upper):
-                return "10:00:00"
-            if upper.startswith("OT"):
-                return "05:00:00"
-            return None
-
-        periods_with_possessions: set[str] = set()
-
-        def start_possession(
-            team_id: str,
-            time_str: str | None,
-            time_seconds: Optional[int],
-            period: str | None,
-            event: Dict[str, Any],
-        ) -> Dict[str, Any]:
-            normalized_start_time = time_str
-            normalized_start_seconds = time_seconds
-
-            default_clock = period_start_clock(period)
-            if period and period not in periods_with_possessions and default_clock:
-                normalized_start_time = default_clock
-                normalized_start_seconds = parse_time(default_clock)
-                periods_with_possessions.add(period)
-
-            return {
-                "possession_number": len(possessions) + 1,
-                "team": team_id,
-                "start_time": normalized_start_time,
-                "start_time_seconds": normalized_start_seconds,
-                "start_period": period,
-                "end_time": None,
-                "end_time_seconds": None,
-                "end_period": None,
-                "duration_seconds": None,
-                "events": [],
-            }
-
-        def end_possession(
-            possession: Dict[str, Any],
-            time_str: str | None,
-            time_seconds: Optional[int],
-            period: str | None,
-            event_payload: Dict[str, Any],
-        ) -> None:
-            possession["end_time"] = time_str
-            possession["end_time_seconds"] = time_seconds
-            possession["end_period"] = period
-            if not possession.get("events"):
-                payload = dict(event_payload)
-                payload["possession_event_role"] = "start_end"
-                possession["events"].append(payload)
-            else:
-                last = possession["events"][-1]
-                prev_role = last.get("possession_event_role")
-                if prev_role == "start":
-                    last["possession_event_role"] = "start_end"
-                elif prev_role is None:
-                    last["possession_event_role"] = "end"
-
-            if (
-                possession["start_time_seconds"] is not None
-                and time_seconds is not None
-                and possession["start_period"] == period
-            ):
-                duration = possession["start_time_seconds"] - time_seconds
-                possession["duration_seconds"] = max(0, duration)
-            elif (
-                possession["start_time_seconds"] is not None
-                and time_seconds is not None
-            ):
-                possession["duration_seconds"] = None
-
-        def find_next_event_with_same_time(
-            start_idx: int, time_str: str | None, period: str | None
-        ) -> Optional[Dict[str, Any]]:
-            if time_str is None:
-                return None
-            for future in events[start_idx + 1 :]:
-                future_time = future.get("time")
-                future_period = future.get("period")
-                if future_time != time_str or future_period != period:
-                    return None
-                return future
-            return None
-
-        def has_free_throw_ahead(
-            start_idx: int, team_id: str, time_str: str | None, period: str | None
-        ) -> bool:
-            if time_str is None:
-                return False
-            for future in events[start_idx + 1 :]:
-                future_time = future.get("time")
-                future_period = future.get("period")
-                if future_time != time_str or future_period != period:
-                    return False
-                if (
-                    future.get("event_type") == "freethrow"
-                    and future.get("team") == team_id
-                ):
-                    return True
-            return False
-
-        def add_event_to_possession(
-            possession: Dict[str, Any],
-            payload: Dict[str, Any],
-            role: Optional[str] = None,
-        ) -> None:
-            event_copy = dict(payload)
-            if role is None and not possession["events"]:
-                role = "start"
-            event_copy["possession_event_role"] = role
-            possession["events"].append(event_copy)
-
-        expected_next_team: Optional[str] = None
-        non_possession_start_events = {
-            "substitution",
-            "timeout",
-            "assist",
-            "block",
-            "foul",
-            "foulon",
-        }
-
-        for idx, event in enumerate(events):
-            event_type = event.get("event_type", "")
-            team = event.get("team", "")
-            time_str = event.get("time", "")
-            period = event.get("period", "")
-            action = event.get("action", "")
-            player_id = event.get("player_id")
-            score = event.get("score")
-            action_lower = (action or "").lower()
-            event_payload = {
-                "event_type": event_type,
-                "time": time_str,
-                "action": action,
-                "team": team,
-                "player_id": player_id,
-                "player_name": event.get("player_name"),
-                "player_number": event.get("player_number"),
-                "score": score,
-            }
-
-            # Period/game marker closes any active possession.
-            # Some feeds emit non-standard end-of-period clocks (for example
-            # "00:00:60"), so we do not require an exact "00:00" match here.
-            if event_type in ["period", "game"]:
-                if current_possession:
-                    marker_time = "00:00:00"
-                    marker_period = current_possession.get("start_period") or period
-                    end_possession(
-                        current_possession,
-                        marker_time,
-                        parse_time(marker_time),
-                        marker_period,
-                        event_payload,
-                    )
-                    possessions.append(current_possession)
-                    current_possession = None
-                expected_next_team = None
-                continue
-
-            # Skip neutral events
-            if team in ["0", None, ""]:
-                continue
-
-            time_seconds = parse_time(time_str)
-
-            if current_possession is None:
-                # Dead-ball/non-possession events should not create a possession.
-                if event_type in non_possession_start_events:
-                    continue
-
-                # If we ended a possession, start the next one only when the
-                # expected team appears in the play-by-play.
-                if expected_next_team and team != expected_next_team:
-                    continue
-
-                if event_type == "jumpball":
-                    if "won" in action_lower:
-                        current_possession = start_possession(
-                            team, time_str, time_seconds, period, event
-                        )
-                        event["possession_number"] = current_possession[
-                            "possession_number"
-                        ]
-                        event["possession_team"] = current_possession["team"]
-                        add_event_to_possession(
-                            current_possession, event_payload, role="start"
-                        )
-                        expected_next_team = None
-                    continue
-                current_possession = start_possession(
-                    expected_next_team or team, time_str, time_seconds, period, event
-                )
-                expected_next_team = None
-            elif event_type == "jumpball":
-                # Ignore non-winning jump ball entries during a possession.
-                if "won" not in action_lower:
-                    continue
-
-            current_team = current_possession["team"] if current_possession else None
-
-            # Determine if possession changes
-            possession_change = False
-            new_team = None
-            event_belongs_to_new_possession = False
-
-            # Made field goal - other team gets possession unless an and-1 follows
-            if event_type in ["2pt", "3pt"] and "made" in action_lower:
-                if current_team == team and not has_free_throw_ahead(
-                    idx, team, time_str, period
-                ):
-                    possession_change = True
-                    new_team = "1" if team == "2" else "2"
-
-            # Free throws: only last made FT ends possession
-            elif event_type == "freethrow" and "made" in action_lower:
-                if current_team == team and not has_free_throw_ahead(
-                    idx, team, time_str, period
-                ):
-                    next_event = find_next_event_with_same_time(
-                        idx, time_str, period
-                    )
-                    retained_events = {
-                        "2pt",
-                        "3pt",
-                        "turnover",
-                        "rebound",
-                        "jumpball",
-                        "steal",
-                    }
-                    if next_event and next_event.get("team") == team and (
-                        next_event.get("event_type") in retained_events
-                    ):
-                        possession_change = False
-                    else:
-                        possession_change = True
-                        new_team = "1" if team == "2" else "2"
-
-            # Rebound: defensive rebound changes possession, offensive does not
-            elif event_type == "rebound":
-                if current_team and team != current_team:
-                    possession_change = True
-                    new_team = team
-                    event_belongs_to_new_possession = True
-
-            # Turnover - other team gets possession
-            elif event_type == "turnover":
-                if current_team == team:
-                    possession_change = True
-                    new_team = "1" if team == "2" else "2"
-
-            # Steal - stealing team gets possession
-            elif event_type == "steal":
-                if current_team and team != current_team:
-                    possession_change = True
-                    new_team = team
-                    event_belongs_to_new_possession = True
-
-            # Jump ball - team in event gains control
-            elif event_type == "jumpball":
-                if "won" in action_lower and current_team and team != current_team:
-                    possession_change = True
-                    new_team = team
-                    event_belongs_to_new_possession = True
-
-            # Foul does not automatically change possession
-
-            if current_possession and not event_belongs_to_new_possession:
-                event["possession_number"] = current_possession["possession_number"]
-                event["possession_team"] = current_possession["team"]
-                add_event_to_possession(current_possession, event_payload)
-
-            # Handle possession change
-            if possession_change and new_team and new_team != "0":
-                # End current possession
-                if current_possession:
-                    end_possession(
-                        current_possession, time_str, time_seconds, period, event_payload
-                    )
-                    possessions.append(current_possession)
-
-                if event_belongs_to_new_possession:
-                    current_possession = start_possession(
-                        new_team, time_str, time_seconds, period, event
-                    )
-                    event["possession_number"] = current_possession[
-                        "possession_number"
-                    ]
-                    event["possession_team"] = current_possession["team"]
-                    add_event_to_possession(
-                        current_possession, event_payload, role="start"
-                    )
-                    expected_next_team = None
-                else:
-                    # Start next possession immediately using the change-of-control
-                    # event as the possession start marker.
-                    current_possession = start_possession(
-                        new_team, time_str, time_seconds, period, event
-                    )
-                    add_event_to_possession(
-                        current_possession, event_payload, role="start"
-                    )
-                    expected_next_team = None
-
-        # Close final possession
-        if current_possession:
-            possessions.append(current_possession)
-
-        # Calculate statistics
-        team1_possessions = [p for p in possessions if p["team"] == "1"]
-        team2_possessions = [p for p in possessions if p["team"] == "2"]
-
-        # Calculate average possession length (only for possessions with duration)
-        team1_durations = [
-            p["duration_seconds"]
-            for p in team1_possessions
-            if p.get("duration_seconds") is not None
-        ]
-        team2_durations = [
-            p["duration_seconds"]
-            for p in team2_possessions
-            if p.get("duration_seconds") is not None
-        ]
-
-        team1_avg_duration = (
-            sum(team1_durations) / len(team1_durations) if team1_durations else 0
-        )
-        team2_avg_duration = (
-            sum(team2_durations) / len(team2_durations) if team2_durations else 0
-        )
-
-        return {
-            "total_possessions": len(possessions),
-            "team1_possessions": len(team1_possessions),
-            "team2_possessions": len(team2_possessions),
-            "team1_avg_possession_length_seconds": round(team1_avg_duration, 2),
-            "team2_avg_possession_length_seconds": round(team2_avg_duration, 2),
-            "possessions_list": possessions,
-        }
+        return dict(calculate_possessions(events))
 
     @staticmethod
     def parse_player_gamelog(
-        html_content: str, teams_dict: Dict[str, str]
-    ) -> Dict[str, Any]:
+        html_content: str, teams_dict: dict[str, str]
+    ) -> dict[str, Any]:
         """
         Parse player gamelog HTML content.
 
@@ -909,7 +533,7 @@ class GeniusSportsParser:
         """
         soup = BeautifulSoup(html_content, "html.parser")
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "team": None,
             "team_id": None,
             "games": [],
@@ -932,7 +556,7 @@ class GeniusSportsParser:
 
         # Get game stats - try tbody first, then fall back to all tr elements
         tbody = table.find("tbody")
-        rows: List[Any] = []
+        rows: list[Any] = []
         if tbody and isinstance(tbody, Tag):
             rows = tbody.find_all("tr")
         else:
@@ -950,7 +574,7 @@ class GeniusSportsParser:
             if len(cells) < 2:
                 continue
 
-            game_stat: Dict[str, Any] = {}
+            game_stat: dict[str, Any] = {}
 
             for i, cell in enumerate(cells):
                 if i >= len(headers):
@@ -998,7 +622,7 @@ class GeniusSportsParser:
                     try:
                         # Check if it's a time format (MM:SS)
                         if ":" in value:
-                            value = value  # Keep as string for time
+                            pass  # Keep source clock strings unchanged
                         elif "." in value:
                             value = float(value)
                         else:
@@ -1014,7 +638,7 @@ class GeniusSportsParser:
         return result
 
     @staticmethod
-    def parse_teams_page(html_content: str) -> List[Dict[str, Any]]:
+    def parse_teams_page(html_content: str) -> list[dict[str, Any]]:
         """
         Parse teams page HTML and extract team data.
 
@@ -1047,7 +671,7 @@ class GeniusSportsParser:
         return teams
 
     @staticmethod
-    def parse_players_page(html_content: str) -> List[Dict[str, Any]]:
+    def parse_players_page(html_content: str) -> list[dict[str, Any]]:
         """
         Parse players page HTML and extract player links.
 
@@ -1080,7 +704,7 @@ class GeniusSportsParser:
         return player_links
 
     @staticmethod
-    def parse_team_roster_page(html_content: str) -> List[Dict[str, Any]]:
+    def parse_team_roster_page(html_content: str) -> list[dict[str, Any]]:
         """
         Parse team roster page HTML and extract player links.
 
@@ -1118,7 +742,7 @@ class GeniusSportsParser:
         return unique_players
 
     @staticmethod
-    def parse_team_statistics_page(html_content: str) -> Dict[str, Any]:
+    def parse_team_statistics_page(html_content: str) -> dict[str, Any]:
         """
         Parse team statistics page HTML and extract player statistics.
 
@@ -1130,7 +754,7 @@ class GeniusSportsParser:
         """
         soup = BeautifulSoup(html_content, "html.parser")
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "team_name": None,
             "team_location": None,
             "averages": [],
@@ -1198,7 +822,7 @@ class GeniusSportsParser:
                 if len(cells) < 2:
                     continue
 
-                player_stat: Dict[str, Any] = {}
+                player_stat: dict[str, Any] = {}
 
                 for i, cell in enumerate(cells):
                     if i >= len(headers):
@@ -1239,7 +863,7 @@ class GeniusSportsParser:
                             try:
                                 # Check if it's a time format (MM:SS)
                                 if ":" in str(value):
-                                    value = value  # Keep as string for time
+                                    pass  # Keep source clock strings unchanged
                                 elif "." in str(value):
                                     value = float(value)
                                 else:

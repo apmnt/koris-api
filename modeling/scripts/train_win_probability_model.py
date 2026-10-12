@@ -4,6 +4,7 @@ import argparse
 import json
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from koris_api.win_probability import (
     accuracy_score,
@@ -163,18 +164,18 @@ def main() -> None:
     train_bucketed = predict_state_probabilities(train_states, model).tolist()
     validation_bucketed = predict_state_probabilities(validation_states, model).tolist()
 
-    metrics = {
+    metrics: dict[str, Any] = {
         "coverage": {
-            "matches_total": int(len(results)),
-            "train_matches": int(len(train_results)),
-            "validation_matches": int(len(validation_results)),
+            "matches_total": len(results),
+            "train_matches": len(train_results),
+            "validation_matches": len(validation_results),
             "matches_with_playbyplay_after_cache": int(
                 sum(1 for match in matches if isinstance(match.get("playbyplay"), dict))
             ),
-            "train_state_rows": int(len(train_states)),
-            "validation_state_rows": int(len(validation_states)),
-            "playbyplay_cache_entries": int(len(playbyplay_by_match_id)),
-            "playbyplay_fetch_errors": int(len(playbyplay_errors)),
+            "train_state_rows": len(train_states),
+            "validation_state_rows": len(validation_states),
+            "playbyplay_cache_entries": len(playbyplay_by_match_id),
+            "playbyplay_fetch_errors": len(playbyplay_errors),
         },
         "elo_config": asdict(elo_config),
         "train": {

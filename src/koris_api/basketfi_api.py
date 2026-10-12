@@ -1,8 +1,9 @@
 """Basket.fi/Torneopal API client for basic match and team data."""
 
-import requests
-from typing import Dict, Any, Optional, cast
 import time
+from typing import Any, ClassVar, cast
+
+import requests
 
 
 class BasketFiAPI:
@@ -10,7 +11,7 @@ class BasketFiAPI:
 
     BASE_URL = "https://koripallo-api.torneopal.net/taso/rest"
     DEFAULT_TIMEOUT = (5.0, 20.0)
-    HEADERS = {
+    HEADERS: ClassVar[dict[str, str]] = {
         "Accept": "json/df8e84j9xtdz269euy3h",
         "Accept-Encoding": "gzip, deflate, br",
         "Accept-Language": "en-US,en;q=0.9",
@@ -26,10 +27,10 @@ class BasketFiAPI:
     @classmethod
     def get_matches(
         cls,
-        competition_id: Optional[str] = None,
-        category_id: Optional[str] = None,
-        team_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        competition_id: str | None = None,
+        category_id: str | None = None,
+        team_id: str | None = None,
+    ) -> dict[str, Any]:
         """Fetch matches for a specific competition and category, or for a specific team."""
         url = f"{cls.BASE_URL}/getMatches"
         params = {}
@@ -56,13 +57,13 @@ class BasketFiAPI:
         # Raise an error for bad status codes
         response.raise_for_status()
 
-        data = cast(Dict[str, Any], response.json())
+        data = cast(dict[str, Any], response.json())
         data["_fetch_time"] = elapsed_time
         data["_status_code"] = response.status_code
         return data
 
     @classmethod
-    def get_match(cls, match_id: str) -> Dict[str, Any]:
+    def get_match(cls, match_id: str) -> dict[str, Any]:
         """
         Fetch detailed information for a specific match.
 
@@ -82,15 +83,15 @@ class BasketFiAPI:
             timeout=cls.DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
-        return cast(Dict[str, Any], response.json())
+        return cast(dict[str, Any], response.json())
 
     @classmethod
     def get_team(
         cls,
         team_id: str,
-        competition_id: Optional[str] = None,
-        category_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        competition_id: str | None = None,
+        category_id: str | None = None,
+    ) -> dict[str, Any]:
         """
         Fetch team data including roster and officials.
 
@@ -120,10 +121,10 @@ class BasketFiAPI:
             timeout=cls.DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
-        return cast(Dict[str, Any], response.json())
+        return cast(dict[str, Any], response.json())
 
     @classmethod
-    def get_category(cls, competition_id: str, category_id: str) -> Dict[str, Any]:
+    def get_category(cls, competition_id: str, category_id: str) -> dict[str, Any]:
         """
         Fetch category data including available seasons.
 
@@ -143,4 +144,4 @@ class BasketFiAPI:
             timeout=cls.DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
-        return cast(Dict[str, Any], response.json())
+        return cast(dict[str, Any], response.json())

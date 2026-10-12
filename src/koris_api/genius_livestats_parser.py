@@ -15,15 +15,37 @@ pipeline already understands:
   player keys, ready for :func:`koris_api.boxscore_normalizer.normalize_boxscore`.
 * :func:`parse_playbyplay` returns ``{"match_info", "events", "players",
   "possessions"}`` and reuses
-  :meth:`GeniusSportsParser._calculate_possessions` so possession logic stays in
+  the shared possession analysis so possession logic stays in
   one place.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from collections.abc import Mapping
+from typing import TypedDict
 
-from .genius_parser import GeniusSportsParser
+from .analysis.possessions import calculate_possessions
+from .data import fields, records, text
+
+
+class BoxScore(TypedDict):
+    match_info: dict[str, object]
+    teams: list[dict[str, object]]
+
+
+class PlayByPlay(TypedDict):
+    match_info: dict[str, object]
+    events: list[dict[str, object]]
+    players: list[dict[str, object]]
+    possessions: Mapping[str, object]
+
+
+class ShotChart(TypedDict):
+    source: str
+    match_id: str
+    teams: dict[str, str | None]
+    shots: list[dict[str, object]]
+
 
 # data.json team key -> genius box score header key.
 _PLAYER_FIELD_MAP = {
@@ -50,9 +72,9 @@ _PLAYER_FIELD_MAP = {
 _REGULATION_PERIODS = 4
 
 
-def _player_display_name(player: Dict[str, Any]) -> Optional[str]:
-    first = (player.get("firstName") or "").strip()
-    family = (player.get("familyName") or "").strip()
+def _player_display_name(player: Mapping[str, object]) -> str | None:
+    first = (text(player.get("firstName")) or "").strip()
+    family = (text(player.get("familyName")) or "").strip()
     full = f"{first} {family}".strip()
     if full:
         return full
@@ -60,18 +82,20 @@ def _player_display_name(player: Dict[str, Any]) -> Optional[str]:
     return name.strip() if isinstance(name, str) and name.strip() else None
 
 
-def _shirt_number(player: Dict[str, Any]) -> Any:
+def _shirt_number(player: Mapping[str, object]) -> object:
     raw = player.get("shirtNumber")
     if raw in (None, ""):
         return None
     try:
-        return int(raw)
+        return int(raw) if isinstance(raw, (str, int, float)) else raw
     except (TypeError, ValueError):
         return raw
 
 
-def _convert_player(player: Dict[str, Any], team_name: Optional[str]) -> Dict[str, Any]:
-    converted: Dict[str, Any] = {
+def _convert_player(
+    player: Mapping[str, object], team_name: str | None
+) -> dict[str, object]:
+    converted: dict[str, object] = {
         "Player": _player_display_name(player),
         "Shirt Number": _shirt_number(player),
         "Minutes": player.get("sMinutes"),
@@ -82,32 +106,35 @@ def _convert_player(player: Dict[str, Any], team_name: Optional[str]) -> Dict[st
     return converted
 
 
-def _ordered_players(team: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _ordered_players(team: Mapping[str, object]) -> list[Mapping[str, object]]:
     players = team.get("pl")
-    if not isinstance(players, dict):
+    if players is None:
         return []
+    players = fields(players)
+
     # ``pl`` keys are the numeric roster slots; keep them in numeric order so the
     # roster is stable across fetches.
-    def sort_key(item: tuple[str, Any]) -> tuple[int, str]:
+    def sort_key(item: tuple[str, object]) -> tuple[int, str]:
         key = item[0]
         try:
             return (0, f"{int(key):04d}")
         except (TypeError, ValueError):
             return (1, str(key))
 
-    return [value for _, value in sorted(players.items(), key=sort_key)]
+    return [fields(value) for _, value in sorted(players.items(), key=sort_key)]
 
 
-def parse_boxscore(data: Dict[str, Any]) -> Dict[str, Any]:
+def parse_boxscore(data: Mapping[str, object]) -> BoxScore:
     """Convert a ``data.json`` payload into the genius box score intermediate."""
     teams_raw = data.get("tm")
-    if not isinstance(teams_raw, dict):
-        raise ValueError("data.json missing 'tm' teams object")
+    if teams_raw is None:
+        raise TypeError("data.json missing 'tm' teams object")
+    teams_raw = fields(teams_raw)
 
-    result: Dict[str, Any] = {"match_info": {}, "teams": []}
+    result: BoxScore = {"match_info": {}, "teams": []}
 
-    home = teams_raw.get("1") or {}
-    away = teams_raw.get("2") or {}
+    home = fields(teams_raw.get("1"))
+    away = fields(teams_raw.get("2"))
     result["match_info"] = {
         "home_team": home.get("name"),
         "away_team": away.get("name"),
@@ -117,13 +144,12 @@ def parse_boxscore(data: Dict[str, Any]) -> Dict[str, Any]:
 
     for team_key in ("1", "2"):
         team = teams_raw.get(team_key)
-        if not isinstance(team, dict):
+        if team is None:
             continue
-        team_name = team.get("name")
+        team = fields(team)
+        team_name = text(team.get("name"))
         players = [
-            _convert_player(player, team_name)
-            for player in _ordered_players(team)
-            if isinstance(player, dict)
+            _convert_player(player, team_name) for player in _ordered_players(team)
         ]
         result["teams"].append(
             {
@@ -137,11 +163,13 @@ def parse_boxscore(data: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def _period_label(event: Dict[str, Any]) -> Optional[str]:
+def _period_label(event: Mapping[str, object]) -> str | None:
     period = event.get("period")
     if period in (None, ""):
         return None
     try:
+        if not isinstance(period, (str, int, float)):
+            return str(period)
         period_num = int(period)
     except (TypeError, ValueError):
         return str(period)
@@ -153,14 +181,14 @@ def _period_label(event: Dict[str, Any]) -> Optional[str]:
     return f"Q{period_num}"
 
 
-def _event_team(event: Dict[str, Any]) -> str:
+def _event_team(event: Mapping[str, object]) -> str:
     tno = event.get("tno")
     if tno in (None, ""):
         return "0"
     return str(tno)
 
 
-def _event_action(event: Dict[str, Any]) -> str:
+def _event_action(event: Mapping[str, object]) -> str:
     """Build an action string whose substrings drive the possession logic.
 
     ``_calculate_possessions`` only inspects the action text for ``"made"``
@@ -180,30 +208,31 @@ def _event_action(event: Dict[str, Any]) -> str:
     return sub_type or action_type
 
 
-def parse_playbyplay(data: Dict[str, Any]) -> Dict[str, Any]:
+def parse_playbyplay(data: Mapping[str, object]) -> PlayByPlay:
     """Convert a ``data.json`` payload into the genius play-by-play intermediate."""
     raw_events = data.get("pbp")
-    if not isinstance(raw_events, list):
-        raise ValueError("data.json missing 'pbp' events list")
+    if raw_events is None:
+        raise TypeError("data.json missing 'pbp' events list")
+    raw_events = records(raw_events)
 
     # The feed lists events newest-first; possession logic walks chronologically.
     chronological = list(reversed(raw_events))
 
-    players: List[Dict[str, Any]] = []
-    player_index: Dict[tuple[str, str, str], int] = {}
-    events: List[Dict[str, Any]] = []
+    players: list[dict[str, object]] = []
+    player_index: dict[tuple[str, str, str], int] = {}
+    events: list[dict[str, object]] = []
 
     for event in chronological:
-        if not isinstance(event, dict):
-            continue
         team = _event_team(event)
-        player_name = (event.get("player") or "").strip() or _player_display_name(event)
+        player_name = (text(event.get("player")) or "").strip() or _player_display_name(
+            event
+        )
         player_number = event.get("shirtNumber")
         player_number = (
             str(player_number).strip() if player_number not in (None, "") else None
         )
 
-        player_id: Optional[int] = None
+        player_id: int | None = None
         if player_name or player_number:
             key = (team, player_number or "", player_name or "")
             player_id = player_index.get(key)
@@ -233,9 +262,9 @@ def parse_playbyplay(data: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
 
-    teams_raw = data.get("tm") or {}
-    home = teams_raw.get("1") or {}
-    away = teams_raw.get("2") or {}
+    teams_raw = fields(data.get("tm"))
+    home = fields(teams_raw.get("1"))
+    away = fields(teams_raw.get("2"))
 
     return {
         "match_info": {
@@ -246,5 +275,52 @@ def parse_playbyplay(data: Dict[str, Any]) -> Dict[str, Any]:
         },
         "events": events,
         "players": players,
-        "possessions": GeniusSportsParser._calculate_possessions(events),
+        "possessions": fields(calculate_possessions(events)),
+    }
+
+
+def parse_shot_chart(match_id: str, live_data: Mapping[str, object]) -> ShotChart:
+    teams_raw = live_data.get("tm")
+    if teams_raw is None:
+        raise TypeError(f"Invalid shot chart payload for match {match_id}: missing tm")
+    teams_raw = fields(teams_raw)
+
+    teams: dict[str, str | None] = {}
+    shots: list[dict[str, object]] = []
+
+    for team_no, team_data in teams_raw.items():
+        team_data = fields(team_data)
+        team_no_str = str(team_no)
+        team_name = team_data.get("name")
+        teams[team_no_str] = str(team_name) if team_name is not None else None
+
+        team_shots = team_data.get("shot")
+        team_shots = records(team_shots)
+
+        for shot in team_shots:
+            shots.append(
+                {
+                    "team_no": team_no_str,
+                    "team_name": teams[team_no_str],
+                    "player_id": shot.get("p"),
+                    "player_number": shot.get("pno"),
+                    "player": shot.get("player"),
+                    "shirt_number": shot.get("shirtNumber"),
+                    "period": shot.get("per"),
+                    "period_type": shot.get("perType"),
+                    "action_type": shot.get("actionType"),
+                    "shot_type": shot.get("subType"),
+                    "made": shot.get("r"),
+                    "x": shot.get("x"),
+                    "y": shot.get("y"),
+                    "action_number": shot.get("actionNumber"),
+                    "previous_action": shot.get("previousAction"),
+                }
+            )
+
+    return {
+        "source": "fibalivestats",
+        "match_id": str(match_id),
+        "teams": teams,
+        "shots": shots,
     }

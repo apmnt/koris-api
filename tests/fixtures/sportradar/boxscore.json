@@ -1,0 +1,1409 @@
+{
+  "fixture": {
+    "ageGroup": "SENIOR",
+    "attendance": 884,
+    "attendanceLabel": "Attendance",
+    "captains": {
+      "d31984cb-90a6-11f1-997e-e7d7c2463142": "61f2db99-90bb-11f1-bce6-27f2444e308f",
+      "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc": "bbf4bb82-90b9-11f1-bbf0-7106e55498b7"
+    },
+    "competitionName": "Korisliiga",
+    "competitors": [
+      {
+        "code": "KAB",
+        "colors": {
+          "primary": "000000",
+          "secondary": "000000",
+          "tertiary": "000000"
+        },
+        "draw": false,
+        "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+        "isHome": true,
+        "link": null,
+        "logo": "https://images.dc.connect.sportradar.com/b1ebt/8e96253509044a3e8dae3e73dea90eb3?size=400",
+        "name": "Kataja Basket",
+        "resultPlace": 1,
+        "resultStatus": "CONFIRMED",
+        "score": "102",
+        "secondaryScore": null,
+        "shootOutAttempts": ""
+      },
+      {
+        "code": "SEA",
+        "colors": {
+          "primary": null,
+          "secondary": null,
+          "tertiary": null
+        },
+        "draw": false,
+        "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+        "isHome": false,
+        "link": null,
+        "logo": "https://images.dc.connect.sportradar.com/b1ebt/6af95347d4c941288180db470cdfbce5?size=400",
+        "name": "Helsinki Seagulls",
+        "resultPlace": 2,
+        "resultStatus": "CONFIRMED",
+        "score": "83",
+        "secondaryScore": null,
+        "shootOutAttempts": ""
+      }
+    ],
+    "discipline": null,
+    "externalId": "1005902",
+    "fixtureId": "44cfe520-a1e7-11f1-8d0e-4fe1f25b2942",
+    "fixtureType": "REGULAR",
+    "liveDataAvailable": false,
+    "liveVideoAvailable": true,
+    "name": null,
+    "profile": {
+      "efficiencyType": "EFFICIENCY",
+      "foulsAllowedTechnical": 2,
+      "foulsBeforeBonus": 4,
+      "foulsBeforeBonusOvertime": 0,
+      "halfTimeDuration": 15,
+      "maxFoulsPersonal": 5,
+      "maximumPlayersOnCourt": 5,
+      "maximumRosterSize": 14,
+      "midGameJumpBallAllowed": false,
+      "numberOfPeriods": 4,
+      "overtimeAllowed": true,
+      "overtimeLength": 5,
+      "periodBreakDuration": 2,
+      "periodLength": 10,
+      "periodLengthCustomized": {},
+      "pointsFourAllowed": false,
+      "resetFoulsAfterPeriods": [
+        1,
+        2,
+        3
+      ],
+      "resetTimeoutsAfterPeriods": [
+        2,
+        4,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "ruleSet": "FIBA",
+      "shotClock": 24,
+      "simpleTargetScoreEndingAllowed": false,
+      "switchPlayingDirection": [
+        2
+      ],
+      "usePeriodLengthCustomized": false
+    },
+    "seasonId": "12a43729-9bb6-11f1-9fef-97a68955b80f",
+    "series": null,
+    "startTimeLocal": "2026-09-29T18:30:00",
+    "startTimeUTC": "2026-09-29T15:30:00",
+    "status": "CONFIRMED",
+    "statusLabel": "Final",
+    "timesUnconfirmed": false,
+    "timezone": "Europe/Helsinki",
+    "updated": "2026-09-30T13:56:53",
+    "venue": "Motonet Areena",
+    "venueId": "b0b97686-90a6-11f1-adf3-6740da308c18"
+  },
+  "statistics": {
+    "advancedStatsEnabled": false,
+    "allStatsLabel": "All Stats",
+    "boxScoreLabels": {
+      "entity": "Team/Coach",
+      "sorting": {
+        "active": "On Court",
+        "bib": "Number",
+        "sortBy": "Sort by",
+        "starter": "Starter"
+      },
+      "total": "Total"
+    },
+    "data": {
+      "base": {
+        "away": {
+          "entity": {
+            "assists": 24,
+            "blocks": 3,
+            "blocksReceived": 0,
+            "efficiency": 94,
+            "foulsDrawn": 18,
+            "foulsTotal": 14,
+            "freeThrowsAttempted": 21,
+            "freeThrowsMade": 14,
+            "freeThrowsPercentage": 66.67,
+            "minutes": "PT200M",
+            "plusMinus": null,
+            "points": 83,
+            "pointsThreeAttempted": 27,
+            "pointsThreeMade": 9,
+            "pointsThreePercentage": 33.33,
+            "pointsTwoAttempted": 36,
+            "pointsTwoMade": 21,
+            "pointsTwoPercentage": 58.33,
+            "rebounds": 30,
+            "reboundsDefensive": 24,
+            "reboundsOffensive": 6,
+            "steals": 4,
+            "turnovers": 10
+          },
+          "extra": {
+            "foulsTotal": 0,
+            "rebounds": 2,
+            "reboundsDefensive": 2,
+            "reboundsOffensive": 0,
+            "turnovers": 1
+          },
+          "persons": [
+            {
+              "headers": [
+                {
+                  "key": "bib",
+                  "name": "#"
+                },
+                {
+                  "key": "name",
+                  "name": "Name"
+                },
+                {
+                  "code": "Minutes",
+                  "key": "minutes",
+                  "name": "MIN"
+                },
+                {
+                  "code": "Points",
+                  "key": "points",
+                  "name": "PTS"
+                },
+                {
+                  "code": "Two Points Made",
+                  "key": "pointsTwoMade",
+                  "name": "2PM"
+                },
+                {
+                  "code": "Two Points Attempted",
+                  "key": "pointsTwoAttempted",
+                  "name": "2PA"
+                },
+                {
+                  "code": "Two Points Percentage",
+                  "key": "pointsTwoPercentage",
+                  "name": "2P%"
+                },
+                {
+                  "code": "Three Points Made",
+                  "key": "pointsThreeMade",
+                  "name": "3PM"
+                },
+                {
+                  "code": "Three Points Attempted",
+                  "key": "pointsThreeAttempted",
+                  "name": "3PA"
+                },
+                {
+                  "code": "Three Points Percentage",
+                  "key": "pointsThreePercentage",
+                  "name": "3P%"
+                },
+                {
+                  "code": "Free Throws Made",
+                  "key": "freeThrowsMade",
+                  "name": "FTM"
+                },
+                {
+                  "code": "Free Throws Attempted",
+                  "key": "freeThrowsAttempted",
+                  "name": "FTA"
+                },
+                {
+                  "code": "Free Throw Percentage",
+                  "key": "freeThrowsPercentage",
+                  "name": "FT%"
+                },
+                {
+                  "code": "Offensive Rebound",
+                  "key": "reboundsOffensive",
+                  "name": "OR"
+                },
+                {
+                  "code": "Defensive Rebound",
+                  "key": "reboundsDefensive",
+                  "name": "DR"
+                },
+                {
+                  "code": "Rebounds",
+                  "key": "rebounds",
+                  "name": "REB"
+                },
+                {
+                  "code": "Assists",
+                  "key": "assists",
+                  "name": "AST"
+                },
+                {
+                  "code": "Turnovers",
+                  "key": "turnovers",
+                  "name": "TO"
+                },
+                {
+                  "code": "Steals",
+                  "key": "steals",
+                  "name": "STL"
+                },
+                {
+                  "code": "Blocks",
+                  "key": "blocks",
+                  "name": "BLK"
+                },
+                {
+                  "code": "Blocks Received",
+                  "key": "blocksReceived",
+                  "name": "BR"
+                },
+                {
+                  "code": "Fouls",
+                  "key": "foulsTotal",
+                  "name": "PF"
+                },
+                {
+                  "code": "Fouls Drawn",
+                  "key": "foulsDrawn",
+                  "name": "FD"
+                },
+                {
+                  "code": "Plus Minus",
+                  "key": "plusMinus",
+                  "name": "+/-"
+                },
+                {
+                  "code": "Efficiency",
+                  "key": "efficiency",
+                  "name": "Eff"
+                }
+              ],
+              "label": "Players",
+              "rows": [
+                {
+                  "active": false,
+                  "bib": "13",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "0289786d-90bc-11f1-a8d5-797de5732515",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Lassi Nikkarinen",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 9,
+                    "blocks": 1,
+                    "blocksReceived": 0,
+                    "efficiency": 11,
+                    "foulsDrawn": 4,
+                    "foulsTotal": 1,
+                    "freeThrowsAttempted": 2,
+                    "freeThrowsMade": 1,
+                    "freeThrowsPercentage": 50.0,
+                    "minutes": "PT33M19S",
+                    "plusMinus": -17,
+                    "points": 3,
+                    "pointsThreeAttempted": 2,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": 0.0,
+                    "pointsTwoAttempted": 2,
+                    "pointsTwoMade": 1,
+                    "pointsTwoPercentage": 50.0,
+                    "rebounds": 2,
+                    "reboundsDefensive": 2,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "1",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "10c3564c-90bd-11f1-bf3b-7b8c3a749dc5",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "SAMATAR ABOKAR",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 0,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 0,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 0,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT2M54S",
+                    "plusMinus": -9,
+                    "points": 0,
+                    "pointsThreeAttempted": 0,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": null,
+                    "pointsTwoAttempted": 0,
+                    "pointsTwoMade": 0,
+                    "pointsTwoPercentage": null,
+                    "rebounds": 0,
+                    "reboundsDefensive": 0,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "11",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "1da7c9bb-90bc-11f1-97db-e9ae9e26fc7d",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "REMU RAITANEN",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 2,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 13,
+                    "foulsDrawn": 4,
+                    "foulsTotal": 1,
+                    "freeThrowsAttempted": 4,
+                    "freeThrowsMade": 3,
+                    "freeThrowsPercentage": 75.0,
+                    "minutes": "PT24M46S",
+                    "plusMinus": -7,
+                    "points": 9,
+                    "pointsThreeAttempted": 3,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": 0.0,
+                    "pointsTwoAttempted": 5,
+                    "pointsTwoMade": 3,
+                    "pointsTwoPercentage": 60.0,
+                    "rebounds": 8,
+                    "reboundsDefensive": 6,
+                    "reboundsOffensive": 2,
+                    "steals": 1,
+                    "turnovers": 1
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "30",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "6a27d731-90bb-11f1-b94b-e9ae9e26fc7d",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Timi Puittinen",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 0,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 0,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 1,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT7M32S",
+                    "plusMinus": -7,
+                    "points": 0,
+                    "pointsThreeAttempted": 0,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": null,
+                    "pointsTwoAttempted": 0,
+                    "pointsTwoMade": 0,
+                    "pointsTwoPercentage": null,
+                    "rebounds": 0,
+                    "reboundsDefensive": 0,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "7",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "7968551b-90be-11f1-bfcd-9339b75ea0b9",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "VILI VESTERINEN",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 1,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 1,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 0,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT1M12S",
+                    "plusMinus": -2,
+                    "points": 0,
+                    "pointsThreeAttempted": 0,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": null,
+                    "pointsTwoAttempted": 0,
+                    "pointsTwoMade": 0,
+                    "pointsTwoPercentage": null,
+                    "rebounds": 0,
+                    "reboundsDefensive": 0,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "3",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "96191371-abc9-11f1-a344-798b3c09e270",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Keonte Kennedy",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 3,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 19,
+                    "foulsDrawn": 5,
+                    "foulsTotal": 2,
+                    "freeThrowsAttempted": 7,
+                    "freeThrowsMade": 4,
+                    "freeThrowsPercentage": 57.14,
+                    "minutes": "PT32M28S",
+                    "plusMinus": -12,
+                    "points": 14,
+                    "pointsThreeAttempted": 5,
+                    "pointsThreeMade": 2,
+                    "pointsThreePercentage": 40.0,
+                    "pointsTwoAttempted": 2,
+                    "pointsTwoMade": 2,
+                    "pointsTwoPercentage": 100.0,
+                    "rebounds": 9,
+                    "reboundsDefensive": 7,
+                    "reboundsOffensive": 2,
+                    "steals": 0,
+                    "turnovers": 1
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "25",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "a977a6d2-90bd-11f1-92f4-83767142611d",
+                  "personImage": "https://images.dc.connect.sportradar.com/b1ebt/fe1293407e4b41ff90e2a15317e9199c?size=400",
+                  "personLink": null,
+                  "personName": "Lenni Hervola",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 1,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 5,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 3,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT11M25S",
+                    "plusMinus": -9,
+                    "points": 5,
+                    "pointsThreeAttempted": 3,
+                    "pointsThreeMade": 1,
+                    "pointsThreePercentage": 33.33,
+                    "pointsTwoAttempted": 1,
+                    "pointsTwoMade": 1,
+                    "pointsTwoPercentage": 100.0,
+                    "rebounds": 1,
+                    "reboundsDefensive": 1,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "4",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "bbf4bb82-90b9-11f1-bbf0-7106e55498b7",
+                  "personImage": "https://images.dc.connect.sportradar.com/b1ebt/8d108ef1c7d249728ea55adafd0e4166?size=400",
+                  "personLink": null,
+                  "personName": "Rene Rougeau",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 5,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 11,
+                    "foulsDrawn": 3,
+                    "foulsTotal": 1,
+                    "freeThrowsAttempted": 3,
+                    "freeThrowsMade": 2,
+                    "freeThrowsPercentage": 66.67,
+                    "minutes": "PT28M21S",
+                    "plusMinus": -4,
+                    "points": 9,
+                    "pointsThreeAttempted": 3,
+                    "pointsThreeMade": 1,
+                    "pointsThreePercentage": 33.33,
+                    "pointsTwoAttempted": 8,
+                    "pointsTwoMade": 2,
+                    "pointsTwoPercentage": 25.0,
+                    "rebounds": 5,
+                    "reboundsDefensive": 3,
+                    "reboundsOffensive": 2,
+                    "steals": 3,
+                    "turnovers": 2
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "15",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "bd6db3e4-90bc-11f1-ae39-916f627ff7ec",
+                  "personImage": "https://images.dc.connect.sportradar.com/b1ebt/6b807fb4f0d0410ea9f1b7bddf678147?size=400",
+                  "personLink": null,
+                  "personName": "Victor Iwuakor",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 2,
+                    "blocks": 2,
+                    "blocksReceived": 0,
+                    "efficiency": 19,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 2,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT25M41S",
+                    "plusMinus": -25,
+                    "points": 17,
+                    "pointsThreeAttempted": 1,
+                    "pointsThreeMade": 1,
+                    "pointsThreePercentage": 100.0,
+                    "pointsTwoAttempted": 10,
+                    "pointsTwoMade": 7,
+                    "pointsTwoPercentage": 70.0,
+                    "rebounds": 3,
+                    "reboundsDefensive": 3,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 2
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "5",
+                  "didNotPlayReason": null,
+                  "entityId": "f2f516ea-90aa-11f1-aba0-cfbc7c66eafc",
+                  "participated": true,
+                  "personId": "d166d74d-abc9-11f1-9a84-ab2c6646cd34",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Tyrese Williams",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 1,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 14,
+                    "foulsDrawn": 2,
+                    "foulsTotal": 3,
+                    "freeThrowsAttempted": 5,
+                    "freeThrowsMade": 4,
+                    "freeThrowsPercentage": 80.0,
+                    "minutes": "PT32M22S",
+                    "plusMinus": -3,
+                    "points": 26,
+                    "pointsThreeAttempted": 10,
+                    "pointsThreeMade": 4,
+                    "pointsThreePercentage": 40.0,
+                    "pointsTwoAttempted": 8,
+                    "pointsTwoMade": 5,
+                    "pointsTwoPercentage": 62.5,
+                    "rebounds": 0,
+                    "reboundsDefensive": 0,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 3
+                  }
+                }
+              ]
+            }
+          ],
+          "totalEntityStats": {
+            "biggestLead": 4,
+            "biggestScoringRun": 8,
+            "leadChanges": 15,
+            "timeInLead": "PT7M43S"
+          }
+        },
+        "home": {
+          "entity": {
+            "assists": 19,
+            "blocks": 0,
+            "blocksReceived": 2,
+            "efficiency": 119,
+            "foulsDrawn": 12,
+            "foulsTotal": 18,
+            "freeThrowsAttempted": 6,
+            "freeThrowsMade": 6,
+            "freeThrowsPercentage": 100.0,
+            "minutes": "PT200M",
+            "plusMinus": null,
+            "points": 102,
+            "pointsThreeAttempted": 38,
+            "pointsThreeMade": 16,
+            "pointsThreePercentage": 42.11,
+            "pointsTwoAttempted": 43,
+            "pointsTwoMade": 24,
+            "pointsTwoPercentage": 55.81,
+            "rebounds": 41,
+            "reboundsDefensive": 24,
+            "reboundsOffensive": 17,
+            "steals": 5,
+            "turnovers": 7
+          },
+          "extra": {
+            "foulsTotal": 0,
+            "rebounds": 3,
+            "reboundsDefensive": 1,
+            "reboundsOffensive": 2,
+            "turnovers": 0
+          },
+          "persons": [
+            {
+              "headers": [
+                {
+                  "key": "bib",
+                  "name": "#"
+                },
+                {
+                  "key": "name",
+                  "name": "Name"
+                },
+                {
+                  "code": "Minutes",
+                  "key": "minutes",
+                  "name": "MIN"
+                },
+                {
+                  "code": "Points",
+                  "key": "points",
+                  "name": "PTS"
+                },
+                {
+                  "code": "Two Points Made",
+                  "key": "pointsTwoMade",
+                  "name": "2PM"
+                },
+                {
+                  "code": "Two Points Attempted",
+                  "key": "pointsTwoAttempted",
+                  "name": "2PA"
+                },
+                {
+                  "code": "Two Points Percentage",
+                  "key": "pointsTwoPercentage",
+                  "name": "2P%"
+                },
+                {
+                  "code": "Three Points Made",
+                  "key": "pointsThreeMade",
+                  "name": "3PM"
+                },
+                {
+                  "code": "Three Points Attempted",
+                  "key": "pointsThreeAttempted",
+                  "name": "3PA"
+                },
+                {
+                  "code": "Three Points Percentage",
+                  "key": "pointsThreePercentage",
+                  "name": "3P%"
+                },
+                {
+                  "code": "Free Throws Made",
+                  "key": "freeThrowsMade",
+                  "name": "FTM"
+                },
+                {
+                  "code": "Free Throws Attempted",
+                  "key": "freeThrowsAttempted",
+                  "name": "FTA"
+                },
+                {
+                  "code": "Free Throw Percentage",
+                  "key": "freeThrowsPercentage",
+                  "name": "FT%"
+                },
+                {
+                  "code": "Offensive Rebound",
+                  "key": "reboundsOffensive",
+                  "name": "OR"
+                },
+                {
+                  "code": "Defensive Rebound",
+                  "key": "reboundsDefensive",
+                  "name": "DR"
+                },
+                {
+                  "code": "Rebounds",
+                  "key": "rebounds",
+                  "name": "REB"
+                },
+                {
+                  "code": "Assists",
+                  "key": "assists",
+                  "name": "AST"
+                },
+                {
+                  "code": "Turnovers",
+                  "key": "turnovers",
+                  "name": "TO"
+                },
+                {
+                  "code": "Steals",
+                  "key": "steals",
+                  "name": "STL"
+                },
+                {
+                  "code": "Blocks",
+                  "key": "blocks",
+                  "name": "BLK"
+                },
+                {
+                  "code": "Blocks Received",
+                  "key": "blocksReceived",
+                  "name": "BR"
+                },
+                {
+                  "code": "Fouls",
+                  "key": "foulsTotal",
+                  "name": "PF"
+                },
+                {
+                  "code": "Fouls Drawn",
+                  "key": "foulsDrawn",
+                  "name": "FD"
+                },
+                {
+                  "code": "Plus Minus",
+                  "key": "plusMinus",
+                  "name": "+/-"
+                },
+                {
+                  "code": "Efficiency",
+                  "key": "efficiency",
+                  "name": "Eff"
+                }
+              ],
+              "label": "Players",
+              "rows": [
+                {
+                  "active": false,
+                  "bib": "3",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "00017500-a83a-11f1-8b00-41f92683b540",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Richie Springs",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 0,
+                    "blocks": 0,
+                    "blocksReceived": 1,
+                    "efficiency": 13,
+                    "foulsDrawn": 1,
+                    "foulsTotal": 2,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT27M57S",
+                    "plusMinus": 1,
+                    "points": 14,
+                    "pointsThreeAttempted": 6,
+                    "pointsThreeMade": 4,
+                    "pointsThreePercentage": 66.67,
+                    "pointsTwoAttempted": 3,
+                    "pointsTwoMade": 1,
+                    "pointsTwoPercentage": 33.33,
+                    "rebounds": 7,
+                    "reboundsDefensive": 5,
+                    "reboundsOffensive": 2,
+                    "steals": 0,
+                    "turnovers": 4
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "2",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "00b8b2c2-a83a-11f1-ac95-dbfd521311a7",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Stevie Strong",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 7,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 28,
+                    "foulsDrawn": 3,
+                    "foulsTotal": 1,
+                    "freeThrowsAttempted": 2,
+                    "freeThrowsMade": 2,
+                    "freeThrowsPercentage": 100.0,
+                    "minutes": "PT31M55S",
+                    "plusMinus": 16,
+                    "points": 26,
+                    "pointsThreeAttempted": 9,
+                    "pointsThreeMade": 4,
+                    "pointsThreePercentage": 44.44,
+                    "pointsTwoAttempted": 8,
+                    "pointsTwoMade": 6,
+                    "pointsTwoPercentage": 75.0,
+                    "rebounds": 3,
+                    "reboundsDefensive": 2,
+                    "reboundsOffensive": 1,
+                    "steals": 1,
+                    "turnovers": 2
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "5",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "037a0c46-90bd-11f1-ad46-e9a336bf1467",
+                  "personImage": "https://images.dc.connect.sportradar.com/b1ebt/503ac765db384fa19bb7cae11494e27b?size=400",
+                  "personLink": null,
+                  "personName": "Joonas Timonen",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 3,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 9,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 2,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT18M51S",
+                    "plusMinus": 5,
+                    "points": 8,
+                    "pointsThreeAttempted": 4,
+                    "pointsThreeMade": 2,
+                    "pointsThreePercentage": 50.0,
+                    "pointsTwoAttempted": 3,
+                    "pointsTwoMade": 1,
+                    "pointsTwoPercentage": 33.33,
+                    "rebounds": 1,
+                    "reboundsDefensive": 1,
+                    "reboundsOffensive": 0,
+                    "steals": 1,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "10",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "21838fb7-90bd-11f1-8f7a-ebd35007e794",
+                  "personImage": "https://images.dc.connect.sportradar.com/b1ebt/0e2a366045b846109f158110c3673b42?size=400",
+                  "personLink": null,
+                  "personName": "TEEMU SUOKAS",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 5,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 17,
+                    "foulsDrawn": 4,
+                    "foulsTotal": 0,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT23M58S",
+                    "plusMinus": 9,
+                    "points": 13,
+                    "pointsThreeAttempted": 3,
+                    "pointsThreeMade": 1,
+                    "pointsThreePercentage": 33.33,
+                    "pointsTwoAttempted": 5,
+                    "pointsTwoMade": 5,
+                    "pointsTwoPercentage": 100.0,
+                    "rebounds": 1,
+                    "reboundsDefensive": 0,
+                    "reboundsOffensive": 1,
+                    "steals": 0,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "17",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "25b80604-90bf-11f1-b0a2-3b6494574767",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Valtteri Pokela",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 0,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 0,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 0,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT1M12S",
+                    "plusMinus": 2,
+                    "points": 0,
+                    "pointsThreeAttempted": 0,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": null,
+                    "pointsTwoAttempted": 0,
+                    "pointsTwoMade": 0,
+                    "pointsTwoPercentage": null,
+                    "rebounds": 0,
+                    "reboundsDefensive": 0,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "13",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "370699bb-90bf-11f1-8fe8-dbbd8242dc7e",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Aatu Aropelto",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 0,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 2,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 0,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT1M12S",
+                    "plusMinus": 2,
+                    "points": 2,
+                    "pointsThreeAttempted": 0,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": null,
+                    "pointsTwoAttempted": 1,
+                    "pointsTwoMade": 1,
+                    "pointsTwoPercentage": 100.0,
+                    "rebounds": 0,
+                    "reboundsDefensive": 0,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "31",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "61f2db99-90bb-11f1-bce6-27f2444e308f",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Topias Palmi",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 0,
+                    "blocks": 0,
+                    "blocksReceived": 1,
+                    "efficiency": 7,
+                    "foulsDrawn": 2,
+                    "foulsTotal": 2,
+                    "freeThrowsAttempted": 2,
+                    "freeThrowsMade": 2,
+                    "freeThrowsPercentage": 100.0,
+                    "minutes": "PT25M13S",
+                    "plusMinus": 13,
+                    "points": 8,
+                    "pointsThreeAttempted": 6,
+                    "pointsThreeMade": 2,
+                    "pointsThreePercentage": 33.33,
+                    "pointsTwoAttempted": 3,
+                    "pointsTwoMade": 0,
+                    "pointsTwoPercentage": 0.0,
+                    "rebounds": 5,
+                    "reboundsDefensive": 3,
+                    "reboundsOffensive": 2,
+                    "steals": 1,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "21",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "794bb8b2-90bc-11f1-84b6-4554ddfa8cbf",
+                  "personImage": "https://images.dc.connect.sportradar.com/b1ebt/3edf9de7cdbc4176adabcd3f956e86b2?size=400",
+                  "personLink": null,
+                  "personName": "Teemu Knihtinen",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 1,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 8,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 4,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT18M30S",
+                    "plusMinus": 5,
+                    "points": 0,
+                    "pointsThreeAttempted": 1,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": 0.0,
+                    "pointsTwoAttempted": 0,
+                    "pointsTwoMade": 0,
+                    "pointsTwoPercentage": null,
+                    "rebounds": 7,
+                    "reboundsDefensive": 3,
+                    "reboundsOffensive": 4,
+                    "steals": 1,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "1",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "c416fd86-90bd-11f1-b262-7b525a68ccc9",
+                  "personImage": "https://images.dc.connect.sportradar.com/b1ebt/fb3d74c83ce9401093632e6076b3598d?size=400",
+                  "personLink": null,
+                  "personName": "THOMAS RÖNNHOLM",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 3,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 5,
+                    "foulsDrawn": 1,
+                    "foulsTotal": 1,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT7M44S",
+                    "plusMinus": 17,
+                    "points": 0,
+                    "pointsThreeAttempted": 0,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": null,
+                    "pointsTwoAttempted": 0,
+                    "pointsTwoMade": 0,
+                    "pointsTwoPercentage": null,
+                    "rebounds": 1,
+                    "reboundsDefensive": 1,
+                    "reboundsOffensive": 0,
+                    "steals": 1,
+                    "turnovers": 0
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "7",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "fe07789e-a839-11f1-9e43-33a5e0826522",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Josiah Harris",
+                  "position": null,
+                  "starter": true,
+                  "statistics": {
+                    "assists": 0,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": 30,
+                    "foulsDrawn": 1,
+                    "foulsTotal": 4,
+                    "freeThrowsAttempted": 2,
+                    "freeThrowsMade": 2,
+                    "freeThrowsPercentage": 100.0,
+                    "minutes": "PT28M31S",
+                    "plusMinus": 24,
+                    "points": 27,
+                    "pointsThreeAttempted": 5,
+                    "pointsThreeMade": 3,
+                    "pointsThreePercentage": 60.0,
+                    "pointsTwoAttempted": 15,
+                    "pointsTwoMade": 8,
+                    "pointsTwoPercentage": 53.33,
+                    "rebounds": 13,
+                    "reboundsDefensive": 8,
+                    "reboundsOffensive": 5,
+                    "steals": 0,
+                    "turnovers": 1
+                  }
+                },
+                {
+                  "active": false,
+                  "bib": "4",
+                  "didNotPlayReason": null,
+                  "entityId": "d31984cb-90a6-11f1-997e-e7d7c2463142",
+                  "participated": true,
+                  "personId": "fea72430-a839-11f1-9aac-d745ed5fb394",
+                  "personImage": null,
+                  "personLink": null,
+                  "personName": "Jalen Lake",
+                  "position": null,
+                  "starter": false,
+                  "statistics": {
+                    "assists": 0,
+                    "blocks": 0,
+                    "blocksReceived": 0,
+                    "efficiency": -3,
+                    "foulsDrawn": 0,
+                    "foulsTotal": 2,
+                    "freeThrowsAttempted": 0,
+                    "freeThrowsMade": 0,
+                    "freeThrowsPercentage": null,
+                    "minutes": "PT14M57S",
+                    "plusMinus": 1,
+                    "points": 4,
+                    "pointsThreeAttempted": 4,
+                    "pointsThreeMade": 0,
+                    "pointsThreePercentage": 0.0,
+                    "pointsTwoAttempted": 5,
+                    "pointsTwoMade": 2,
+                    "pointsTwoPercentage": 40.0,
+                    "rebounds": 0,
+                    "reboundsDefensive": 0,
+                    "reboundsOffensive": 0,
+                    "steals": 0,
+                    "turnovers": 0
+                  }
+                }
+              ]
+            }
+          ],
+          "totalEntityStats": {
+            "biggestLead": 20,
+            "biggestScoringRun": 7,
+            "leadChanges": 15,
+            "timeInLead": "PT30M29S"
+          }
+        },
+        "legend": [
+          {
+            "code": "Minutes",
+            "key": "minutes",
+            "name": "MIN"
+          },
+          {
+            "code": "Points",
+            "key": "points",
+            "name": "PTS"
+          },
+          {
+            "code": "Two Points Made",
+            "key": "pointsTwoMade",
+            "name": "2PM"
+          },
+          {
+            "code": "Two Points Attempted",
+            "key": "pointsTwoAttempted",
+            "name": "2PA"
+          },
+          {
+            "code": "Two Points Percentage",
+            "key": "pointsTwoPercentage",
+            "name": "2P%"
+          },
+          {
+            "code": "Three Points Made",
+            "key": "pointsThreeMade",
+            "name": "3PM"
+          },
+          {
+            "code": "Three Points Attempted",
+            "key": "pointsThreeAttempted",
+            "name": "3PA"
+          },
+          {
+            "code": "Three Points Percentage",
+            "key": "pointsThreePercentage",
+            "name": "3P%"
+          },
+          {
+            "code": "Free Throws Made",
+            "key": "freeThrowsMade",
+            "name": "FTM"
+          },
+          {
+            "code": "Free Throws Attempted",
+            "key": "freeThrowsAttempted",
+            "name": "FTA"
+          },
+          {
+            "code": "Free Throw Percentage",
+            "key": "freeThrowsPercentage",
+            "name": "FT%"
+          },
+          {
+            "code": "Offensive Rebound",
+            "key": "reboundsOffensive",
+            "name": "OR"
+          },
+          {
+            "code": "Defensive Rebound",
+            "key": "reboundsDefensive",
+            "name": "DR"
+          },
+          {
+            "code": "Rebounds",
+            "key": "rebounds",
+            "name": "REB"
+          },
+          {
+            "code": "Assists",
+            "key": "assists",
+            "name": "AST"
+          },
+          {
+            "code": "Turnovers",
+            "key": "turnovers",
+            "name": "TO"
+          },
+          {
+            "code": "Steals",
+            "key": "steals",
+            "name": "STL"
+          },
+          {
+            "code": "Blocks",
+            "key": "blocks",
+            "name": "BLK"
+          },
+          {
+            "code": "Blocks Received",
+            "key": "blocksReceived",
+            "name": "BR"
+          },
+          {
+            "code": "Fouls",
+            "key": "foulsTotal",
+            "name": "PF"
+          },
+          {
+            "code": "Fouls Drawn",
+            "key": "foulsDrawn",
+            "name": "FD"
+          },
+          {
+            "code": "Plus Minus",
+            "key": "plusMinus",
+            "name": "+/-"
+          },
+          {
+            "code": "Efficiency",
+            "key": "efficiency",
+            "name": "Eff"
+          }
+        ]
+      }
+    },
+    "entitiesLabels": [
+      {
+        "code": "Time in lead",
+        "key": "timeInLead",
+        "name": "TIL"
+      },
+      {
+        "code": "Lead Changes",
+        "key": "leadChanges",
+        "name": "LC"
+      },
+      {
+        "code": "Biggest Lead",
+        "key": "biggestLead",
+        "name": "BL"
+      },
+      {
+        "code": "Biggest Scoring Run",
+        "key": "biggestScoringRun",
+        "name": "Run"
+      }
+    ]
+  }
+}

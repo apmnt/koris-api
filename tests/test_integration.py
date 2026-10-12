@@ -8,6 +8,8 @@ Run with: pytest tests/test_integration.py -v
 Skip with: pytest -m "not integration"
 """
 
+import os
+
 import pytest
 
 from koris_api.basketfi_api import BasketFiAPI
@@ -15,9 +17,14 @@ from koris_api.basketfi_parser import BasketFiParser
 from koris_api.baskethotel_api import BasketHotelAPI
 from koris_api.genius_api import GeniusSportsAPI
 
-
 # Mark all tests in this file as integration tests
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        os.getenv("RUN_INTEGRATION_TESTS") != "1",
+        reason="Set RUN_INTEGRATION_TESTS=1 to run live checks",
+    ),
+]
 
 
 # =============================================================================
@@ -72,20 +79,14 @@ def live_genius_boxscore(live_basketfi_matches):
 
     external_id = str(played_matches[0]["match_external_id"])
 
-    try:
-        return GeniusSportsAPI.get_match_boxscore(external_id)
-    except Exception as e:
-        pytest.skip(f"Could not fetch box score: {str(e)[:100]}")
+    return GeniusSportsAPI.get_match_boxscore(external_id)
 
 
 @pytest.fixture(scope="session")
 def live_baskethotel_game():
     """Fetch a historical game from BasketHotel API once per session."""
     client = BasketHotelAPI()
-    try:
-        return client.fetch_game_data("5513579", season_id="121333", league_id="2")
-    except Exception as e:
-        pytest.skip(f"Could not fetch BasketHotel game: {str(e)[:100]}")
+    return client.fetch_game_data("5513579", season_id="121333", league_id="2")
 
 
 # =============================================================================
@@ -359,13 +360,10 @@ def test_genius_boxscore_response_time():
     external_id = str(played_matches[0]["match_external_id"])
 
     start = time.time()
-    try:
-        boxscore = GeniusSportsAPI.get_match_boxscore(external_id)
-        elapsed = time.time() - start
+    boxscore = GeniusSportsAPI.get_match_boxscore(external_id)
+    elapsed = time.time() - start
 
-        assert elapsed < 10.0, f"API call took too long: {elapsed:.2f}s"
-        assert "match_info" in boxscore
+    assert elapsed < 10.0, f"API call took too long: {elapsed:.2f}s"
+    assert "match_info" in boxscore
 
-        print(f"\n✓ Genius Sports API responded in {elapsed:.2f}s")
-    except Exception as e:
-        pytest.skip(f"Could not complete timing test: {str(e)[:100]}")
+    print(f"\n✓ Genius Sports API responded in {elapsed:.2f}s")

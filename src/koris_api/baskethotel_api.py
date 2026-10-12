@@ -1,12 +1,15 @@
 """BasketHotel API client for fetching older basketball game data."""
 
-import requests
-import httpx
-from typing import Dict, Any
+import logging
 import re
+from typing import Any
 from urllib.parse import urlencode
-from .baskethotel_parser import BasketHotelParser
+
+import httpx
+import requests
 from bs4 import BeautifulSoup, Tag
+
+from .baskethotel_parser import BasketHotelParser
 
 
 class BasketHotelAPI:
@@ -22,7 +25,7 @@ class BasketHotelAPI:
         season_id: str = "121333",
         league_id: str = "2",
         session: requests.Session | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch complete game data from BasketHotel API
 
@@ -44,7 +47,7 @@ class BasketHotelAPI:
         }
 
         client = session or requests
-        response = client.get(url, headers=headers)
+        response = client.get(url, headers=headers, timeout=30.0)
         response.raise_for_status()
 
         # Extract the state token from the response (needed for subsequent requests)
@@ -63,7 +66,7 @@ class BasketHotelAPI:
         # Now fetch the actual game data using the "home" part
         game_data_url = self._build_game_part_url(game_id, state)
 
-        response2 = client.get(game_data_url, headers=headers)
+        response2 = client.get(game_data_url, headers=headers, timeout=30.0)
         response2.raise_for_status()
 
         # Extract HTML from JavaScript response
@@ -84,7 +87,7 @@ class BasketHotelAPI:
 
         return game_data
 
-    def _build_game_url(self, game_id: str, season_id: str, league_id: str) -> str:
+    def build_game_url(self, game_id: str, season_id: str, league_id: str) -> str:
         """Build the API URL with all required parameters"""
         params = {
             "api": self.api_key,
@@ -111,13 +114,13 @@ class BasketHotelAPI:
 
         return f"{self.base_url}?{urlencode(params)}"
 
-    def _build_game_part_url(
+    def build_game_part_url(
         self,
         game_id: str,
         state: str,
         part: str = "home",
         container: str = "2-400-tab-container",
-        extra_params: Dict[str, Any] | None = None,
+        extra_params: dict[str, Any] | None = None,
     ) -> str:
         """Build URL to fetch specific game data part"""
         params = {
@@ -138,18 +141,26 @@ class BasketHotelAPI:
 
         return f"{self.base_url}?{urlencode(params)}"
 
-    def _extract_state(self, response_text: str) -> str | None:
+    def extract_state(self, response_text: str) -> str | None:
         state_match = re.search(r"state:\s*\\\\'([^\\\\]+)\\\\'", response_text)
         if state_match:
             return state_match.group(1)
         try:
             html = BasketHotelParser.extract_html_from_response(response_text)
         except Exception:
+            logging.getLogger(__name__).debug(
+                "baskethotel_api: operation failed", exc_info=True
+            )
             return None
         state_match = re.search(r"state:\s*'([^']+)'", html)
         if state_match:
             return state_match.group(1)
         return None
+
+    # Keep private compatibility names for existing callers.
+    _build_game_url = build_game_url
+    _build_game_part_url = build_game_part_url
+    _extract_state = extract_state
 
     def fetch_boxscore_data(
         self,
@@ -157,7 +168,7 @@ class BasketHotelAPI:
         season_id: str = "121333",
         league_id: str = "2",
         session: requests.Session | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch boxscore data for a single game from BasketHotel API.
 
@@ -177,7 +188,7 @@ class BasketHotelAPI:
         }
 
         client = session or requests
-        response = client.get(url, headers=headers)
+        response = client.get(url, headers=headers, timeout=30.0)
         response.raise_for_status()
         initial_html = BasketHotelParser.extract_html_from_response(response.text)
         initial_data = BasketHotelParser.parse_game_html(initial_html)
@@ -190,7 +201,7 @@ class BasketHotelAPI:
             return boxscore
 
         game_data_url = self._build_game_part_url(game_id, state, part="boxscore")
-        response2 = client.get(game_data_url, headers=headers)
+        response2 = client.get(game_data_url, headers=headers, timeout=30.0)
         response2.raise_for_status()
         html_content = BasketHotelParser.extract_html_from_response(response2.text)
         boxscore = BasketHotelParser.parse_boxscore_html(html_content)
@@ -204,7 +215,7 @@ class BasketHotelAPI:
         season_id: str = "121333",
         league_id: str = "2",
         client: httpx.AsyncClient | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch boxscore data for a single game from BasketHotel API asynchronously.
 
@@ -225,12 +236,12 @@ class BasketHotelAPI:
         }
 
         if client is None:
-            async with httpx.AsyncClient(headers=headers) as session:
+            async with httpx.AsyncClient(headers=headers, timeout=30.0) as session:
                 return await self.fetch_boxscore_data_async(
                     game_id, season_id, league_id, client=session
                 )
 
-        response = await client.get(url, headers=headers)
+        response = await client.get(url, headers=headers, timeout=30.0)
         response.raise_for_status()
         initial_html = BasketHotelParser.extract_html_from_response(response.text)
         initial_data = BasketHotelParser.parse_game_html(initial_html)
@@ -243,7 +254,7 @@ class BasketHotelAPI:
             return boxscore
 
         game_data_url = self._build_game_part_url(game_id, state, part="boxscore")
-        response2 = await client.get(game_data_url, headers=headers)
+        response2 = await client.get(game_data_url, headers=headers, timeout=30.0)
         response2.raise_for_status()
         html_content = BasketHotelParser.extract_html_from_response(response2.text)
         boxscore = BasketHotelParser.parse_boxscore_html(html_content)
@@ -257,7 +268,7 @@ class BasketHotelAPI:
         season_id: str = "121333",
         league_id: str = "2",
         session: requests.Session | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch play-by-play data for a single game from BasketHotel API.
 
@@ -277,7 +288,7 @@ class BasketHotelAPI:
         }
 
         client = session or requests
-        response = client.get(url, headers=headers)
+        response = client.get(url, headers=headers, timeout=30.0)
         response.raise_for_status()
 
         initial_html = BasketHotelParser.extract_html_from_response(response.text)
@@ -299,7 +310,7 @@ class BasketHotelAPI:
                 container="2-400-tab-container",
                 extra_params=tab_params,
             )
-            response_tab = client.get(tab_url, headers=headers)
+            response_tab = client.get(tab_url, headers=headers, timeout=30.0)
             response_tab.raise_for_status()
             tab_html = BasketHotelParser.extract_html_from_response(response_tab.text)
 
@@ -321,18 +332,14 @@ class BasketHotelAPI:
             if playbyplay_state:
                 action_params = {
                     "request[0][param][season_id]": season_id,
-                    "request[0][param][filter][quarter]": ",".join(
-                        filters["quarter"]
-                    ),
+                    "request[0][param][filter][quarter]": ",".join(filters["quarter"]),
                     "request[0][param][filter][player_a]": ",".join(
                         filters["player_a"]
                     ),
                     "request[0][param][filter][player_b]": ",".join(
                         filters["player_b"]
                     ),
-                    "request[0][param][filter][action]": ",".join(
-                        filters["action"]
-                    ),
+                    "request[0][param][filter][action]": ",".join(filters["action"]),
                 }
                 actions_url = self._build_game_part_url(
                     game_id,
@@ -341,7 +348,7 @@ class BasketHotelAPI:
                     container="2-400-play-by-play-actions-container",
                     extra_params=action_params,
                 )
-                response2 = client.get(actions_url, headers=headers)
+                response2 = client.get(actions_url, headers=headers, timeout=30.0)
                 response2.raise_for_status()
                 html_content = BasketHotelParser.extract_html_from_response(
                     response2.text

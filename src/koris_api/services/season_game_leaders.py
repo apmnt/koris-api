@@ -1,7 +1,9 @@
 import asyncio
 import json
+import logging
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 from tqdm import tqdm
@@ -9,7 +11,6 @@ from tqdm import tqdm
 from ..baskethotel_api import BasketHotelAPI
 from ..boxscore_normalizer import normalize_boxscore
 from .common import (
-    _BASKETHOTEL_DEFAULT_SEASON_ID,
     _clean_player_name,
     _fetch_baskethotel_schedule_game_ids,
     _get_baskethotel_league_id,
@@ -40,9 +41,7 @@ def download_season_game_leaders(
 
     league_id = _get_baskethotel_league_id(category_id)
     resolved_season_id = (
-        _resolve_baskethotel_season_id(season_name, league_id)
-        or season_id
-        or _BASKETHOTEL_DEFAULT_SEASON_ID
+        _resolve_baskethotel_season_id(season_name, league_id) or season_id
     )
 
     game_ids = _fetch_baskethotel_schedule_game_ids(
@@ -62,6 +61,9 @@ def download_season_game_leaders(
                 client=session,
             )
         except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "season_game_leaders: operation failed", exc_info=True
+            )
             return {"game_id": match_id, "error": str(exc)}
 
         game_info = boxscore.get("game_info", {})
@@ -74,7 +76,7 @@ def download_season_game_leaders(
             game_label = f"{home_team} vs {away_team}"
 
         normalized = normalize_boxscore(boxscore, source="baskethotel")
-        leaders = {
+        leaders: dict[str, dict[str, Any]] = {
             "points": {"value": -1},
             "rebounds": {"value": -1},
             "assists": {"value": -1},
@@ -84,7 +86,7 @@ def download_season_game_leaders(
         for team in normalized.get("teams", []):
             team_name = team.get("team_name")
             for player in team.get("players", []) or []:
-                name = _clean_player_name(player.get("player") or "")
+                name = _clean_player_name(str(player.get("player") or ""))
                 if not name:
                     continue
                 points = _stat_int(player.get("points"))
