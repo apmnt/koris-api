@@ -3,19 +3,20 @@
 Download all seasons for Miesten I divisioona A with advanced boxscores.
 
 This uses the KorisAPI helpers in src/koris_api to fetch:
-  - Historical seasons (pre-2022) via BasketHotel (boxscores with players)
-  - Modern seasons (2022+) via Genius Sports advanced boxscores
+  - Historical seasons (through 2023) via BasketHotel (boxscores with players)
+  - Modern seasons (2024+) via Genius Sports advanced boxscores
 """
 
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from pathlib import Path
 
 from koris_api import download_league_boxscores_all_seasons
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Download all seasons for Miesten I divisioona A (category 2) "
@@ -60,15 +61,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Reduce output verbosity.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> None:
-    args = parse_args()
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    download_league_boxscores_all_seasons(
+    failures = download_league_boxscores_all_seasons(
         category_id="2",
         output_dir=str(output_dir),
         start_year=args.start_year,
@@ -79,6 +80,8 @@ def main() -> None:
         verbose=not args.quiet,
     )
 
+    return 1 if failures else 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

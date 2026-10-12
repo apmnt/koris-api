@@ -222,7 +222,7 @@ def normalize_boxscore(
 
         totals: Mapping[str, object] = _totals(normalized_players)
 
-        if detected_source == "sportradar":
+        if detected_source != "baskethotel" and team.get("totals"):
             reported = _normalize_player_genius(fields(team["totals"]), team_name)
             totals = {key: reported[key] for key in totals}
 

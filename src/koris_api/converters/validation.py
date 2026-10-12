@@ -28,6 +28,14 @@ def validate_game(game: pb.Game) -> list[str]:
             and team.score != team.totals.points
         ):
             issues.append(f"{side}: score and reported total points disagree")
+        if (
+            game.status == pb.GAME_STATUS_FINAL
+            and team.totals.HasField("points")
+            and team.players
+            and all(p.stats.HasField("points") for p in team.players)
+            and sum(p.stats.points for p in team.players) != team.totals.points
+        ):
+            issues.append(f"{side}: player points do not sum to reported total")
         rows = [(f"{side}.totals", team.totals)] + [
             (p.id, p.stats) for p in team.players
         ]

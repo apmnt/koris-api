@@ -19,12 +19,36 @@ RUN_INTEGRATION_TESTS=1 uv run pytest tests/test_integration.py -v
 RUN_PERFORMANCE_TESTS=1 uv run pytest tests/test_performance_cli.py -v
 ```
 
-Performance tests download full 2010–11 and 2024–25 box-score seasons. Optional
-runtime limits are `KORIS_PERF_MAX_SECONDS_2010` and `KORIS_PERF_MAX_SECONDS_2024`.
-These are network checks and can take substantially longer than fixture tests.
+Full-season tests download 2010–11, the current season, and 2024–25 box scores.
+They verify every selected game, player scoring totals, and failure accounting.
+Incomplete archived records must retain their source data, report the failure,
+and produce a nonzero CLI exit status. `KORIS_PERF_MAX_SECONDS` optionally limits
+each run. Override current seasons with `KORIS_LIVE_SEASON` (integration) or
+`KORIS_PERF_MODERN_SEASON` (full-season). These checks require working upstream
+services and can take substantially longer than fixture tests.
 
-`tests/generate_fixtures.py` refreshes live fixtures; review source IDs and the
-resulting diffs before replacing regression data.
+Offline tests block requests/httpx/urllib HTTP calls unless the test has the
+`integration` marker. Transport fakes still exercise retry and cache behavior.
+Coverage includes handwritten production code, including the TUI; generated
+protobuf bindings are omitted:
+
+```bash
+uv run pytest -q tests --cov=koris_api --cov-report=term-missing
+```
+
+`tests/generate_fixtures.py` captures live responses into a separate staging
+directory; it does not overwrite regression fixtures by default:
+
+```bash
+uv run python tests/generate_fixtures.py --output-dir /tmp/koris-api-fixtures
+```
+
+Review source IDs and diffs before replacing fixtures. The real LiveStats
+`2514938` fixture covers official team rebounds, player minutes, events, and shot
+linkage. The Sportradar `incomplete_roster.json` fixture preserves an upstream
+final game with a 76-point home total but only 60 points in its player rows.
+See [the test audit](../docs/test-audit.md) for measured coverage, script checks,
+and known limits.
 
 Run the pinned lint/type tools separately or use the warning ratchet:
 

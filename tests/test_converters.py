@@ -276,3 +276,88 @@ def test_explicit_dnp_and_missing_time_are_different():
     assert game.home.players[0].stats.played is False
     assert not game.home.players[0].stats.HasField("seconds_played")
     assert not game.home.players[1].stats.HasField("played")
+
+
+def test_historical_abbreviations_resolve_by_reported_scores_not_row_order():
+    header = {
+        "teams": {
+            "home": {"name": "Espoon Honka"},
+            "away": {"name": "Joensuun Kataja"},
+        },
+        "score": {"home": 93, "away": 88},
+    }
+    box = {
+        "teams": [
+            {
+                "team_name": "Kataja",
+                "totals": {"PIST": "88"},
+                "players": [{"Player": "#2 Away", "PIST": "88"}],
+            },
+            {
+                "team_name": "Honka",
+                "totals": {"PIST": "93"},
+                "players": [{"Player": "#1 Home", "PIST": "93"}],
+            },
+        ]
+    }
+    before = deepcopy((header, box))
+    game = from_baskethotel(
+        game_id="239490", league_id="4", season="8589", header=header, boxscore=box
+    )
+    assert game.home.name == "Espoon Honka" and game.home.players[0].name == "Home"
+    assert game.away.name == "Joensuun Kataja" and game.away.players[0].name == "Away"
+    assert validate_game(game) == []
+    assert (header, box) == before
+
+
+def test_ambiguous_historical_abbreviations_are_rejected():
+    with pytest.raises(ConversionError, match="Cannot resolve"):
+        from_baskethotel(
+            game_id="1",
+            league_id="4",
+            season="8589",
+            header={
+                "teams": {"home": {"name": "Full Home"}, "away": {"name": "Full Away"}},
+                "score": {"home": 80, "away": 80},
+            },
+            boxscore={
+                "teams": [
+                    {"team_name": "A", "totals": {"PIST": "80"}},
+                    {"team_name": "B", "totals": {"PIST": "80"}},
+                ]
+            },
+        )
+
+
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "duplicate_player",
+        "duplicate_event",
+        "unknown_actor",
+        "invalid_shot_link",
+        "made_exceeds_attempts",
+        "dnp_stats",
+    ],
+)
+def test_validation_detects_invalid_cross_references_and_stats(problem: str) -> None:
+    game = pb.Game()
+    player = game.home.players.add(id="p1")
+    if problem == "duplicate_player":
+        game.away.players.add(id="p1")
+    elif problem == "duplicate_event":
+        game.events.add(id="e1")
+        game.events.add(id="e1")
+    elif problem == "unknown_actor":
+        game.events.add(id="e1").players.add(player_id="missing")
+    elif problem == "invalid_shot_link":
+        player.shots.add(event_id="missing")
+    elif problem == "made_exceeds_attempts":
+        player.stats.free_throws_made = 2
+        player.stats.free_throws_attempted = 1
+    else:
+        player.stats.played = False
+        player.stats.points = 1
+    before = game.SerializeToString()
+    assert validate_game(game), problem
+    assert game.SerializeToString() == before

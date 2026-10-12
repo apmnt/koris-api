@@ -223,7 +223,7 @@ def _period_label(period_value: Any, period_type: Any) -> str | None:
     if normalized_period_type == "REGULAR":
         return f"P{period_index}"
     if normalized_period_type in {"OVERTIME", "EXTRATIME"}:
-        return f"OT{max(1, period_index - 4)}"
+        return f"OT{period_index}"
     return f"P{period_index}"
 
 
@@ -333,6 +333,8 @@ def _build_live_match(
         raise ValueError(f"No live events found for match {match_id}")
 
     current_period = _as_int(live_data.get("period")) or 1
+    if str(live_data.get("periodType", "")).upper() in {"OVERTIME", "EXTRATIME"}:
+        current_period += 4
     current_clock_seconds = _mmss_to_seconds(live_data.get("clock")) or 0
     current_elapsed_seconds = elapsed_seconds(current_period, current_clock_seconds)
 

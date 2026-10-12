@@ -155,7 +155,11 @@ def parse_boxscore(data: Mapping[str, object]) -> BoxScore:
             {
                 "team_name": team_name,
                 "players": players,
-                "totals": {},
+                "totals": {
+                    target: team["tot_" + source]
+                    for source, target in _PLAYER_FIELD_MAP.items()
+                    if "tot_" + source in team
+                },
                 "coaches": {},
             }
         )
@@ -175,9 +179,10 @@ def _period_label(event: Mapping[str, object]) -> str | None:
         return str(period)
 
     period_type = str(event.get("periodType") or "").upper()
-    if period_type == "OVERTIME" or period_num > _REGULATION_PERIODS:
-        overtime_index = max(1, period_num - _REGULATION_PERIODS)
-        return f"OT{overtime_index}"
+    if period_type == "OVERTIME":
+        return f"OT{period_num}"
+    if period_num > _REGULATION_PERIODS:
+        return f"OT{period_num - _REGULATION_PERIODS}"
     return f"Q{period_num}"
 
 
@@ -200,6 +205,8 @@ def _event_action(event: Mapping[str, object]) -> str:
     success = event.get("success")
 
     if action_type in ("2pt", "3pt", "freethrow"):
+        if success not in (0, 1):
+            return sub_type or action_type
         outcome = "made" if success == 1 else "missed"
         return f"{outcome} {sub_type}".strip()
     if action_type == "jumpball":

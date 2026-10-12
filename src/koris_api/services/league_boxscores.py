@@ -29,13 +29,15 @@ def download_league_boxscores_all_seasons(
     combined_file: str | None = None,
     max_workers: int = 5,
     verbose: bool = True,
-) -> None:
+) -> int:
     """
-    Download boxscores + player data for all seasons from start_year to newest.
+    Download boxscores + player data and return the number of failed games/teams.
 
-    Historical seasons (pre-2022) are fetched from BasketHotel.
-    Modern seasons (2022+) use season-comprehensive with advanced boxscores.
+    Historical seasons (through 2023) are fetched from BasketHotel.
+    Modern seasons (2024+) use season-comprehensive with advanced boxscores.
     """
+    if limit_seasons is not None and limit_seasons < 0:
+        raise ValueError("limit_seasons must be nonnegative")
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -54,12 +56,10 @@ def download_league_boxscores_all_seasons(
         logging.getLogger(__name__).debug(
             "league_boxscores: operation failed", exc_info=True
         )
-        print(f"Error: Failed to fetch category info: {e}")
-        return
+        raise RuntimeError("Failed to fetch category information") from e
 
     if "category" not in category_data or "seasons" not in category_data["category"]:
-        print(f"Error: Could not retrieve seasons for category-id ({category_id}).")
-        return
+        raise ValueError(f"No seasons in category {category_id}")
 
     category = category_data["category"]
     category_name = category.get("category_name", str(category_id))
@@ -80,7 +80,7 @@ def download_league_boxscores_all_seasons(
 
     if not filtered:
         print("No seasons found for the requested year range.")
-        return
+        return 0
 
     if limit_seasons is not None:
         filtered = filtered[:limit_seasons]
@@ -99,6 +99,7 @@ def download_league_boxscores_all_seasons(
         "seasons": [],
     }
 
+    total_failures = 0
     total_new_games = 0
     total_boxscores_fixed = 0
 
@@ -182,6 +183,11 @@ def download_league_boxscores_all_seasons(
 
         try:
             current_payload = json.loads(target_file.read_text(encoding="utf-8"))
+            metadata = current_payload.get("metadata", {})
+            total_failures += max(
+                int(metadata.get("matches_failed", 0)),
+                int(metadata.get("conversion_failures", 0)),
+            ) + int(metadata.get("teams_failed", 0))
             current_matches = current_payload.get("matches") or []
             current_match_count = (
                 len(current_matches) if isinstance(current_matches, list) else 0
@@ -195,10 +201,10 @@ def download_league_boxscores_all_seasons(
             total_boxscores_fixed += max(
                 0, current_boxscore_count - existing_boxscore_count
             )
-        except Exception:
-            logging.getLogger(__name__).debug(
-                "league_boxscores: operation failed", exc_info=True
-            )
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
+            raise RuntimeError(
+                f"Season download produced invalid output: {target_file}"
+            ) from exc
 
         if combine_output:
             try:
@@ -228,6 +234,8 @@ def download_league_boxscores_all_seasons(
         print(f"  - New games fetched: {total_new_games}")
         print(f"  - Boxscores fixed: {total_boxscores_fixed}")
         print(f"{'=' * 60}")
+
+    return total_failures
 
 
 def download_league_boxscores_playbyplay_all_seasons(

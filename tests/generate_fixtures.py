@@ -1,138 +1,89 @@
-"""Generate test fixtures by calling the actual APIs."""
+"""Capture live responses into a separate directory for review before updating goldens."""
 
-import json
-import logging
-import sys
+import argparse
+from collections.abc import Sequence
 from pathlib import Path
 
-# Add parent directory to path to import the package
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 from koris_api.basketfi_api import BasketFiAPI
-from koris_api.genius_api import GeniusSportsAPI
+from koris_api.basketfi_parser import BasketFiParser
+from koris_api.pipeline import Component, Provider, fetch_game, resolve_reference
+from koris_api.pipeline.export import write_bytes, write_json
+from koris_api.seasons import current_season_id
 
 
-def generate_basketfi_fixtures():
-    """Generate fixtures from Basket.fi API."""
-    print("Generating Basket.fi fixtures...")
-    fixtures_dir = Path(__file__).parent / "fixtures" / "basketfi"
-
-    # 1. Get a small set of matches from current season
-    print("  Fetching matches...")
-    matches_data = BasketFiAPI.get_matches(competition_id="huki2526", category_id="4")
-
-    # Save full matches response
-    with open(fixtures_dir / "matches.json", "w", encoding="utf-8") as f:
-        json.dump(matches_data, f, indent=2, ensure_ascii=False)
-    print(f"    Saved {len(matches_data.get('matches', []))} matches")
-
-    # 2. Get detailed match data for one played match
-    played_matches = [
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", default="/tmp/koris-api-fixtures")
+    parser.add_argument("--season-id", default=current_season_id())
+    parser.add_argument("--category-id", default="4")
+    args = parser.parse_args(argv)
+    directory = Path(args.output_dir)
+    raw = BasketFiAPI.get_matches(args.season_id, args.category_id)
+    played = [
         m
-        for m in matches_data.get("matches", [])
-        if m.get("status") == "Played" and m.get("match_external_id")
+        for m in BasketFiParser.extract_matches(raw)
+        if BasketFiParser.is_match_played(m)
+        and m.get("match_external_id")
+        and m.get("date")
     ]
-
-    if played_matches:
-        match_id = played_matches[0]["match_id"]
-        print(f"  Fetching match details for match {match_id}...")
-        match_data = BasketFiAPI.get_match(str(match_id))
-
-        with open(fixtures_dir / "match_detail.json", "w", encoding="utf-8") as f:
-            json.dump(match_data, f, indent=2, ensure_ascii=False)
-        print("    Saved match detail")
-
-    # 3. Get team data
-    if matches_data.get("matches"):
-        team_id = matches_data["matches"][0].get("team_A_id")
-        if team_id:
-            print(f"  Fetching team data for team {team_id}...")
-            team_data = BasketFiAPI.get_team(str(team_id))
-
-            with open(fixtures_dir / "team.json", "w", encoding="utf-8") as f:
-                json.dump(team_data, f, indent=2, ensure_ascii=False)
-            print("    Saved team data")
-
-    # 4. Get category data
-    print("  Fetching category data...")
-    category_data = BasketFiAPI.get_category("huki2526", "4")
-
-    with open(fixtures_dir / "category.json", "w", encoding="utf-8") as f:
-        json.dump(category_data, f, indent=2, ensure_ascii=False)
-    print("    Saved category data")
-
-    print("✓ Basket.fi fixtures generated\n")
-    return played_matches[0] if played_matches else None
-
-
-def generate_genius_sports_fixtures(played_match=None):
-    """Generate fixtures from Genius Sports API."""
-    print("Generating Genius Sports fixtures...")
-    fixtures_dir = Path(__file__).parent / "fixtures" / "genius_sports"
-
-    # Use the match external ID from basket.fi if available
-    if played_match and played_match.get("match_external_id"):
-        match_external_id = str(played_match["match_external_id"])
-        print(f"  Fetching box score for match {match_external_id}...")
-
-        try:
-            boxscore_data = GeniusSportsAPI.get_match_boxscore(match_external_id)
-
-            with open(fixtures_dir / "boxscore.json", "w", encoding="utf-8") as f:
-                json.dump(boxscore_data, f, indent=2, ensure_ascii=False)
-            print("    Saved box score")
-        except Exception as e:
-            logging.getLogger(__name__).debug(
-                "generate_fixtures: operation failed", exc_info=True
-            )
-            print(f"    Error fetching box score: {e}")
-
-    # Get a minimal set of teams for a competition
-    # Use a known competition ID (e.g., 69 for Korisliiga 2024-25)
-    competition_id = "69"
-    print(f"  Fetching teams for competition {competition_id}...")
-
-    try:
-        teams = GeniusSportsAPI.get_genius_teams(competition_id)
-
-        with open(fixtures_dir / "teams.json", "w", encoding="utf-8") as f:
-            json.dump(teams, f, indent=2, ensure_ascii=False)
-        print(f"    Saved {len(teams)} teams")
-
-        # Get player data for just one player from the first team
-        if teams:
-            team_id = teams[0]["id"]
-            print(f"  Fetching roster for first team (ID: {team_id})...")
-
-            # This will be very slow, so we'll just fetch minimal data
-            # We'll create a mock response instead
-            print("    Skipping full player fetch (too slow for fixture generation)")
-            print("    Using existing example_responses instead")
-
-    except Exception as e:
-        logging.getLogger(__name__).debug(
-            "generate_fixtures: operation failed", exc_info=True
+    if not played:
+        raise ValueError(
+            "No played game with an external source in the selected season"
         )
-        print(f"    Error fetching teams: {e}")
-
-    print("✓ Genius Sports fixtures generated\n")
-
-
-def main():
-    """Generate all test fixtures."""
-    print("=" * 60)
-    print("GENERATING TEST FIXTURES")
-    print("=" * 60)
-    print()
-
-    # Generate fixtures
-    played_match = generate_basketfi_fixtures()
-    generate_genius_sports_fixtures(played_match)
-
-    print("=" * 60)
-    print("ALL FIXTURES GENERATED SUCCESSFULLY")
-    print("=" * 60)
+    match = max(played, key=lambda row: str(row["date"]))
+    metadata = directory / "basketfi"
+    write_json(metadata / "matches.json", raw)
+    write_json(
+        metadata / "match_detail.json", BasketFiAPI.get_match(str(match["match_id"]))
+    )
+    write_json(
+        metadata / "team.json",
+        BasketFiAPI.get_team(str(match["team_A_id"]), args.season_id, args.category_id),
+    )
+    write_json(
+        metadata / "category.json",
+        BasketFiAPI.get_category(args.season_id, args.category_id),
+    )
+    references = [
+        (resolve_reference(str(match["match_external_id"])), tuple(Component)),
+        (resolve_reference("2514938"), tuple(Component)),
+        (
+            resolve_reference(
+                "239490", provider=Provider.BASKETHOTEL, league_id="4", season_id="8589"
+            ),
+            (Component.BOXSCORE, Component.PLAYBYPLAY),
+        ),
+    ]
+    failed = False
+    for reference, components in references:
+        outcome = fetch_game(reference, components)
+        target = directory / reference.provider.value / reference.source_id
+        for fetched in outcome.fetches:
+            if fetched.payload is None:
+                continue
+            if isinstance(fetched.payload, str):
+                write_bytes(
+                    target / f"{fetched.request.name}.html",
+                    fetched.payload.encode("utf-8"),
+                )
+            else:
+                write_json(target / f"{fetched.request.name}.json", fetched.payload)
+        write_json(
+            target / "report.json",
+            {
+                "source": reference.key,
+                "complete": outcome.complete,
+                "issues": outcome.issues,
+                "conversion_failure": outcome.conversion_failure,
+                "failures": [f.failure.message for f in outcome.fetches if f.failure],
+            },
+        )
+        failed |= not outcome.complete
+    print(
+        f"Captured responses to {directory}; {'some sources failed' if failed else 'all sources passed'}"
+    )
+    return int(failed)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

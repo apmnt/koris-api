@@ -1,6 +1,7 @@
 """Contracts for pure planning, owned I/O, and compatibility exports."""
 
 import json
+from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
 from threading import Event
@@ -41,7 +42,7 @@ def fixture(name: str) -> JSONObject:
 
 
 class FixtureTransport:
-    def __init__(self, payloads: dict[str, JSONObject]) -> None:
+    def __init__(self, payloads: Mapping[str, JSONObject | str]) -> None:
         self.payloads = payloads
         self.calls: list[Request] = []
 

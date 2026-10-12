@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import sys
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import cast
@@ -113,7 +114,7 @@ def _ensure_output_dir(output_dir: str | None) -> Path:
     return base
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point for koris-api."""
     epilog = """
 examples:
@@ -187,7 +188,7 @@ notes:
     _ = league_parser.add_argument("category_id", help="Category ID")
 
     args = Arguments()
-    _ = parser.parse_args(namespace=args)
+    _ = parser.parse_args(argv, namespace=args)
 
     try:
         requested = tuple(
@@ -285,22 +286,23 @@ notes:
                     verbose=True,
                 )
 
-            if output_file.exists():
-                saved = fields(
-                    cast(object, json.loads(output_file.read_text(encoding="utf-8")))
+            if not output_file.exists():
+                raise RuntimeError(f"Download produced no output: {output_file}")
+            saved = fields(
+                cast(object, json.loads(output_file.read_text(encoding="utf-8")))
+            )
+            metadata = fields(saved.get("metadata"))
+            if any(
+                metadata.get(field, 0)
+                for field in (
+                    "matches_failed",
+                    "matches_playbyplay_failed",
+                    "matches_shot_chart_failed",
+                    "conversion_failures",
+                    "teams_failed",
                 )
-                metadata = fields(saved.get("metadata"))
-                if any(
-                    metadata.get(field, 0)
-                    for field in (
-                        "matches_failed",
-                        "matches_playbyplay_failed",
-                        "matches_shot_chart_failed",
-                        "conversion_failures",
-                        "teams_failed",
-                    )
-                ):
-                    return 1
+            ):
+                return 1
 
         elif args.action == "league":
             include_box = args.box_score or args.playbyplay or args.shot_chart

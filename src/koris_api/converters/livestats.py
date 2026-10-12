@@ -42,7 +42,15 @@ def from_genius_livestats(
     for side, slot in (("home", "1"), ("away", "2")):
         team = team_for(game, side)
         raw = fields(teams[slot])
-        team.totals.CopyFrom(stats(raw))
+        totals = {
+            **raw,
+            **{
+                key.removeprefix("tot_"): value
+                for key, value in raw.items()
+                if key.startswith("tot_")
+            },
+        }
+        team.totals.CopyFrom(stats(totals))
         for roster_slot, value in fields(raw.get("pl")).items():
             row = fields(value)
             name = (
@@ -215,6 +223,8 @@ def from_genius_livestats(
                 for e in shot.external_ids
             ):
                 external(shot, "genius.action_number", action, game.id)
+    if game.events and game.events[-1].type == pb.EVENT_TYPE_GAME_END:
+        game.status = pb.GAME_STATUS_FINAL
     from .common import finish
 
     return finish(game)

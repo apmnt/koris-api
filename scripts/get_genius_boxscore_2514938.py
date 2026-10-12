@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
-"""
-Fetch a single Genius Sports boxscore (match 2514938) and save to JSON.
+"""Fetch a normalized box score; defaults to the original Genius example game."""
 
-Run:
-  uv run python scripts/get_genius_boxscore_2514938.py
-"""
-
-from __future__ import annotations
-
-import json
+import argparse
+from collections.abc import Sequence
 from pathlib import Path
 
 from koris_api import GeniusSportsAPI
 from koris_api.boxscore_normalizer import normalize_boxscore
+from koris_api.pipeline.export import write_json
 
 MATCH_ID = "2514938"
 OUTPUT_FILE = "genius_boxscore_2514938.json"
 
 
-def main() -> None:
-    boxscore = GeniusSportsAPI.get_match_boxscore(MATCH_ID)
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--match-id", default=MATCH_ID)
+    parser.add_argument("--output", default=OUTPUT_FILE)
+    args = parser.parse_args(argv)
+    boxscore = GeniusSportsAPI.get_match_boxscore(args.match_id)
     normalized = normalize_boxscore(boxscore, source="genius")
-
-    output_path = Path(OUTPUT_FILE)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(normalized, f, indent=2, ensure_ascii=False)
-
-    print(f"Saved boxscore for match {MATCH_ID} to {output_path}")
+    if not normalized["teams"] or any(
+        not team["players"] for team in normalized["teams"]
+    ):
+        raise ValueError("Box score has no player data")
+    output_path = Path(args.output)
+    write_json(output_path, normalized)
+    print(f"Saved boxscore for match {args.match_id} to {output_path}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

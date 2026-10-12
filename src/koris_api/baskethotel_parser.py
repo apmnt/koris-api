@@ -582,7 +582,7 @@ class BasketHotelParser:
                         cleaned_name = re.split(
                             r"\b(tuli|meni|menetti|onnistui|epäonnistui|otti|antoi|teki|riisti|torjui|torjuttiin|hyökkäyslevypallo|puolustuslevypallo)\b",
                             cleaned_name,
-                            1,
+                            maxsplit=1,
                             flags=re.IGNORECASE,
                         )[0].strip()
                     if not cleaned_name:

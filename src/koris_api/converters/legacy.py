@@ -77,6 +77,24 @@ def _box(game: pb.Game, box: Mapping[str, object], source: str) -> dict[str, str
         for side in ("home", "away"):
             if raw.get("team_name") == team_for(game, side).name:
                 aliases[str(raw["team_name"])] = side
+    # Old widgets use abbreviated names. A unique reported point total can
+    # identify the team against the header score without relying on row order.
+    if source == "baskethotel" and len(rows) == 2:
+        for raw in rows:
+            name = str(raw.get("team_name"))
+            if name in aliases:
+                continue
+            points = count(first(fields(raw.get("totals")), "PIST", "Points", "points"))
+            candidates = [
+                side
+                for side in ("home", "away")
+                if side not in aliases.values()
+                and points is not None
+                and team_for(game, side).HasField("score")
+                and team_for(game, side).score == points
+            ]
+            if len(candidates) == 1:
+                aliases[name] = candidates[0]
     # An exact counterpart resolves a single abbreviated name by elimination.
     if source == "baskethotel" and len(rows) == 2 and len(set(aliases.values())) == 1:
         remaining = ({"home", "away"} - set(aliases.values())).pop()

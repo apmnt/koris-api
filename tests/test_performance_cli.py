@@ -1,88 +1,69 @@
-"""
-Performance tests for CLI season boxscore downloads.
-
-These are opt-in because they fetch full seasons with advanced stats.
-Run with: RUN_PERFORMANCE_TESTS=1 uv run pytest tests/test_performance_cli.py -v
-"""
-
-from __future__ import annotations
+"""Opt-in full-season CLI checks; includes explicit incomplete archival records."""
 
 import json
 import os
-import sys
 import time
 from pathlib import Path
 
 import pytest
 
 from koris_api import main
+from koris_api.seasons import current_season_id
 
-pytestmark = [pytest.mark.integration, pytest.mark.performance]
-
-
-def _require_perf_opt_in() -> None:
-    if os.environ.get("RUN_PERFORMANCE_TESTS") != "1":
-        pytest.skip("Set RUN_PERFORMANCE_TESTS=1 to run performance tests.")
-
-
-def _run_cli(args: list[str]) -> float:
-    start = time.monotonic()
-    original_argv = sys.argv[:]
-    try:
-        sys.argv = ["koris-api", *args]
-        assert main() == 0
-    finally:
-        sys.argv = original_argv
-    return time.monotonic() - start
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.performance,
+    pytest.mark.skipif(
+        os.getenv("RUN_PERFORMANCE_TESTS") != "1",
+        reason="Set RUN_PERFORMANCE_TESTS=1 to run full-season checks",
+    ),
+]
 
 
-def _assert_max_duration(elapsed: float, env_key: str) -> None:
-    limit = os.environ.get(env_key)
-    if not limit:
-        return
-    max_seconds = float(limit)
-    assert elapsed <= max_seconds, (
-        f"{env_key} exceeded: {elapsed:.1f}s > {max_seconds:.1f}s"
+@pytest.mark.parametrize("season", ["2010-2011", "current", "2024-2025"])
+def test_full_season_boxscores_report_every_game(tmp_path: Path, season: str) -> None:
+    if season == "current":
+        season = os.getenv("KORIS_PERF_MODERN_SEASON", current_season_id())
+    started = time.monotonic()
+    exit_code = main(
+        ["season", "4", season, "--box-score", "--output-dir", str(tmp_path)]
     )
-
-
-def test_baskethotel_season_2010_boxscores(tmp_path: Path) -> None:
-    _require_perf_opt_in()
-    output_file = tmp_path / "season_boxscores_2010-2011.json"
-    elapsed = _run_cli(
-        [
-            "season",
-            "4",
-            "2010-2011",
-            "--box-score",
-            "--output-dir",
-            str(tmp_path),
-        ]
+    elapsed = time.monotonic() - started
+    if os.getenv("KORIS_PERF_MAX_SECONDS"):
+        assert elapsed <= float(os.environ["KORIS_PERF_MAX_SECONDS"])
+    data = json.loads((tmp_path / f"season_boxscores_{season}.json").read_text())
+    matches = data["matches"]
+    assert matches, "Full-season test must not pass on an empty dataset"
+    complete = [
+        m for m in matches if m.get("boxscore") and not m.get("conversion_error")
+    ]
+    incomplete = [m for m in matches if m not in complete]
+    assert data["metadata"]["matches_with_boxscore"] == sum(
+        bool(m.get("boxscore")) for m in matches
     )
-    _assert_max_duration(elapsed, "KORIS_PERF_MAX_SECONDS_2010")
-
-    data = json.loads(output_file.read_text(encoding="utf-8"))
-    assert data["metadata"]["source"] == "baskethotel"
-    assert data["matches"], "Expected matches for 2010 season"
-    assert data["metadata"]["matches_with_boxscore"] > 0
-
-
-def test_genius_season_2024_boxscores(tmp_path: Path) -> None:
-    _require_perf_opt_in()
-    output_file = tmp_path / "season_boxscores_2024-2025.json"
-    elapsed = _run_cli(
-        [
-            "season",
-            "4",
-            "2024-2025",
-            "--box-score",
-            "--output-dir",
-            str(tmp_path),
-        ]
+    assert data["metadata"]["conversion_failures"] == len(incomplete)
+    if season == "2024-2025":
+        # The migrated archive currently has games with no player rows. They
+        # must be reported as incomplete, never exported as invented zeroes.
+        assert complete
+        for row in incomplete:
+            if row.get("boxscore"):
+                assert (
+                    "player points do not sum to reported total"
+                    in row["conversion_error"]
+                )
+            else:
+                error = row["advanced_boxscore_error"]
+                assert error["error_type"] == "invalid_payload"
+                assert "players" in error["error_message"]
+        assert exit_code == (1 if incomplete else 0)
+    else:
+        assert exit_code == 0 and not incomplete
+    for row in complete:
+        teams = row["boxscore"]["teams"]
+        assert len(teams) == 2 and all(team["players"] for team in teams)
+        assert sum(p["Points"] for p in teams[0]["players"]) == int(row["home_score"])
+        assert sum(p["Points"] for p in teams[1]["players"]) == int(row["away_score"])
+    print(
+        f"{season}: {len(complete)} complete, {len(incomplete)} explicitly incomplete, {elapsed:.1f}s"
     )
-    _assert_max_duration(elapsed, "KORIS_PERF_MAX_SECONDS_2024")
-
-    data = json.loads(output_file.read_text(encoding="utf-8"))
-    assert data["metadata"]["source"] == "genius"
-    assert data["matches"], "Expected matches for 2024 season"
-    assert data["metadata"]["matches_with_boxscore"] > 0

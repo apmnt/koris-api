@@ -5,6 +5,23 @@ from typing import Any, ClassVar, cast
 
 import requests
 
+from .data import fields
+
+
+def _response_data(response: requests.Response, key: str) -> dict[str, Any]:
+    """HTTP success can still contain a Torneopal application error."""
+    raw = cast(object, response.json())
+    if not isinstance(raw, dict):
+        raise TypeError("Basket.fi response must be a JSON object")
+    data = dict(fields(raw))
+    error = fields(data.get("call")).get("error")
+    if error:
+        raise ValueError(f"Basket.fi API error: {error}")
+    expected = list if key == "matches" else dict
+    if not isinstance(data.get(key), expected):
+        raise TypeError(f"Basket.fi response missing {key}")
+    return data
+
 
 class BasketFiAPI:
     """Client for interacting with the Basket.fi/Torneopal API."""
@@ -57,7 +74,7 @@ class BasketFiAPI:
         # Raise an error for bad status codes
         response.raise_for_status()
 
-        data = cast(dict[str, Any], response.json())
+        data = _response_data(response, "matches")
         data["_fetch_time"] = elapsed_time
         data["_status_code"] = response.status_code
         return data
@@ -83,7 +100,7 @@ class BasketFiAPI:
             timeout=cls.DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
-        return cast(dict[str, Any], response.json())
+        return _response_data(response, "match")
 
     @classmethod
     def get_team(
@@ -121,7 +138,7 @@ class BasketFiAPI:
             timeout=cls.DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
-        return cast(dict[str, Any], response.json())
+        return _response_data(response, "team")
 
     @classmethod
     def get_category(cls, competition_id: str, category_id: str) -> dict[str, Any]:
@@ -144,4 +161,4 @@ class BasketFiAPI:
             timeout=cls.DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
-        return cast(dict[str, Any], response.json())
+        return _response_data(response, "category")

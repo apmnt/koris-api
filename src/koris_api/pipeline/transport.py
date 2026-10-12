@@ -86,6 +86,8 @@ class RequestsTransport:
                 failure = FetchFailure(
                     "transport", str(exc), request.url, retryable=True
                 )
+            except requests.exceptions.JSONDecodeError as exc:
+                failure = FetchFailure("invalid_payload", str(exc), request.url)
             except requests.RequestException as exc:
                 failure = FetchFailure("transport", str(exc), request.url)
             except ValueError as exc:
