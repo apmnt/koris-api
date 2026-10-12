@@ -19,10 +19,10 @@ jobs:
                   version: "latest"
 
             - name: Set up Python
-              run: uv python install
+              run: uv python install 3.13
 
             - name: Install dependencies
-              run: uv sync --group dev
+              run: uv sync --locked --python 3.13 --group dev
 
             - name: Run tests
-              run: uv run pytest
+              run: uv run --locked --python 3.13 pytest
